@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* =====================================================================
+   FINES d.o.o. - barvna paleta
+   Primary:   temno oranžna
+   Secondary: temno siva / odtenki sive, bela, črna
+   Funkcijske: zelena (dodaj/shrani), rdeča (izbriši), rumena (opozorilo),
+               modra (sync / zunanje funkcije)
+   ===================================================================== */
+@theme {
+  --color-fines-50: #fdf3ed;
+  --color-fines-100: #fae2d3;
+  --color-fines-200: #f3bf9f;
+  --color-fines-500: #ca5010;
+  --color-fines-600: #b0450d;
+  --color-fines-700: #8f380b;
+
+  --color-ink-50: #f7f7f8;
+  --color-ink-100: #eeeef0;
+  --color-ink-200: #dcdcdf;
+  --color-ink-300: #c2c2c7;
+  --color-ink-400: #9a9aa1;
+  --color-ink-500: #6b6b72;
+  --color-ink-600: #4d4d53;
+  --color-ink-700: #3a3a3f;
+  --color-ink-800: #2b2b2f;
+  --color-ink-900: #1c1c1f;
+
+  --color-ok-50: #ecfdf3;
+  --color-ok-500: #16a34a;
+  --color-ok-600: #15803d;
+  --color-nok-50: #fef2f2;
+  --color-nok-500: #dc2626;
+  --color-nok-600: #b91c1c;
+  --color-warn-50: #fffbeb;
+  --color-warn-400: #fbbf24;
+  --color-warn-500: #f59e0b;
+  --color-warn-700: #b45309;
+  --color-sync-500: #2563eb;
+  --color-sync-600: #1d4ed8;
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  background: var(--color-ink-50);
+  color: var(--color-ink-900);
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Enotno osenčenje komponent */
+.fp-card {
+  background: #fff;
+  border: 1px solid var(--color-ink-200);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* Drsnik (procent) */
+input[type="range"].fp-range {
+  accent-color: var(--color-fines-500);
+}
