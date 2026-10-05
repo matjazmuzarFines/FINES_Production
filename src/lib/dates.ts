@@ -101,3 +101,47 @@ export function formatMonth(iso: IsoDate) {
   const s = fmtMonth.format(fromIso(iso));
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/** Preveri niz "YYYY-MM-DD" in da je datum dejansko veljaven (npr. ne 2026-02-31). */
+export function isValidIso(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && toIso(fromIso(s)) === s;
+}
+
+/** Ponedeljek tedna, v katerem je datum (tedni so pon-ned). */
+export function mondayOf(iso: IsoDate): IsoDate {
+  return addDays(iso, 1 - weekday(iso));
+}
+
+/** ISO številka tedna (1-53). */
+export function isoWeek(iso: IsoDate): number {
+  const thursday = fromIso(addDays(mondayOf(iso), 3));
+  const jan1 = new Date(thursday.getFullYear(), 0, 1);
+  // round: odpravi zamik zaradi poletnega časa
+  return Math.floor(Math.round((thursday.getTime() - jan1.getTime()) / 86400000) / 7) + 1;
+}
+
+/** "5. 10." */
+export function formatDayMonth(iso: IsoDate): string {
+  const d = fromIso(iso);
+  return `${d.getDate()}. ${d.getMonth() + 1}.`;
+}
+
+/**
+ * Prebere datum iz izvoza (Excel): "15. 10. 2026", "29.09.2026", "2026-10-15",
+ * Date objekt ali Excelova serijska številka. Vrne null, če ni datuma.
+ */
+export function parseAnyDate(v: unknown): IsoDate | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date && !isNaN(v.getTime())) return toIso(v);
+  if (typeof v === "number" && v > 20000 && v < 80000) {
+    // Excel serijska številka (dnevi od 1899-12-30)
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}

@@ -9,11 +9,15 @@ export function SaveBar({
   shranjujem,
   onSave,
   onReset,
+  shraniLabel = "Shrani rutino",
+  shraniHint = "Shrani rutino za izbrani dan",
 }: {
   steviloSprememb: number;
   shranjujem: boolean;
   onSave: () => void;
   onReset: () => void;
+  shraniLabel?: string;
+  shraniHint?: string;
 }) {
   return (
     <div className="sticky bottom-0 z-30 -mx-3 mt-4 border-t border-ink-200 bg-white/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
@@ -35,14 +39,14 @@ export function SaveBar({
           <span className="hidden sm:inline">Prekliči</span>
         </Button>
         <Button
-          hint="Shrani rutino za izbrani dan"
+          hint={shraniHint}
           variant="success"
           size="lg"
           icon={Save}
           disabled={steviloSprememb === 0 || shranjujem}
           onClick={onSave}
         >
-          {shranjujem ? "Shranjujem ..." : "Shrani rutino"}
+          {shranjujem ? "Shranjujem ..." : shraniLabel}
         </Button>
       </div>
     </div>

@@ -9,6 +9,30 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "3.01",
+    datum: "05. 10. 2026",
+    spremembe: [
+      "Nov zavihek Zasedenost: pregled po delovnih tednih (pon–ned) za proizvodnjo, montažo, elektro in testiranje.",
+      "Uvoz nalogov z drag & drop (.xlsx izvoz delovnih nalogov); prikazan je zadnji uvoz.",
+      "Število zaposlenih in delovni dnevi se vnašajo za vsak teden posebej; privzete vrednosti po oddelkih.",
+      "Tabela nalogov izbranega tedna z iskanjem in izvozom v Excel; opozorilo za naloge brez normativa.",
+      "Nov zavihek Normativi: urejevalna tabela s filtri (ident, naziv, družina - večkratni izbor, velikost, barvanje).",
+      "Multiselect z izbiro vseh, skrivanje normativov, izvoz in CSV uvoz z navodili (gumb i).",
+      "Splošne tabele normativov spl_normativi in spl_druzine (za uporabo v vseh projektih).",
+    ],
+  },
+  {
+    verzija: "2.01",
+    datum: "05. 10. 2026",
+    spremembe: [
+      "Rutina: zavihek prikaže samo mesečni koledar z navigacijo (mesec nazaj/naprej, Danes).",
+      "Klik na dan odpre novo podstran z rutino izbranega dne; gumb Koledar/Nazaj vrne na koledar istega meseca.",
+      "Današnji dan je na koledarju obarvan modro (pika v kotu prikazuje status).",
+      "Opozorilo pred odhodom s strani, če obstajajo neshranjene spremembe.",
+      "Odstranjeni testni ključi iz .env.example.",
+    ],
+  },
+  {
     verzija: "1.01",
     datum: "05. 10. 2026",
     spremembe: [

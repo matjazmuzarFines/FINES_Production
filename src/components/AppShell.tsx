@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft, Home, Info, LogOut, Menu, X } from "lucide-react";
-import { NAV, findNav } from "@/lib/nav";
+import { NAV, findNav, parentHref } from "@/lib/nav";
+import { lahkoZapustim } from "@/lib/neshranjeno";
 import { APP_VERSION, CHANGELOG } from "@/lib/changelog";
 import { Button, IconButton } from "./ui/Button";
 import { Modal } from "./ui/Modal";
@@ -25,6 +26,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const current = findNav(pathname);
   const title = current ? `${current.group.label} · ${current.item.label}` : "Domov";
 
+  function nazaj() {
+    if (lahkoZapustim()) router.push(parentHref(pathname));
+  }
+
   function exitApp() {
     window.close();
     // Brskalnik ne dovoli zapiranja zavihka, ki ga ni odprla skripta.
@@ -43,16 +48,23 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="lg:hidden"
               onClick={() => setMenuOpen(true)}
             />
-            <Link href="/" title="Pojdi na domačo stran" className="flex shrink-0 items-center">
+            <Link
+              href="/"
+              title="Pojdi na domačo stran"
+              className="flex shrink-0 items-center"
+              onClick={(e) => {
+                if (!lahkoZapustim()) e.preventDefault();
+              }}
+            >
               <Image src="/fines-logo.png" alt="FINES d.o.o. logotip" width={136} height={36} priority />
             </Link>
             {!isHome && (
               <Button
-                hint="Vrni se na prejšnjo stran"
+                hint="Vrni se na nadrejeno stran"
                 variant="neutral"
                 icon={ChevronLeft}
                 className="ml-2 hidden sm:inline-flex"
-                onClick={() => router.back()}
+                onClick={nazaj}
               >
                 Nazaj
               </Button>
@@ -62,10 +74,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             </h1>
             {!isHome && (
               <IconButton
-                hint="Vrni se na prejšnjo stran"
+                hint="Vrni se na nadrejeno stran"
                 icon={ChevronLeft}
                 className="sm:hidden"
-                onClick={() => router.back()}
+                onClick={nazaj}
               />
             )}
             <IconButton
@@ -188,6 +200,9 @@ function NavLink({
     <Link
       href={href}
       title={hint}
+      onClick={(e) => {
+        if (!lahkoZapustim()) e.preventDefault();
+      }}
       aria-current={active ? "page" : undefined}
       className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors ${
         active ? "bg-fines-500 text-white" : "text-ink-200 hover:bg-ink-700 hover:text-white"

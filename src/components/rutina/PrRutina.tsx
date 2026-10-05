@@ -1,13 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  firstWorkdayOfMonth,
-  monthEnd,
-  monthStart,
-  todayWorkday,
-  type IsoDate,
-} from "@/lib/dates";
+import { useEffect, useMemo, useState } from "react";
+import type { IsoDate } from "@/lib/dates";
 import {
   PR_PODROCJA,
   aktivnaDelovnaMesta,
@@ -15,7 +9,6 @@ import {
   naloziPrRutino,
   naloziPrSlike,
   prImaOdstopanje,
-  prMesecPovzetek,
   prPodrocjeNok,
   shraniPrRutino,
   type DelovnoMesto,
@@ -25,13 +18,13 @@ import {
   type PrSlika,
 } from "@/lib/rutina";
 import { compressImage } from "@/lib/images";
+import { useNeshranjeno } from "@/lib/neshranjeno";
 import { supabaseConfigured } from "@/lib/supabase";
 import { ChoiceGroup, daNeOptions, scoreOptions } from "@/components/ui/Choice";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
-import { DateBar } from "./DateBar";
-import { MonthCalendar } from "./MonthCalendar";
+import { DanGlava } from "./DanGlava";
 import { PhotoField } from "./PhotoField";
 import { SaveBar } from "./SaveBar";
 import { StatusBadge } from "./StatusBadge";
@@ -58,24 +51,18 @@ const PODROCJE_LABEL: Record<PrPodrocje, string> = {
   PROCES: "Proces",
 };
 
-export function PrRutina() {
+export function PrRutina({ datum }: { datum: IsoDate }) {
   if (!supabaseConfigured) return <ConfigMissing />;
-  return <PrRutinaInner />;
+  return <PrRutinaInner datum={datum} />;
 }
 
-function PrRutinaInner() {
+function PrRutinaInner({ datum }: { datum: IsoDate }) {
   const notify = useToast();
-  const [datum, setDatum] = useState<IsoDate>(todayWorkday);
-  const [mesec, setMesec] = useState<IsoDate>(() => monthStart(todayWorkday()));
-  const [koledarOdprt, setKoledarOdprt] = useState(false);
   const [oddelek, setOddelek] = useState("Vsi");
 
   const [mesta, setMesta] = useState<DelovnoMesto[] | null>(null);
-  const [rutinaMesec, setRutinaMesec] = useState<PrRutinaZapis[]>([]);
+  const [zapisiDne, setZapisiDne] = useState<PrRutinaZapis[] | null>(null);
   const [slike, setSlike] = useState<PrSlika[]>([]);
-  // Ključ (mesec|datum) zadnjih naloženih podatkov - dokler se ne ujema, nalagamo.
-  const [nalozenKljuc, setNalozenKljuc] = useState<string | null>(null);
-  const nalagam = nalozenKljuc !== `${mesec}|${datum}`;
   const [shranjujem, setShranjujem] = useState(false);
 
   const [urejanja, setUrejanja] = useState<Record<number, PrOdgovori>>({});
@@ -84,63 +71,40 @@ function PrRutinaInner() {
   const [verzija, setVerzija] = useState(0);
 
   const steviloSprememb = Object.keys(urejanja).length + Object.keys(noveSlike).length;
+  useNeshranjeno(steviloSprememb > 0);
 
-  const naloziMesec = useCallback(async (m: IsoDate) => {
-    setRutinaMesec(await naloziPrRutino(monthStart(m), monthEnd(m)));
-  }, []);
+  async function naloziDan() {
+    const [r, s] = await Promise.all([naloziPrRutino(datum, datum), naloziPrSlike(datum)]);
+    setZapisiDne(r);
+    setSlike(s);
+  }
 
-  // Delovna mesta
-  useEffect(() => {
-    naloziDelovnaMesta()
-      .then(setMesta)
-      .catch((e) => notify("error", `Napaka pri nalaganju delovnih mest: ${e.message}`));
-  }, [notify]);
-
-  // Rutina meseca + slike izbranega dne
   useEffect(() => {
     let preklic = false;
-    Promise.all([naloziPrRutino(monthStart(mesec), monthEnd(mesec)), naloziPrSlike(datum)])
-      .then(([r, s]) => {
+    Promise.all([naloziDelovnaMesta(), naloziPrRutino(datum, datum), naloziPrSlike(datum)])
+      .then(([m, r, s]) => {
         if (preklic) return;
-        setRutinaMesec(r);
+        setMesta(m);
+        setZapisiDne(r);
         setSlike(s);
-        setNalozenKljuc(`${mesec}|${datum}`);
       })
-      .catch((e) => notify("error", `Napaka pri nalaganju rutine: ${e.message}`))
+      .catch((e) => notify("error", `Napaka pri nalaganju rutine: ${e.message}`));
     return () => {
       preklic = true;
     };
-  }, [mesec, datum, notify]);
-
-  function lahkoZapustim() {
-    return steviloSprememb === 0 || window.confirm("Imaš neshranjene spremembe. Jih želiš zavreči?");
-  }
-
-  function zamenjajDatum(d: IsoDate) {
-    if (d === datum || !lahkoZapustim()) return;
-    setUrejanja({});
-    setNoveSlike({});
-    setDatum(d);
-    setMesec(monthStart(d));
-  }
-
-  function zamenjajMesec(m: IsoDate) {
-    const danes = todayWorkday();
-    zamenjajDatum(monthStart(danes) === m ? danes : firstWorkdayOfMonth(m));
-  }
+  }, [datum, notify]);
 
   const aktivna = useMemo(() => (mesta ? aktivnaDelovnaMesta(mesta, datum) : []), [mesta, datum]);
   const oddelki = useMemo(() => ["Vsi", ...new Set(aktivna.map((m) => m.oddelek).filter(Boolean))], [aktivna]);
   const prikazana = aktivna.filter((m) => oddelek === "Vsi" || m.oddelek === oddelek);
-  const zapisiDne = useMemo(() => rutinaMesec.filter((r) => r.datum === datum), [rutinaMesec, datum]);
-  const povzetki = useMemo(
-    () => (mesta ? prMesecPovzetek(mesec, mesta, rutinaMesec) : []),
-    [mesec, mesta, rutinaMesec],
-  );
+  const nalozeno = mesta !== null && zapisiDne !== null;
+  const izpolnjenih = (zapisiDne ?? []).filter(
+    (z) => z.izpolnjeno && aktivna.some((m) => m.id === z.delovno_mesto_id),
+  ).length;
 
   function vrednosti(mestoId: number): PrOdgovori {
     if (urejanja[mestoId]) return urejanja[mestoId];
-    const z = zapisiDne.find((r) => r.delovno_mesto_id === mestoId);
+    const z = zapisiDne?.find((r) => r.delovno_mesto_id === mestoId);
     return z
       ? {
           plan_pripravljen: z.plan_pripravljen,
@@ -176,7 +140,7 @@ function PrRutinaInner() {
           return { delovnoMestoId: Number(id), podrocje: podrocje as PrPodrocje, blob };
         }),
         slike,
-        zapisiDne,
+        zapisiDne ?? [],
       );
       setUrejanja({});
       setNoveSlike({});
@@ -185,35 +149,25 @@ function PrRutinaInner() {
     } catch (e) {
       notify("error", `Napaka pri shranjevanju: ${(e as Error).message}`, 10000);
     } finally {
-      await Promise.all([naloziMesec(mesec), naloziPrSlike(datum).then(setSlike)]).catch(() => {});
+      await naloziDan().catch(() => {});
       setShranjujem(false);
     }
   }
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <DateBar
+      <DanGlava
         datum={datum}
-        onChange={zamenjajDatum}
-        koledarOdprt={koledarOdprt}
-        onToggleKoledar={() => setKoledarOdprt((o) => !o)}
+        koledarHref={`/proizvodnja/rutina?mesec=${datum.slice(0, 7)}`}
+        povzetek={nalozeno ? `Izpolnjeno ${izpolnjenih} od ${aktivna.length} delovnih mest` : undefined}
+        prikaziDanes={nalozeno}
       />
-
-      {koledarOdprt && (
-        <MonthCalendar
-          mesec={mesec}
-          izbran={datum}
-          povzetki={povzetki}
-          onSelect={zamenjajDatum}
-          onMonthChange={zamenjajMesec}
-        />
-      )}
 
       {oddelki.length > 2 && (
         <FilterChips items={oddelki} value={oddelek} onChange={setOddelek} hintPrefix="Prikaži oddelek" />
       )}
 
-      {!mesta || nalagam ? (
+      {!nalozeno ? (
         <Loading />
       ) : prikazana.length === 0 ? (
         <div className="fp-card p-6 text-center text-ink-600">Za izbrani dan ni aktivnih delovnih mest.</div>
@@ -221,7 +175,7 @@ function PrRutinaInner() {
         <div className="grid gap-4 xl:grid-cols-2">
           {prikazana.map((m) => {
             const v = vrednosti(m.id);
-            const zapis = zapisiDne.find((r) => r.delovno_mesto_id === m.id);
+            const zapis = zapisiDne?.find((r) => r.delovno_mesto_id === m.id);
             const izpolnjeno =
               v.plan_pripravljen !== null &&
               v.delovno_mesto_urejeno !== null &&
