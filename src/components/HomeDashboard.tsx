@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { NAV, type NavItem } from "@/lib/nav";
+import { NAV, listiNav, type NavItem } from "@/lib/nav";
 import { formatLong, todayWorkday } from "@/lib/dates";
 import {
   aktivnaDelovnaMesta,
@@ -66,7 +66,7 @@ export function HomeDashboard() {
             {group.label}
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {group.items.map((item) => (
+            {listiNav(group.items).map((item) => (
               <Tile key={item.href} item={item} kpi={kpi[item.href]} />
             ))}
           </div>

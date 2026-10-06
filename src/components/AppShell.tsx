@@ -4,8 +4,8 @@ import { useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronLeft, Home, Info, LogOut, Menu, X } from "lucide-react";
-import { NAV, findNav, parentHref } from "@/lib/nav";
+import { ChevronDown, ChevronLeft, Home, Info, LogOut, Menu, X } from "lucide-react";
+import { NAV, aktivnaPostavka, findNav, parentHref, type NavItem } from "@/lib/nav";
 import { lahkoZapustim } from "@/lib/neshranjeno";
 import { APP_VERSION, CHANGELOG } from "@/lib/changelog";
 import { Button, IconButton } from "./ui/Button";
@@ -24,7 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const isHome = pathname === "/";
   const current = findNav(pathname);
-  const title = current ? `${current.group.label} · ${current.item.label}` : "Domov";
+  const title = current
+    ? [current.group.label, current.item.label, current.sub?.label].filter(Boolean).join(" · ")
+    : "Domov";
 
   function nazaj() {
     if (lahkoZapustim()) router.push(parentHref(pathname));
@@ -125,18 +127,22 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {group.label}
                   </div>
                   <div className="flex flex-col gap-1">
-                    {group.items.map((item) => (
-                      <NavLink
-                        key={item.href}
-                        href={item.href}
-                        active={pathname.startsWith(item.href)}
-                        icon={item.icon}
-                        hint={item.hint}
-                        kmalu={item.kmalu}
-                      >
-                        {item.label}
-                      </NavLink>
-                    ))}
+                    {group.items.map((item) =>
+                      item.children ? (
+                        <NavPodmeni key={item.href} item={item} pathname={pathname} />
+                      ) : (
+                        <NavLink
+                          key={item.href}
+                          href={item.href}
+                          active={current?.item === item}
+                          icon={item.icon}
+                          hint={item.hint}
+                          kmalu={item.kmalu}
+                        >
+                          {item.label}
+                        </NavLink>
+                      ),
+                    )}
                   </div>
                 </div>
               ))}
@@ -181,12 +187,48 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Postavka s podmenijem: klik razpre / zloži seznam podstrani. Na podstrani je razprta. */
+function NavPodmeni({ item, pathname }: { item: NavItem; pathname: string }) {
+  const aktivna = aktivnaPostavka(item.children ?? [], pathname);
+  const [odprt, setOdprt] = useState(!!aktivna);
+  const prikazan = odprt || !!aktivna;
+  return (
+    <div>
+      <button
+        type="button"
+        title={item.hint}
+        aria-expanded={prikazan}
+        onClick={() => setOdprt(!prikazan)}
+        className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors ${
+          aktivna ? "text-white" : "text-ink-200 hover:bg-ink-700 hover:text-white"
+        }`}
+      >
+        <item.icon className="h-5 w-5 shrink-0" aria-hidden />
+        <span className="flex-1">{item.label}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${prikazan ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {prikazan && (
+        <ul className="ml-5 mt-1 flex flex-col gap-1 border-l border-ink-600 pl-2">
+          {item.children?.map((c) => (
+            <li key={c.href}>
+              <NavLink href={c.href} active={aktivna === c} icon={c.icon} hint={c.hint} kmalu={c.kmalu} majhen>
+                {c.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function NavLink({
   href,
   active,
   icon: Icon,
   hint,
   kmalu,
+  majhen,
   children,
 }: {
   href: string;
@@ -194,6 +236,7 @@ function NavLink({
   icon: typeof Home;
   hint: string;
   kmalu?: boolean;
+  majhen?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -204,11 +247,11 @@ function NavLink({
         if (!lahkoZapustim()) e.preventDefault();
       }}
       aria-current={active ? "page" : undefined}
-      className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors ${
+      className={`flex items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors ${majhen ? "h-10" : "h-11"} ${
         active ? "bg-fines-500 text-white" : "text-ink-200 hover:bg-ink-700 hover:text-white"
       }`}
     >
-      <Icon className="h-5 w-5 shrink-0" aria-hidden />
+      <Icon className={`${majhen ? "h-4 w-4" : "h-5 w-5"} shrink-0`} aria-hidden />
       <span className="flex-1">{children}</span>
       {kmalu && (
         <span className="rounded-full bg-ink-600 px-2 py-0.5 text-[10px] font-bold uppercase text-ink-200">

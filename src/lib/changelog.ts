@@ -9,6 +9,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "4.01",
+    datum: "06. 10. 2026",
+    spremembe: [
+      "Zasedenost v levem meniju se razpre v podmeni: Pregled zasedenosti (dosedanja stran) in Delovni plan.",
+      "Nova podstran Delovni plan: ločen pogled za proizvodnjo, montažo, elektro in testiranje (vsak oddelek svoja delovna mesta iz rutine).",
+      "Seznam krovnih nalogov iz zadnjega uvoza: število nalogov, potrebne ure oddelka po normativih, rok, nerazporejene ure.",
+      "Krovni nalog povlečeš (ali klikneš in izbereš dan) na delovno mesto - plan se raztegne čez toliko dni, kolikor je delovnih ur.",
+      "Število zaposlenih na delovnem mestu za vsak dan (privzeto po delovnem mestu); kapaciteta = zaposleni × ure na dan.",
+      "Zasedenost po dnevih za vsako delovno mesto in oddelek skupaj; opozorilo, če plan konča po roku izdelave.",
+      "Urejanje postavitve (delovno mesto, začetek, ure, opomba), premik z vlečenjem, odstranitev in izvoz plana v Excel.",
+      "SQL 004: fp_plan_postavitve, fp_plan_zaposleni in privzeto število zaposlenih na delovnem mestu.",
+    ],
+  },
+  {
     verzija: "3.04",
     datum: "06. 10. 2026",
     spremembe: [
