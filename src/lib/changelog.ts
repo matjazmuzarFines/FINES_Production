@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "3.04",
+    datum: "06. 10. 2026",
+    spremembe: [
+      "Zasedenost: v tabeli nalogov gumbi Proizvodnja, Montaža, Elektro, Testiranje za filter po oddelkih (normativ > 0).",
+      "Nalogi brez normativa so ne glede na filter vedno prikazani (z opozorilom).",
+    ],
+  },
+  {
     verzija: "3.03",
     datum: "06. 10. 2026",
     spremembe: [

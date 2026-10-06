@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, Search, Settings, Users } from "lucide-react";
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
-import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
+import { ODDELKI_NORMATIVA, naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { useNeshranjeno } from "@/lib/neshranjeno";
 import { formatNum, formatUre, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
@@ -81,6 +81,8 @@ function ZasedenostInner() {
   const [pregled, setPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
   const [uvazam, setUvazam] = useState(false);
   const [nastavitveOdprte, setNastavitveOdprte] = useState(false);
+  // Filter oddelkov v tabeli nalogov (ostane ob menjavi tedna)
+  const [filterOddelkov, setFilterOddelkov] = useState<OddelekKoda[]>([]);
 
   const steviloSprememb = Object.keys(kapEdits).length + Object.keys(dniEdits).length;
   useNeshranjeno(steviloSprememb > 0);
@@ -382,6 +384,8 @@ function ZasedenostInner() {
             zacetek={zacetek}
             brezRoka={brezRoka.length}
             onIzbor={setIzbor}
+            filterOddelkov={filterOddelkov}
+            onFilterOddelkov={setFilterOddelkov}
           />
         </>
       )}
@@ -555,12 +559,16 @@ function NalogiTabela({
   zacetek,
   brezRoka,
   onIzbor,
+  filterOddelkov,
+  onFilterOddelkov,
 }: {
   izracun: NalogIzracun[];
   izbor: Izbor;
   zacetek: IsoDate;
   brezRoka: number;
   onIzbor: (i: Izbor) => void;
+  filterOddelkov: OddelekKoda[];
+  onFilterOddelkov: (k: OddelekKoda[]) => void;
 }) {
   const [iskanje, setIskanje] = useState("");
   const [samoBrez, setSamoBrez] = useState(izbor.tip === "vsi" && !!izbor.samoBrez);
@@ -586,6 +594,13 @@ function NalogiTabela({
             : true,
     )
     .filter((n) => !samoBrez || !n.normativ)
+    // Oddelki: nalog ima normativ > 0 v vsaj enem izbranem oddelku. Nalogi brez normativa so vedno prikazani.
+    .filter(
+      (n) =>
+        filterOddelkov.length === 0 ||
+        !n.normativ ||
+        ODDELKI_NORMATIVA.some((o) => filterOddelkov.includes(o.koda) && n.normativ![o.polje] > 0),
+    )
     .filter(
       (n) =>
         !q ||
@@ -649,6 +664,39 @@ function NalogiTabela({
             className="h-10 w-full rounded-lg border border-ink-200 pl-8 pr-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
           />
         </label>
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter po oddelkih">
+          {ODDELKI_NORMATIVA.map((o) => {
+            const aktiven = filterOddelkov.includes(o.koda);
+            return (
+              <button
+                key={o.koda}
+                type="button"
+                aria-pressed={aktiven}
+                title={`${aktiven ? "Odstrani filter" : "Prikaži naloge z normativom"}: ${o.label}`}
+                onClick={() =>
+                  onFilterOddelkov(aktiven ? filterOddelkov.filter((k) => k !== o.koda) : [...filterOddelkov, o.koda])
+                }
+                className={`h-9 rounded-full border px-3 text-sm font-semibold transition-colors ${
+                  aktiven
+                    ? "border-fines-500 bg-fines-500 text-white"
+                    : "border-ink-200 bg-white text-ink-600 hover:border-fines-500 hover:text-fines-500"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+          {filterOddelkov.length > 0 && (
+            <button
+              type="button"
+              title="Počisti filter oddelkov"
+              onClick={() => onFilterOddelkov([])}
+              className="px-2 text-xs font-semibold text-ink-500 hover:underline"
+            >
+              Počisti
+            </button>
+          )}
+        </div>
         <label title="Prikaži samo naloge brez normativa" className="flex cursor-pointer items-center gap-2 text-sm">
           <input type="checkbox" checked={samoBrez} onChange={(e) => setSamoBrez(e.target.checked)} className="h-4 w-4 accent-fines-500" />
           Samo brez normativa
