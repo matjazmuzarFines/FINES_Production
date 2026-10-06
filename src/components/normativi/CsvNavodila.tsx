@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 const STOLPCI: [string, string, string][] = [
   ["ident", "DA", "Proizvodna šifra artikla, npr. 097-10685. Po njej se normativ poveže z nalogi."],
   ["naziv", "DA", "Naziv artikla."],
-  ["normativ_skupni", "DA", "Skupni normativ v urah na kos, npr. 4,5"],
+  ["normativ_skupni", "ne*", "Skupni normativ v urah na kos, npr. 4,5. Je vedno vsota oddelkov."],
   ["druzina", "ne", "Koda družine, npr. OCB, RN-CU. Nova družina se ustvari sama."],
   ["velikost", "ne", "Velikost (število), npr. 60. Lahko je prazno."],
   ["normativ_proizvodnja", "ne", "Ure na kos za proizvodnjo (P)."],
@@ -45,6 +45,20 @@ export function CsvNavodila({ onPredloga }: { onPredloga: () => void }) {
             ostali podatki ostanejo nespremenjeni.
           </li>
           <li>Normativi, ki jih ni v datoteki, se ne spremenijo (nič se ne briše).</li>
+          <li>Prazna celica pomeni: vrednost se ne spremeni.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="mb-1 font-bold text-ink-900">Pravilo: skupni = vsota oddelkov</h3>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>* Potreben je vsaj en stolpec z normativom (skupni ali oddelek).</li>
+          <li>Če so podani oddelki, se skupni izračuna sam.</li>
+          <li>
+            Če je podan samo <code>normativ_skupni</code>, se oddelki obstoječega normativa <strong>sorazmerno razdelijo</strong>{" "}
+            (razmerja ostanejo). Nov normativ mora imeti podane oddelke.
+          </li>
+          <li>Če so podani vsi oddelki in skupni, se morata ujemati, sicer je vrstica zavrnjena.</li>
           <li>Pred uvozom se prikaže pregled: število novih, posodobljenih in vrstic z napako.</li>
         </ul>
       </section>

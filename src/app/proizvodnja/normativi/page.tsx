@@ -3,7 +3,7 @@ import { NormativiUrejevalnik } from "@/components/normativi/NormativiUrejevalni
 
 export const metadata: Metadata = { title: "Normativi | Fines - Production" };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ ident?: string }> }) {
-  const { ident } = await searchParams;
-  return <NormativiUrejevalnik zacetniIdent={ident} />;
+export default async function Page({ searchParams }: { searchParams: Promise<{ nov?: string; naziv?: string }> }) {
+  const { nov, naziv } = await searchParams;
+  return <NormativiUrejevalnik nov={nov ? { ident: nov, naziv: naziv ?? "" } : undefined} />;
 }

@@ -34,10 +34,101 @@ export type Normativ = {
 
 export type Druzina = { id: number; koda: string };
 
+export type OddelekPolje = (typeof ODDELKI_NORMATIVA)[number]["polje"];
+const DELI: OddelekPolje[] = ODDELKI_NORMATIVA.map((o) => o.polje);
+
+const r3 = (x: number) => Math.round(x * 1000) / 1000;
+
+export function vsotaDelov(n: Pick<Normativ, OddelekPolje>) {
+  return r3(DELI.reduce((s, p) => s + n[p], 0));
+}
+
 /** Vsota normativov oddelkov se ne ujema s skupnim normativom. */
 export function vsotaNeUjema(n: Normativ) {
-  const vsota = n.normativ_proizvodnja + n.normativ_montaza + n.normativ_elektro + n.normativ_testiranje;
-  return Math.abs(vsota - n.normativ_skupni) > 0.01;
+  return Math.abs(vsotaDelov(n) - n.normativ_skupni) > 0.0005;
+}
+
+/**
+ * Razdeli `skupaj` na dele v razmerju `utezi` (zaokroženo na 3 decimalke,
+ * ostanek zaokroževanja gre največjemu delu, da je vsota točna).
+ * Vrne null, če so vse uteži 0.
+ */
+export function razdeliSorazmerno(skupaj: number, utezi: number[]): number[] | null {
+  const vsota = utezi.reduce((s, u) => s + u, 0);
+  if (vsota <= 0) return skupaj === 0 ? utezi.map(() => 0) : null;
+  const deli = utezi.map((u) => r3((u * skupaj) / vsota));
+  const ostanek = r3(skupaj - deli.reduce((s, d) => s + d, 0));
+  if (ostanek !== 0) {
+    const i = deli.indexOf(Math.max(...deli));
+    deli[i] = r3(deli[i] + ostanek);
+  }
+  return deli;
+}
+
+/**
+ * Pravilo: skupni normativ = vsota oddelkov.
+ * - sprememba oddelka -> skupni se preračuna
+ * - sprememba skupnega -> oddelki se sorazmerno razdelijo
+ * Vrne nov normativ ali besedilo napake.
+ */
+export function uskladiNormativ(n: Normativ, polje: NormativPolje, vrednost: number): Normativ | string {
+  if (polje !== "normativ_skupni") {
+    const nov = { ...n, [polje]: r3(vrednost) };
+    return { ...nov, normativ_skupni: vsotaDelov(nov) };
+  }
+  const deli = razdeliSorazmerno(r3(vrednost), DELI.map((p) => n[p]));
+  if (!deli) return "Skupnega normativa ni mogoče razdeliti, ker so vsi oddelki 0. Najprej vpiši normative po oddelkih.";
+  return { ...n, normativ_skupni: r3(vrednost), ...Object.fromEntries(DELI.map((p, i) => [p, deli[i]])) };
+}
+
+/** Vnos v oknu "Spremeni normative": null = ne spremeni. */
+export type SkupnaSprememba = {
+  druzina: string | null;
+  velikost: number | null;
+  normativ_skupni: number | null;
+  normativ_proizvodnja: number | null;
+  normativ_montaza: number | null;
+  normativ_elektro: number | null;
+  normativ_testiranje: number | null;
+  barvanje: boolean | null;
+  cleaning: boolean | null;
+};
+
+/**
+ * Uporabi skupno spremembo na en normativ (skupni = vsota oddelkov ostane veljavno):
+ * - vpisani oddelki se nastavijo,
+ * - če je vpisan tudi skupni, se nevpisani oddelki sorazmerno razdelijo na preostanek,
+ * - če je vpisan samo skupni, se vsi oddelki sorazmerno razdelijo,
+ * - če skupni ni vpisan, je skupni = vsota oddelkov.
+ */
+export function uporabiSkupnoSpremembo(n: Normativ, s: SkupnaSprememba): Normativ | string {
+  const out: Normativ = {
+    ...n,
+    druzina: s.druzina ?? n.druzina,
+    velikost: s.velikost ?? n.velikost,
+    barvanje: s.barvanje ?? n.barvanje,
+    cleaning: s.cleaning ?? n.cleaning,
+  };
+  const vpisani = DELI.filter((p) => s[p] !== null);
+  for (const p of vpisani) out[p] = r3(s[p]!);
+
+  if (s.normativ_skupni === null) {
+    out.normativ_skupni = vsotaDelov(out);
+    return out;
+  }
+  const skupni = r3(s.normativ_skupni);
+  const nevpisani = DELI.filter((p) => s[p] === null);
+  const preostanek = r3(skupni - vpisani.reduce((v, p) => v + out[p], 0));
+  if (nevpisani.length === 0) {
+    if (Math.abs(preostanek) > 0.0005) return "vsota vpisanih oddelkov ni enaka skupnemu normativu";
+  } else {
+    if (preostanek < 0) return "vpisani oddelki skupaj presegajo skupni normativ";
+    const deli = razdeliSorazmerno(preostanek, nevpisani.map((p) => n[p]));
+    if (!deli) return "ostanka skupnega normativa ni mogoče razdeliti (nevpisani oddelki so 0)";
+    nevpisani.forEach((p, i) => (out[p] = deli[i]));
+  }
+  out.normativ_skupni = skupni;
+  return out;
 }
 
 // =====================================================================
@@ -156,6 +247,7 @@ export async function nastaviVidnost(ids: number[], visible: boolean) {
 function prevediNapako(msg: string) {
   if (msg.includes("spl_normativi_ident_key")) return "Šifra (ident) že obstaja. Vsaka šifra je lahko le enkrat.";
   if (msg.includes("spl_normativi_nenegativni")) return "Normativi ne smejo biti negativni.";
+  if (msg.includes("spl_normativi_vsota")) return "Skupni normativ mora biti enak vsoti normativov oddelkov.";
   return msg;
 }
 
@@ -177,7 +269,8 @@ export const CSV_STOLPCI = [
   "cleaning",
 ] as const;
 
-export const CSV_OBVEZNI = ["ident", "naziv", "normativ_skupni"] as const;
+export const CSV_OBVEZNI = ["ident", "naziv"] as const;
+const NORMATIV_STOLPCI_CSV = ["normativ_skupni", ...DELI] as const;
 
 export type CsvRezultat = {
   vrstice: NormativVnos[];
@@ -213,7 +306,8 @@ function daNe(v: string | undefined): boolean {
   return ["da", "1", "true", "x", "yes"].includes((v ?? "").trim().toLowerCase());
 }
 
-export function preberiCsv(besedilo: string): CsvRezultat {
+/** `obstojeci`: trenutni normativi - potrebni za sorazmerno razdelitev, ko CSV spremeni samo skupni normativ. */
+export function preberiCsv(besedilo: string, obstojeci: Normativ[]): CsvRezultat {
   const napake: string[] = [];
   const vrstice: NormativVnos[] = [];
   const lines = besedilo.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim() !== "");
@@ -225,8 +319,12 @@ export function preberiCsv(besedilo: string): CsvRezultat {
   if (manjkajo.length) {
     return { vrstice, napake: [`V glavi manjkajo obvezni stolpci: ${manjkajo.join(", ")}`], stolpci: [] };
   }
+  if (!NORMATIV_STOLPCI_CSV.some((s) => glava.includes(s))) {
+    return { vrstice, napake: ["V glavi ni nobenega stolpca z normativom (normativ_skupni ali normativ_...)."], stolpci: [] };
+  }
   const idx = (s: string) => glava.indexOf(s);
   const videni = new Set<string>();
+  const poIdentu = new Map(obstojeci.map((n) => [n.ident, n]));
 
   lines.slice(1).forEach((line, i) => {
     const st = i + 2;
@@ -250,19 +348,46 @@ export function preberiCsv(besedilo: string): CsvRezultat {
       return n;
     };
 
-    const skupni = stevilo("normativ_skupni", null);
-    if (skupni === null) return napake.push(`Vrstica ${st} (${ident}): manjka normativ_skupni.`);
+    // Pravilo skupni = vsota oddelkov (prazna celica = ne spremeni)
+    const osnova: Normativ = poIdentu.get(ident) ?? {
+      id: 0,
+      ident,
+      naziv,
+      druzina: "",
+      velikost: null,
+      normativ_skupni: 0,
+      normativ_proizvodnja: 0,
+      normativ_montaza: 0,
+      normativ_elektro: 0,
+      normativ_testiranje: 0,
+      barvanje: false,
+      cleaning: false,
+      opomba: null,
+      visible: true,
+    };
+    const uskladen = uporabiSkupnoSpremembo(osnova, {
+      druzina: null,
+      velikost: null,
+      barvanje: null,
+      cleaning: null,
+      normativ_skupni: stevilo("normativ_skupni", null),
+      normativ_proizvodnja: stevilo("normativ_proizvodnja", null),
+      normativ_montaza: stevilo("normativ_montaza", null),
+      normativ_elektro: stevilo("normativ_elektro", null),
+      normativ_testiranje: stevilo("normativ_testiranje", null),
+    });
+    if (typeof uskladen === "string") return napake.push(`Vrstica ${st} (${ident}): ${uskladen}.`);
 
     vrstice.push({
       ident,
       naziv,
       druzina: get("druzina")?.trim() ?? "",
       velikost: stevilo("velikost", null),
-      normativ_skupni: skupni,
-      normativ_proizvodnja: stevilo("normativ_proizvodnja", 0)!,
-      normativ_montaza: stevilo("normativ_montaza", 0)!,
-      normativ_elektro: stevilo("normativ_elektro", 0)!,
-      normativ_testiranje: stevilo("normativ_testiranje", 0)!,
+      normativ_skupni: uskladen.normativ_skupni,
+      normativ_proizvodnja: uskladen.normativ_proizvodnja,
+      normativ_montaza: uskladen.normativ_montaza,
+      normativ_elektro: uskladen.normativ_elektro,
+      normativ_testiranje: uskladen.normativ_testiranje,
       barvanje: daNe(get("barvanje")),
       cleaning: daNe(get("cleaning")),
       opomba: null,
@@ -270,7 +395,14 @@ export function preberiCsv(besedilo: string): CsvRezultat {
     });
   });
 
-  return { vrstice, napake, stolpci: CSV_STOLPCI.filter((st) => glava.includes(st)) };
+  // Normativi se vedno shranijo vsi skupaj (usklajeni), ostali stolpci samo, če so v datoteki
+  return {
+    vrstice,
+    napake,
+    stolpci: CSV_STOLPCI.filter(
+      (st) => glava.includes(st) || (NORMATIV_STOLPCI_CSV as readonly string[]).includes(st),
+    ),
+  };
 }
 
 /**

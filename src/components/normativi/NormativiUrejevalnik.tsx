@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ChevronLeft,
@@ -10,8 +11,11 @@ import {
   EyeOff,
   FileUp,
   Info,
+  Pencil,
   Plus,
+  Scale,
   Search,
+  X,
 } from "lucide-react";
 import {
   CSV_PREDLOGA,
@@ -22,11 +26,14 @@ import {
   prenesiDatoteko,
   preberiCsv,
   shraniNormative,
+  uporabiSkupnoSpremembo,
+  uskladiNormativ,
   uvoziNormative,
   vsotaNeUjema,
   type CsvRezultat,
   type Normativ,
   type NormativPolje,
+  type SkupnaSprememba,
 } from "@/lib/normativi";
 import { useNeshranjeno } from "@/lib/neshranjeno";
 import { formatNum, parseNum } from "@/lib/stevila";
@@ -38,6 +45,7 @@ import { ConfigMissing, Loading } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
 import { CsvNavodila } from "./CsvNavodila";
+import { SkupnaSpremembaOkno } from "./SkupnaSpremembaOkno";
 
 const NA_STRAN = 50;
 
@@ -62,12 +70,15 @@ const PRAZEN: Omit<Normativ, "id"> = {
   visible: true,
 };
 
-export function NormativiUrejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
+/** Nov normativ, ki ga odpremo iz zasedenosti (nalog brez normativa). */
+export type NovNormativ = { ident: string; naziv: string };
+
+export function NormativiUrejevalnik({ nov }: { nov?: NovNormativ }) {
   if (!supabaseConfigured) return <ConfigMissing />;
-  return <Urejevalnik zacetniIdent={zacetniIdent} />;
+  return <Urejevalnik nov={nov} />;
 }
 
-function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
+function Urejevalnik({ nov }: { nov?: NovNormativ }) {
   const notify = useToast();
   const [vsi, setVsi] = useState<Normativ[] | null>(null);
   const [urejanja, setUrejanja] = useState<Record<number, Normativ>>({});
@@ -77,7 +88,7 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
   const [shranjujem, setShranjujem] = useState(false);
 
   // Filtri
-  const [fIdent, setFIdent] = useState(zacetniIdent ?? "");
+  const [fIdent, setFIdent] = useState("");
   const [fNaziv, setFNaziv] = useState("");
   const [fDruzine, setFDruzine] = useState<string[]>([]);
   const [fVelikost, setFVelikost] = useState("");
@@ -87,10 +98,15 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
   const [fSkriti, setFSkriti] = useState(false);
   const [stran, setStran] = useState(0);
 
+  // Primerjava: nov normativ, po katerega družini in velikosti se filtrira tabela
+  const [primerjavaId, setPrimerjavaId] = useState<number | null>(null);
+  const [izZasedenosti, setIzZasedenosti] = useState(false);
+
   // CSV
   const [navodilaOdprta, setNavodilaOdprta] = useState(false);
   const [csv, setCsv] = useState<(CsvRezultat & { datoteka: string }) | null>(null);
   const [uvazam, setUvazam] = useState(false);
+  const [skupnaOdprta, setSkupnaOdprta] = useState(false);
 
   const steviloSprememb = Object.keys(urejanja).length;
   useNeshranjeno(steviloSprememb > 0);
@@ -105,9 +121,23 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
 
   useEffect(() => {
     naloziNormative()
-      .then(setVsi)
+      .then((data) => {
+        setVsi(data);
+        if (!nov?.ident) return;
+        // Prišli smo iz zasedenosti: pripravi novo vrstico z identom in nazivom
+        window.history.replaceState(null, "", "/proizvodnja/normativi");
+        setIzZasedenosti(true);
+        if (data.some((n) => n.ident === nov.ident)) {
+          setFIdent(nov.ident);
+          notify("info", `Normativ ${nov.ident} že obstaja.`);
+          return;
+        }
+        setNoviId(-1);
+        setPrimerjavaId(-1);
+        setUrejanja({ [-1]: { ...PRAZEN, id: -1, ident: nov.ident, naziv: nov.naziv } });
+      })
       .catch((e) => notify("error", `Napaka pri nalaganju normativov: ${e.message}`));
-  }, [notify]);
+  }, [notify, nov]);
 
   // Trenutno stanje = shranjeno + neshranjena urejanja + novi
   const vrstice = useMemo(() => {
@@ -139,6 +169,11 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
     );
   }, [vrstice, fIdent, fNaziv, fDruzine, fVelikost, fBarvanje, fSamoNapake, fBrezNormativa, fSkriti]);
 
+  const primerjava = primerjavaId !== null ? urejanja[primerjavaId] : undefined;
+  const primerljivi = primerjava ? filtrirane.filter((n) => n.id > 0) : [];
+  const povprecje = (polje: NormativPolje) =>
+    primerljivi.length ? primerljivi.reduce((vs, n) => vs + n[polje], 0) / primerljivi.length : 0;
+
   const steviloStrani = Math.max(1, Math.ceil(filtrirane.length / NA_STRAN));
   const trenutnaStran = Math.min(stran, steviloStrani - 1);
   const prikazane = filtrirane.slice(trenutnaStran * NA_STRAN, (trenutnaStran + 1) * NA_STRAN);
@@ -153,6 +188,55 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
 
   function uredi(n: Normativ, sprememba: Partial<Normativ>) {
     setUrejanja((u) => ({ ...u, [n.id]: { ...n, ...sprememba } }));
+    // Nov normativ: tabela sproti pokaže primerljive (ista družina / velikost)
+    if (n.id <= 0 && ("druzina" in sprememba || "velikost" in sprememba)) {
+      const nova = { ...n, ...sprememba };
+      setPrimerjavaId(n.id);
+      setFDruzine(nova.druzina ? [nova.druzina] : []);
+      setFVelikost(nova.velikost === null ? "" : formatNum(nova.velikost));
+      setStran(0);
+    }
+  }
+
+  /** Sprememba normativa v tabeli: skupni = vsota oddelkov ostane veljavno. */
+  function urediNormativ(n: Normativ, polje: NormativPolje, vrednost: number) {
+    const r = uskladiNormativ(n, polje, vrednost);
+    if (typeof r === "string") {
+      notify("warning", r);
+      setVerzija((v) => v + 1); // povrni prikaz celice
+      return;
+    }
+    uredi(n, {
+      normativ_skupni: r.normativ_skupni,
+      normativ_proizvodnja: r.normativ_proizvodnja,
+      normativ_montaza: r.normativ_montaza,
+      normativ_elektro: r.normativ_elektro,
+      normativ_testiranje: r.normativ_testiranje,
+    });
+  }
+
+  /** Okno "Spremeni normative": vrne napake ali uporabi spremembe (neshranjene, za pregled). */
+  function uporabiSkupno(sprememba: SkupnaSprememba): string[] {
+    const izbor = vrstice.filter((n) => izbrani.has(n.id));
+    const napake: string[] = [];
+    const nove: Record<number, Normativ> = {};
+    for (const n of izbor) {
+      const r = uporabiSkupnoSpremembo(n, sprememba);
+      if (typeof r === "string") napake.push(`${n.ident}: ${r}`);
+      else nove[n.id] = r;
+    }
+    if (napake.length) return napake;
+    setUrejanja((u) => ({ ...u, ...nove }));
+    setVerzija((v) => v + 1);
+    setSkupnaOdprta(false);
+    notify("info", `Spremenjenih ${izbor.length} normativov (rumeno). Preglej jih in klikni Shrani normative.`, 7000);
+    return [];
+  }
+
+  function koncajPrimerjavo() {
+    setPrimerjavaId(null);
+    setFDruzine([]);
+    setFVelikost("");
   }
 
   function dodaj() {
@@ -186,6 +270,7 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
     try {
       await shraniNormative(spremenjeni);
       setUrejanja({});
+      setPrimerjavaId(null);
       setVerzija((v) => v + 1);
       notify("success", `Shranjenih normativov: ${spremenjeni.length}.`);
       await nalozi();
@@ -216,7 +301,7 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
   }
 
   async function izberiCsv(file: File) {
-    const r = preberiCsv(await file.text());
+    const r = preberiCsv(await file.text(), vsi ?? []);
     setCsv({ ...r, datoteka: file.name });
   }
 
@@ -311,6 +396,44 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
         </div>
       </div>
 
+      {primerjava && (
+        <div className="fp-card flex flex-col gap-2 border-l-4 border-l-fines-500 p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Scale className="h-5 w-5 text-fines-500" aria-hidden />
+            <strong className="text-ink-900">Nov normativ {primerjava.ident || "(brez identa)"}</strong>
+            <span className="text-ink-600">
+              {primerjava.druzina || primerjava.velikost !== null
+                ? `· primerjava: družina ${primerjava.druzina || "vse"}, velikost ${primerjava.velikost ?? "vse"} (${primerljivi.length})`
+                : "· vpiši družino in velikost - spodaj se prikažejo primerljivi normativi"}
+            </span>
+            <span className="ml-auto flex gap-2">
+              {izZasedenosti && (
+                <Link
+                  href="/proizvodnja/zasedenost"
+                  title="Vrni se na zasedenost"
+                  className="inline-flex h-10 items-center rounded-lg border border-ink-200 bg-white px-4 font-semibold text-ink-700 shadow-sm hover:bg-ink-100"
+                >
+                  Nazaj na zasedenost
+                </Link>
+              )}
+              <Button hint="Počisti filtre primerjave" variant="neutral" icon={X} onClick={koncajPrimerjavo}>
+                Končaj primerjavo
+              </Button>
+            </span>
+          </div>
+          {primerljivi.length > 0 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-ink-700">
+              <span className="font-semibold">Povprečje primerljivih (h/kos):</span>
+              {NORMATIV_STOLPCI.map((st) => (
+                <span key={st.polje}>
+                  {st.label}: <strong className="tabular-nums">{formatNum(Math.round(povprecje(st.polje) * 1000) / 1000)}</strong>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {steviloNapak > 0 && !fSamoNapake && (
         <button
           type="button"
@@ -327,6 +450,14 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
       {izbrani.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-fines-50 px-3 py-2 text-sm">
           <strong className="text-fines-700">Izbranih: {izbrani.size}</strong>
+          <Button
+            hint="Spremeni vrednosti vseh izbranih normativov"
+            variant="primary"
+            icon={Pencil}
+            onClick={() => setSkupnaOdprta(true)}
+          >
+            Spremeni normative
+          </Button>
           <Button hint="Skrij izbrane normative" variant="danger" icon={EyeOff} onClick={() => vidnostIzbranih(false)}>
             Skrij
           </Button>
@@ -378,7 +509,11 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
                 <tr
                   key={n.id}
                   className={`border-b border-ink-100 ${
-                    spremenjen ? "bg-warn-50" : !n.visible ? "bg-ink-100 text-ink-400" : "hover:bg-ink-50"
+                    n.id === primerjavaId
+                      ? "bg-fines-50 outline outline-2 -outline-offset-2 outline-fines-500"
+                      : spremenjen
+                        ? "bg-warn-50"
+                        : !n.visible ? "bg-ink-100 text-ink-400" : "hover:bg-ink-50"
                   }`}
                 >
                   <td className="px-3 py-1">
@@ -405,10 +540,19 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
                       hint="Družina (izberi ali vpiši novo)"
                       className="w-28"
                       list="fp-druzine"
+                      sprotno={n.id <= 0}
+                      autoFocus={n.id === primerjavaId && !n.druzina}
                     />
                   </td>
                   <td className="px-1 py-1">
-                    <NumCell key={`v${n.id}-${verzija}`} value={n.velikost} onCommit={(v) => uredi(n, { velikost: v })} hint="Velikost" dovoliPrazno />
+                    <NumCell
+                      key={`v${n.id}-${verzija}`}
+                      value={n.velikost}
+                      onCommit={(v) => uredi(n, { velikost: v })}
+                      hint="Velikost"
+                      dovoliPrazno
+                      sprotno={n.id <= 0}
+                    />
                   </td>
                   {NORMATIV_STOLPCI.map((s) => (
                     <td key={s.polje} className="px-1 py-1">
@@ -423,9 +567,9 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
                           </span>
                         )}
                         <NumCell
-                          key={`${s.polje}${n.id}-${verzija}`}
+                          key={`${s.polje}${n.id}-${verzija}-${n[s.polje]}`}
                           value={n[s.polje]}
-                          onCommit={(v) => uredi(n, { [s.polje]: v ?? 0 })}
+                          onCommit={(v) => urediNormativ(n, s.polje, v ?? 0)}
                           hint={`Normativ ${s.label.toLowerCase()} (h/kos)`}
                           poudarjeno={s.polje === "normativ_skupni"}
                         />
@@ -501,6 +645,15 @@ function Urejevalnik({ zacetniIdent }: { zacetniIdent?: string }) {
         shraniHint="Shrani spremenjene in nove normative"
       />
 
+      <Modal open={skupnaOdprta} title="Spremeni normative" onClose={() => setSkupnaOdprta(false)}>
+        <SkupnaSpremembaOkno
+          stevilo={izbrani.size}
+          druzine={druzine}
+          onUporabi={uporabiSkupno}
+          onPreklici={() => setSkupnaOdprta(false)}
+        />
+      </Modal>
+
       {/* ============ CSV ============ */}
       <Modal open={navodilaOdprta} title="Navodila za CSV uvoz" onClose={() => setNavodilaOdprta(false)}>
         <CsvNavodila onPredloga={() => prenesiDatoteko(CSV_PREDLOGA, "normativi_predloga.csv")} />
@@ -562,12 +715,17 @@ function TextCell({
   hint,
   className = "",
   list,
+  sprotno,
+  autoFocus,
 }: {
   value: string;
   onCommit: (v: string) => void;
   hint: string;
   className?: string;
   list?: string;
+  /** Shrani ob vsakem znaku (ne šele ob izhodu iz polja). */
+  sprotno?: boolean;
+  autoFocus?: boolean;
 }) {
   return (
     <input
@@ -575,6 +733,10 @@ function TextCell({
       title={hint}
       aria-label={hint}
       list={list}
+      autoFocus={autoFocus}
+      onChange={(e) => {
+        if (sprotno && e.target.value.trim() !== value) onCommit(e.target.value.trim());
+      }}
       onBlur={(e) => {
         const v = e.target.value.trim();
         if (v !== value) onCommit(v);
@@ -590,12 +752,15 @@ function NumCell({
   hint,
   dovoliPrazno,
   poudarjeno,
+  sprotno,
 }: {
   value: number | null;
   onCommit: (v: number | null) => void;
   hint: string;
   dovoliPrazno?: boolean;
   poudarjeno?: boolean;
+  /** Shrani ob vsakem veljavnem vnosu (ne šele ob izhodu iz polja). */
+  sprotno?: boolean;
 }) {
   return (
     <input
@@ -603,6 +768,12 @@ function NumCell({
       inputMode="decimal"
       title={hint}
       aria-label={hint}
+      onChange={(e) => {
+        if (!sprotno) return;
+        const raw = e.target.value.trim();
+        const n = raw === "" ? (dovoliPrazno ? null : 0) : parseNum(raw);
+        if ((raw === "" || (n !== null && n >= 0)) && n !== value) onCommit(n);
+      }}
       onBlur={(e) => {
         const raw = e.target.value.trim();
         const n = parseNum(raw);

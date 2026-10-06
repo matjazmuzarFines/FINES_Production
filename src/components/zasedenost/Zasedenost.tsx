@@ -685,8 +685,8 @@ function NalogiTabela({
                     n.koda_artikla
                   ) : (
                     <Link
-                      href={`/proizvodnja/normativi?ident=${encodeURIComponent(n.koda_artikla)}`}
-                      title="Ni normativa - odpri urejevalnik normativov"
+                      href={`/proizvodnja/normativi?nov=${encodeURIComponent(n.koda_artikla)}&naziv=${encodeURIComponent(n.naziv_artikla ?? "")}`}
+                      title="Ni normativa - dodaj nov normativ za ta artikel"
                       className="inline-flex items-center gap-1 font-semibold text-warn-700 hover:underline"
                     >
                       <AlertTriangle className="h-3.5 w-3.5" aria-hidden />

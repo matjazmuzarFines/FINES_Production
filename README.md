@@ -74,6 +74,7 @@ Pravila: podatkov ne brišemo (`visible = false`), DELETE politike v bazi ni. Sl
 2. Odpri **SQL Editor** → New query → prilepi celotno vsebino `supabase/migrations/001_schema.sql` → **Run**.
 3. Nova query → prilepi `supabase/seed.sql` → **Run** (testni podatki).
 4. Nova query → `supabase/migrations/002_normativi_zasedenost.sql` → **Run**, nato `supabase/seed_normativi.sql` → **Run**.
+   Nato še `supabase/migrations/003_normativi_vsota.sql` → **Run** (uskladi skupni = vsota oddelkov).
 5. Preveri v **Table Editor**, da so tabele `fp_...` napolnjene, in v **Storage**, da obstaja bucket `fp-rutina-slike`.
 6. **Project Settings → API keys**: kopiraj *Project URL* in *Publishable key* (ali *anon* key).
 

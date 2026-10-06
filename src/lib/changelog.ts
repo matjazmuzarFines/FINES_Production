@@ -9,6 +9,25 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "3.03",
+    datum: "06. 10. 2026",
+    spremembe: [
+      "Normativi: gumb Spremeni normative za več izbranih hkrati (prazno polje = ne spremeni).",
+      "Pravilo: skupni normativ je vedno enak vsoti oddelkov (sprememba oddelka preračuna skupni, sprememba skupnega sorazmerno razdeli oddelke).",
+      "Enkraten popravek 148 normativov, kjer so se deleži družine sešteli v 101 % (SQL 003) in pravilo v bazi.",
+      "CSV uvoz upošteva isto pravilo; normativ_skupni ni več obvezen stolpec.",
+    ],
+  },
+  {
+    verzija: "3.02",
+    datum: "06. 10. 2026",
+    spremembe: [
+      "Zasedenost: klik na kodo brez normativa odpre Normative z novo vrstico (ident in naziv že vpisana).",
+      "Normativi: med vpisom družine in velikosti novega normativa se tabela sproti filtrira na primerljive normative.",
+      "Prikaz povprečja primerljivih normativov (skupni, P, M, E, T) in gumb Nazaj na zasedenost.",
+    ],
+  },
+  {
     verzija: "3.01",
     datum: "05. 10. 2026",
     spremembe: [
