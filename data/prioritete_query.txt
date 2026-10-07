@@ -1,0 +1,402 @@
+let
+    Site = "https://finesdoo.sharepoint.com/teams/MFG-B",
+    AllFiles = SharePoint.Files(Site, [ApiVersion = 15]),
+    TargetFolder =
+        "https://finesdoo.sharepoint.com/teams/MFG-B/Dokumenti v skupni rabi/Proizvodnja/Planiranje/Dnevni in tedenski plan/",
+    Filtered = Table.SelectRows(AllFiles, each Text.StartsWith([Folder Path], TargetFolder)),
+    
+    #"Filtered Rows" = Table.SelectRows(Filtered, each Text.StartsWith([Name], "izvozvd200")),
+    #"Filtered Hidden Files1" = Table.SelectRows(#"Filtered Rows", each [Attributes]?[Hidden]? <> true),
+    #"Filtered Hidden Files2" = Table.SelectRows(#"Filtered Hidden Files1", each [Attributes]?[Hidden]? <> true),
+    #"Invoke Custom Function2" = Table.AddColumn(#"Filtered Hidden Files2", "Transform File (2)", each #"Transform File (2)"([Content])),
+    #"Renamed Columns2" = Table.RenameColumns(#"Invoke Custom Function2", {"Name", "Source.Name"}),
+    #"Removed Other Columns2" = Table.SelectColumns(#"Renamed Columns2", {"Source.Name", "Transform File (2)"}),
+    #"Expanded Table Column2" = Table.ExpandTableColumn(#"Removed Other Columns2", "Transform File (2)", Table.ColumnNames(#"Transform File (2)"(#"Sample File (2)"))),
+
+    #"Changed Type2" = Table.TransformColumnTypes(
+        #"Expanded Table Column2",
+        {
+            {"Source.Name", type text},
+            {"IZDAJA DOKUMENTOV - (VD 100;200;300;) ", type any},
+            {"Column2", type any},
+            {"Column3", type any},
+            {"Column4", type any},
+            {"Column5", type any},
+            {"Column6", type text},
+            {"Column7", type text},
+            {"Column8", type text},
+            {"Column9", type any},
+            {"Column10", type text},
+            {"Column11", type any},
+            {"Column12", type any},
+            {"Column13", type text},
+            {"Column14", type text},
+            {"Column15", type text},
+            {"Column16", type text},
+            {"Column17", type text},
+            {"Column18", type text},
+            {"Column19", type text},
+            {"Column20", type text},
+            {"Column21", type text},
+            {"Column22", type text},
+            {"Column23", type text},
+            {"Column24", type any},
+            {"Column25", type text},
+            {"Column26", type text},
+            {"Column27", type text},
+            {"Column28", type text},
+            {"Column29", type text},
+            {"Column30", type text},
+            {"Column31", type text},
+            {"Column32", type text},
+            {"Column33", type text},
+            {"Column34", type text},
+            {"Column35", type text},
+            {"Column36", type text},
+            {"Column37", type any},
+            {"Column38", type text},
+            {"Column39", type text},
+            {"Column40", type any},
+            {"Column41", type text},
+            {"Column42", type text},
+            {"Column43", type any},
+            {"Column44", type text},
+            {"Column45", type text},
+            {"Column46", type text},
+            {"Column47", type text},
+            {"Column48", type any},
+            {"Column49", type any},
+            {"Column50", type text},
+            {"Column51", type text},
+            {"Column52", type text},
+            {"Column53", type text},
+            {"Column54", type text},
+            {"Column55", type text}
+        }
+    ),
+
+    // Če je 3. vrstica glava -> odstrani prvi 2 vrstici
+    #"Removed Top Rows" = Table.Skip(#"Changed Type2", 1),
+
+    #"Promoted Headers" = Table.PromoteHeaders(#"Removed Top Rows", [PromoteAllScalars=true]),
+
+    #"Changed Type1" = Table.TransformColumnTypes(
+        #"Promoted Headers",
+        {
+            {"izvozvd200.xlsx", type text},
+            {"Poslano", type logical},
+            {"Obdelano", type logical},
+            {"VD", Int64.Type},
+            {"Številka", Int64.Type},
+            {"Ver.", Int64.Type},
+            {"Naziv partnerja", type text},
+            {"Lokacija", type text},
+            {"Datum potrjenega statusa", Int64.Type},
+            {"Kupčevo naročilo - Številka", type any},
+            {"Kupčevo naročilo - Datum", Int64.Type},
+            {"Vezni dokument VD (IZ)", Int64.Type},
+            {"Vezni dokument Številka (IZ)", Int64.Type},
+            {"Vezni dokument Status (IZ)", type text},
+            {"Vezni dokument VD/Številka (NA)", type text},
+            {"Vezni dokument Status (NA)", type text},
+            {"Vred.po prod.ceni brez DDV", type number},
+            {"Popust 1 na postavke", type number},
+            {"Popust 2 na postavke", type number},
+            {"Osnova za DDV", type number},
+            {"DDV", type number},
+            {"Vrednost z DDV", type number},
+            {"Datum odpreme", Int64.Type},
+            {"Dan", type text},
+            {"Obvestilo (nova potrjena naročila)", type logical},
+            {"Datum/ura (poslano)", Int64.Type},
+            {"Opis dokumenta", type text},
+            {"Sestavil", type text},
+            {"Država", type text},
+            {"Skupina partnerja", type text},
+            {"Datum", Int64.Type},
+            {"Status", type text},
+            {"Datum prejema", Int64.Type},
+            {"Način prejema", type text},
+            {"Kontaktna oseba", type text},
+            {"Kontakna oseba (tel.)", type text},
+            {"Kontakt", type text},
+            {"Kom. pog.", type logical},
+            {"Interne opombe", type text},
+            {"Zaznamek / komentar", type text},
+            {"Zap", Int64.Type},
+            {"Oddelek", type text},
+            {"Komplet", type text},
+            {"Grupa opcija", Int64.Type},
+            {"IDENT", type text},
+            {"Kratki opis", type text},
+            {"Količina", Int64.Type},
+            {"EM", type text},
+            {"Vezane opcije", type logical},
+            {"Možne opcije", type logical},
+            {"ZALOGA (matično skladišče)", Int64.Type},
+            {"ZALOGA (ostalo)", Int64.Type},
+            {"PLANIRANA KOLIČINA (DN)", Int64.Type},
+            {"PROSTA ZALOGA", Int64.Type},
+            {"PROSTA ZALOGA (brez naročil)", Int64.Type},
+            {"Dokument  (SKL/VT/ŠTEVILKA)", type text}
+        }
+    ),
+
+    #"Filtered Rows2" = Table.SelectRows(#"Changed Type1", each ([Status] = "VD200-potrjeno")),
+
+    #"Removed Columns" = Table.RemoveColumns(
+        #"Filtered Rows2",
+        {
+            "izvozvd200.xlsx",
+            "Poslano",
+            "Obdelano",
+            "VD",
+            "Ver.",
+            "Datum potrjenega statusa",
+            "Kupčevo naročilo - Številka",
+            "Kupčevo naročilo - Datum",
+            "Vezni dokument VD (IZ)",
+            "Vezni dokument Številka (IZ)",
+            "Vezni dokument Status (IZ)",
+            "Vezni dokument VD/Številka (NA)",
+            "Vezni dokument Status (NA)",
+            "Vred.po prod.ceni brez DDV",
+            "Popust 1 na postavke",
+            "Popust 2 na postavke",
+            "Osnova za DDV",
+            "DDV",
+            "Vrednost z DDV",
+            "Obvestilo (nova potrjena naročila)",
+            "Datum/ura (poslano)",
+            "Opis dokumenta",
+            "Sestavil",
+            "Država",
+            "Skupina partnerja",
+            "Datum",
+            "Status",
+            "Datum prejema",
+            "Način prejema",
+            "Kontaktna oseba",
+            "Kontakna oseba (tel.)",
+            "Kontakt",
+            "Kom. pog.",
+            "Interne opombe",
+            "Zaznamek / komentar",
+            "Zap",
+            "Oddelek",
+            "Komplet",
+            "Grupa opcija",
+            "Vezane opcije",
+            "Možne opcije",
+            "Dokument  (SKL/VT/ŠTEVILKA)"
+        }
+    ),
+
+    // Datum odpreme: ddMMyyyy, tudi če je 7 številk -> pravi date
+    #"Datum odpreme (date)" =
+        Table.TransformColumns(
+            #"Removed Columns",
+            {
+                {
+                    "Datum odpreme",
+                    each
+                        let
+                            n = _
+                        in
+                            if n = null then
+                                null
+                            else
+                                let
+                                    t = Text.PadStart(Text.From(n), 8, "0"),
+                                    d = Number.FromText(Text.Start(t, 2)),
+                                    m = Number.FromText(Text.Range(t, 2, 2)),
+                                    y = Number.FromText(Text.End(t, 4))
+                                in
+                                    try #date(y, m, d) otherwise null,
+                    type date
+                }
+            }
+        ),
+
+    #"Added Index" = Table.AddIndexColumn(#"Datum odpreme (date)", "Index", 1, 1, Int64.Type),
+
+    #"Added Custom1" =
+        Table.AddColumn(
+            #"Added Index",
+            "Skupno količina naročila",
+            each
+                let
+                    thisIdent = [IDENT],
+                    t = #"Added Index",
+                    tFiltered = Table.SelectRows(t, each [IDENT] = thisIdent),
+                    s = List.Sum(List.Transform(tFiltered[#"Količina"], each try Number.From(_) otherwise 0))
+                in
+                    s
+        ),
+
+    #"Filtered Rows1" =
+        Table.SelectRows(
+            #"Added Custom1",
+            each
+                Text.StartsWith([IDENT], "100-")
+                or Text.StartsWith([IDENT], "099-")
+                or Text.StartsWith([IDENT], "110-")
+        ),
+
+    #"Filtered NonNull Date" = Table.SelectRows(#"Filtered Rows1", each [Datum odpreme] <> null),
+
+    // Število tednov se bere iz poimenovane celice "weeks" na listu Nastavitve
+    WeeksTable = Excel.CurrentWorkbook(){[Name="weeks"]}[Content],
+
+    WeeksRaw =
+        try
+            Number.From(
+                Record.Field(
+                    Table.First(WeeksTable),
+                    Table.ColumnNames(WeeksTable){0}
+                )
+            )
+        otherwise
+            1,
+
+    WeeksToShow =
+        if WeeksRaw = null or WeeksRaw < 1 then
+            1
+        else
+            Number.RoundDown(WeeksRaw),
+
+    // Časovni razpon: od ponedeljka tekočega tedna naprej
+    // Primer:
+    // weeks = 1 -> tekoči teden
+    // weeks = 2 -> tekoči teden + naslednji teden
+    // weeks = 4 -> tekoči teden + naslednji + 3. + 4. teden
+    Today = Date.From(DateTime.LocalNow()),
+    WeekStart = Date.StartOfWeek(Today, Day.Monday),
+    RangeEndExclusive = Date.AddDays(WeekStart, WeeksToShow * 7),
+
+        #"Filtered Selected Weeks" =
+        Table.SelectRows(
+            #"Filtered NonNull Date",
+            each
+                [Datum odpreme] >= WeekStart
+                and [Datum odpreme] < RangeEndExclusive
+        ),
+
+    // Datum začetka tedna - vedno ponedeljek
+    #"Added Datum začetka tedna" =
+        Table.AddColumn(
+            #"Filtered Selected Weeks",
+            "Datum začetka tedna",
+            each Date.StartOfWeek([Datum odpreme], Day.Monday),
+            type date
+        ),
+
+    // Številka tedna v letu
+    #"Added Številka tedna" =
+        Table.AddColumn(
+            #"Added Datum začetka tedna",
+            "Številka tedna",
+            each Date.WeekOfYear([Datum odpreme], Day.Monday),
+            Int64.Type
+        ),
+
+    #"Reordered Columns" =
+        Table.ReorderColumns(
+            #"Added Številka tedna",
+            {
+                "Številka tedna",
+                "Datum začetka tedna",
+                "Naziv partnerja",
+                "Datum odpreme",
+                "Dan",
+                "IDENT",
+                "Kratki opis",
+                "Količina",
+                "EM",
+                "Skupno količina naročila",
+                "ZALOGA (matično skladišče)",
+                "ZALOGA (ostalo)",
+                "PLANIRANA KOLIČINA (DN)",
+                "PROSTA ZALOGA",
+                "PROSTA ZALOGA (brez naročil)",
+                "Index"
+            }
+        ),
+
+    #"Added Custom" =
+        Table.AddColumn(
+            #"Reordered Columns",
+            "Stauts",
+            each
+                let
+                    k = try Number.From([#"Količina"]) otherwise null,
+                    zal = try Number.From([#"ZALOGA (matično skladišče)"]) otherwise 0,
+                    plan = try Number.From([#"PLANIRANA KOLIČINA (DN)"]) otherwise 0,
+                    prosta = try Number.From([#"PROSTA ZALOGA"]) otherwise 0,
+                    naroceno_skupaj = try Number.From([#"Skupno količina naročila"]) otherwise 0
+                in
+                    if k = null then
+                        null
+                    else if prosta < 0 then
+                        "MANJKA"
+                    else if zal >= k and zal >= naroceno_skupaj then
+                        "NA ZALOGI"
+                    else if zal <= k and plan > 0 and (zal + plan) >= k and prosta >= 0 and (zal + plan) >= naroceno_skupaj then
+                        "V DELU"
+                    else if k > (zal + plan) or naroceno_skupaj > (zal + plan) then
+                        "MANJKA"
+                    else
+                        "PREGLEJ"
+        ),
+
+    #"Added Grupa polizdelkov" =
+        Table.AddColumn(
+            #"Added Custom",
+            "Grupa polizdelkov",
+            each
+                let
+                    opis =
+                        if [Kratki opis] = null then
+                            ""
+                        else
+                            Text.Lower(Text.From([Kratki opis]))
+                in
+                    if Text.Contains(opis, "komplet povezovalni") then
+                        "Kitkomplet"
+                    else if Text.Contains(opis, "napa") then
+                        "Napa"
+                    else if Text.Contains(opis, "fbm") then
+                        "OC-A"
+                    else if Text.Contains(opis, "peč konvekcijska") and not Text.Contains(opis, "fbm") then
+                        "OC-B"
+                    else if Text.Contains(opis, "peč etažna") then
+                        "OD-C"
+                    else if Text.Contains(opis, "vzhajalnik") then
+                        "HTBP"
+                    else if Text.Contains(opis, "peč pica") then
+                        "OD-P"
+                    else if Text.Contains(opis, "podstavek") then
+                        "RN-CU"
+                    else if Text.Contains(opis, "vitrina") then
+                        "SCH"
+                    else if Text.Contains(opis, "voziček") then
+                        "Voziček"
+                    else
+                        null,
+            type text
+        ),
+    #"Reordered Columns1" = Table.ReorderColumns(#"Added Grupa polizdelkov",{"Številka", "Lokacija", "Naziv partnerja", "Datum odpreme", "Dan", "Številka tedna", "Datum začetka tedna", "IDENT", "Kratki opis", "Količina", "EM", "Skupno količina naročila", "ZALOGA (matično skladišče)", "ZALOGA (ostalo)", "PLANIRANA KOLIČINA (DN)", "PROSTA ZALOGA", "PROSTA ZALOGA (brez naročil)", "Index", "Stauts", "Grupa polizdelkov"}),
+
+    #"Sorted Rows" =
+        Table.Sort(
+            #"Reordered Columns1",
+            {
+                {"Datum odpreme", Order.Ascending},
+                {"Naziv partnerja", Order.Ascending},
+                {"Kratki opis", Order.Ascending}
+            }
+        ),
+    #"Merged Queries" = Table.NestedJoin(#"Sorted Rows", {"IDENT"}, vsi_normativi, {"Šifra"}, "vsi_normativi", JoinKind.LeftOuter),
+    #"Expanded vsi_normativi" = Table.ExpandTableColumn(#"Merged Queries", "vsi_normativi", {"Normativ montaža", "Normativ Proizvodnja", "Normativ Elektro", "Normativ Preizkus"}, {"Normativ montaža", "Normativ Proizvodnja", "Normativ Elektro", "Normativ Preizkus"})
+in
+    #"Expanded vsi_normativi"

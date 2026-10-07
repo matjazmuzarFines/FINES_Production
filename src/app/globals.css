@@ -36,6 +36,7 @@
   --color-warn-400: #fbbf24;
   --color-warn-500: #f59e0b;
   --color-warn-700: #b45309;
+  --color-sync-50: #eff6ff;
   --color-sync-500: #2563eb;
   --color-sync-600: #1d4ed8;
 
@@ -58,6 +59,44 @@ body {
   border: 1px solid var(--color-ink-200);
   border-radius: 0.75rem;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* Standardna glava tabele: temno siva, prilepi se pod glavo aplikacije (glej TabelaOkvir) */
+.fp-thead {
+  position: sticky;
+  top: var(--fp-thead-top, 0px);
+  z-index: 10;
+  background: var(--color-ink-800);
+  color: var(--color-ink-100);
+  text-align: left;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Zaobljeni koti tabel s standardno glavo (zgoraj glava, spodaj zadnja vrstica).
+   Zaobljenost celic deluje samo pri border-collapse: separate - zato črte vrstic (border-b na <tr>)
+   prenesemo na celice. */
+table:has(> .fp-thead) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+table:has(> .fp-thead) > tbody > tr > td {
+  border-bottom: inherit;
+}
+.fp-thead tr:first-child > :first-child {
+  border-top-left-radius: 0.5rem;
+}
+.fp-thead tr:first-child > :last-child {
+  border-top-right-radius: 0.5rem;
+}
+table:has(> .fp-thead) > tbody:last-child > tr:last-child > td:first-child {
+  border-bottom-left-radius: 0.5rem;
+}
+table:has(> .fp-thead) > tbody:last-child > tr:last-child > td:last-child {
+  border-bottom-right-radius: 0.5rem;
 }
 
 /* Drsnik (procent) */

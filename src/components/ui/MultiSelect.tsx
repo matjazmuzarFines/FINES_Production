@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { FilterNaslov } from "./Filtri";
 
 /** Spustni seznam z večkratnim izborom (checkboxi + Izberi vse). */
 export function MultiSelect({
@@ -40,7 +41,7 @@ export function MultiSelect({
 
   return (
     <div ref={ref} className="relative">
-      <span className="mb-1 block text-xs font-semibold text-ink-600">{label}</span>
+      <FilterNaslov>{label}</FilterNaslov>
       <button
         type="button"
         title={hint}

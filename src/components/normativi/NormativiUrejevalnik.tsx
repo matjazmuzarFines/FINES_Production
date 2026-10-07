@@ -14,7 +14,6 @@ import {
   Pencil,
   Plus,
   Scale,
-  Search,
   X,
 } from "lucide-react";
 import {
@@ -43,11 +42,29 @@ import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { ConfigMissing, Loading } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
+import { FilterCheckbox, FilterIskanje, FilterIzbira, FilterVrstica } from "@/components/ui/Filtri";
+import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
 import { SaveBar } from "@/components/rutina/SaveBar";
 import { CsvNavodila } from "./CsvNavodila";
 import { SkupnaSpremembaOkno } from "./SkupnaSpremembaOkno";
 
 const NA_STRAN = 50;
+
+type NormKljuc = "ident" | "naziv" | "druzina" | "velikost" | NormativPolje | "barvanje" | "cleaning";
+
+const NORM_VREDNOSTI: Record<NormKljuc, (n: Normativ) => string | number | null> = {
+  ident: (n) => n.ident,
+  naziv: (n) => n.naziv,
+  druzina: (n) => n.druzina,
+  velikost: (n) => n.velikost,
+  normativ_skupni: (n) => n.normativ_skupni,
+  normativ_proizvodnja: (n) => n.normativ_proizvodnja,
+  normativ_montaza: (n) => n.normativ_montaza,
+  normativ_elektro: (n) => n.normativ_elektro,
+  normativ_testiranje: (n) => n.normativ_testiranje,
+  barvanje: (n) => (n.barvanje ? 1 : 0),
+  cleaning: (n) => (n.cleaning ? 1 : 0),
+};
 
 const NORMATIV_STOLPCI: { polje: NormativPolje; label: string }[] = [
   { polje: "normativ_skupni", label: "Skupni" },
@@ -151,7 +168,8 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
     [vrstice],
   );
 
-  const filtrirane = useMemo(() => {
+  const sort = useRazvrscanje(NORM_VREDNOSTI);
+  const filtriraneBrezSorta = useMemo(() => {
     const id = fIdent.trim().toLowerCase();
     const naz = fNaziv.trim().toLowerCase();
     const vel = parseNum(fVelikost);
@@ -168,6 +186,11 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
           (!fBrezNormativa || n.normativ_skupni === 0)),
     );
   }, [vrstice, fIdent, fNaziv, fDruzine, fVelikost, fBarvanje, fSamoNapake, fBrezNormativa, fSkriti]);
+  // Razvrščanje po stolpcu (novi normativi ostanejo na vrhu)
+  const filtrirane = [
+    ...filtriraneBrezSorta.filter((n) => n.id <= 0),
+    ...sort.razvrsti(filtriraneBrezSorta.filter((n) => n.id > 0)),
+  ];
 
   const primerjava = primerjavaId !== null ? urejanja[primerjavaId] : undefined;
   const primerljivi = primerjava ? filtrirane.filter((n) => n.id > 0) : [];
@@ -365,36 +388,65 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
       </div>
 
       {/* ============ FILTRI ============ */}
-      <div className="fp-card grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 lg:grid-cols-6">
-        <FilterInput label="Ident" value={fIdent} onChange={filter(setFIdent)} hint="Filtriraj po identu (šifri)" />
-        <FilterInput label="Naziv" value={fNaziv} onChange={filter(setFNaziv)} hint="Filtriraj po nazivu" />
-        <MultiSelect
-          label="Družina"
-          options={["(brez)", ...druzine]}
-          value={fDruzine}
-          onChange={filter(setFDruzine)}
-          hint="Filtriraj po eni ali več družinah"
+      <FilterVrstica className="fp-card p-3">
+        <FilterIskanje
+          label="Ident"
+          value={fIdent}
+          onChange={filter(setFIdent)}
+          placeholder="Vse"
+          hint="Filtriraj po identu (šifri)"
+          className="w-full sm:w-44"
         />
-        <FilterInput label="Velikost" value={fVelikost} onChange={filter(setFVelikost)} hint="Filtriraj po velikosti" />
-        <label className="flex flex-col">
-          <span className="mb-1 text-xs font-semibold text-ink-600">Barvanje</span>
-          <select
-            value={fBarvanje}
-            title="Filtriraj po barvanju"
-            onChange={(e) => filter(setFBarvanje)(e.target.value as "" | "DA" | "NE")}
-            className="h-10 rounded-lg border border-ink-200 bg-white px-2 text-sm focus:border-fines-500 focus:outline-none"
-          >
-            <option value="">Vse</option>
-            <option value="DA">DA</option>
-            <option value="NE">NE</option>
-          </select>
-        </label>
-        <div className="col-span-2 flex flex-col justify-end gap-1 text-sm sm:col-span-3 lg:col-span-1">
-          <Check label="Vsota ≠ skupni" value={fSamoNapake} onChange={filter(setFSamoNapake)} hint="Prikaži normative, kjer vsota oddelkov ni enaka skupnemu" />
-          <Check label="Skupni = 0" value={fBrezNormativa} onChange={filter(setFBrezNormativa)} hint="Prikaži normative brez skupnega normativa" />
-          <Check label="Prikaži skrite" value={fSkriti} onChange={filter(setFSkriti)} hint="Prikaži tudi skrite normative" />
+        <FilterIskanje
+          label="Naziv"
+          value={fNaziv}
+          onChange={filter(setFNaziv)}
+          placeholder="Vse"
+          hint="Filtriraj po nazivu"
+          className="w-full sm:w-64"
+        />
+        <div className="w-full sm:w-44">
+          <MultiSelect
+            label="Družina"
+            options={["(brez)", ...druzine]}
+            value={fDruzine}
+            onChange={filter(setFDruzine)}
+            hint="Filtriraj po eni ali več družinah"
+          />
         </div>
-      </div>
+        <FilterIskanje
+          label="Velikost"
+          value={fVelikost}
+          onChange={filter(setFVelikost)}
+          placeholder="Vse"
+          hint="Filtriraj po velikosti"
+          className="w-full sm:w-28"
+        />
+        <FilterIzbira
+          label="Barvanje"
+          value={fBarvanje}
+          options={[
+            { value: "", label: "Vse" },
+            { value: "DA", label: "DA" },
+            { value: "NE", label: "NE" },
+          ]}
+          onChange={(v) => filter(setFBarvanje)(v as "" | "DA" | "NE")}
+          hint="Filtriraj po barvanju"
+        />
+        <FilterCheckbox
+          label="Vsota ≠ skupni"
+          checked={fSamoNapake}
+          onChange={filter(setFSamoNapake)}
+          hint="Prikaži normative, kjer vsota oddelkov ni enaka skupnemu"
+        />
+        <FilterCheckbox
+          label="Skupni = 0"
+          checked={fBrezNormativa}
+          onChange={filter(setFBrezNormativa)}
+          hint="Prikaži normative brez skupnega normativa"
+        />
+        <FilterCheckbox label="Prikaži skrite" checked={fSkriti} onChange={filter(setFSkriti)} hint="Prikaži tudi skrite normative" />
+      </FilterVrstica>
 
       {primerjava && (
         <div className="fp-card flex flex-col gap-2 border-l-4 border-l-fines-500 p-3 text-sm">
@@ -473,9 +525,9 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
       )}
 
       {/* ============ TABELA ============ */}
-      <div className="fp-card overflow-x-auto">
+      <TabelaOkvir className="fp-card">
         <table className="w-full min-w-[1100px] border-collapse text-sm">
-          <thead className="sticky top-0 bg-ink-800 text-left text-xs font-semibold uppercase tracking-wide text-ink-100">
+          <thead className="fp-thead">
             <tr>
               <th className="w-10 px-3 py-2">
                 <input
@@ -487,18 +539,18 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
                   className="h-4 w-4 accent-fines-500"
                 />
               </th>
-              <th className="px-2 py-2">Ident</th>
-              <th className="px-2 py-2">Naziv</th>
-              <th className="px-2 py-2">Družina</th>
-              <th className="px-2 py-2 text-right">Velikost</th>
+              <SortTh sort={sort} kljuc="ident">Ident</SortTh>
+              <SortTh sort={sort} kljuc="naziv">Naziv</SortTh>
+              <SortTh sort={sort} kljuc="druzina">Družina</SortTh>
+              <SortTh sort={sort} kljuc="velikost" desno>Velikost</SortTh>
               {NORMATIV_STOLPCI.map((s) => (
-                <th key={s.polje} className="px-2 py-2 text-right">
+                <SortTh key={s.polje} sort={sort} kljuc={s.polje} desno>
                   {s.label}
                   <span className="block text-[10px] font-normal normal-case text-ink-300">h/kos</span>
-                </th>
+                </SortTh>
               ))}
-              <th className="px-2 py-2 text-center">Barv.</th>
-              <th className="px-2 py-2 text-center">Clean.</th>
+              <SortTh sort={sort} kljuc="barvanje" className="text-center">Barv.</SortTh>
+              <SortTh sort={sort} kljuc="cleaning" className="text-center">Clean.</SortTh>
             </tr>
           </thead>
           <tbody>
@@ -611,7 +663,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
             <option key={d} value={d} />
           ))}
         </datalist>
-      </div>
+      </TabelaOkvir>
 
       {/* ============ STRANI ============ */}
       <div className="flex items-center justify-between text-sm text-ink-600">
@@ -787,53 +839,6 @@ function NumCell({
       }}
       className={`${CELL} w-20 text-right tabular-nums ${poudarjeno ? "font-bold" : ""}`}
     />
-  );
-}
-
-function FilterInput({
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  hint: string;
-}) {
-  return (
-    <label className="flex flex-col">
-      <span className="mb-1 text-xs font-semibold text-ink-600">{label}</span>
-      <span className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-ink-400" aria-hidden />
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          title={hint}
-          placeholder="Vse"
-          className="h-10 w-full rounded-lg border border-ink-200 bg-white pl-8 pr-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
-        />
-      </span>
-    </label>
-  );
-}
-
-function Check({
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  hint: string;
-}) {
-  return (
-    <label title={hint} className="flex cursor-pointer items-center gap-2">
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-fines-500" />
-      {label}
-    </label>
   );
 }
 

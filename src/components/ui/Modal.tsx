@@ -9,11 +9,14 @@ export function Modal({
   title,
   onClose,
   children,
+  sirina = "max-w-lg",
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Največja širina okna (Tailwind razred), privzeto max-w-lg. */
+  sirina?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -34,7 +37,7 @@ export function Modal({
       aria-label={title}
     >
       <div
-        className="fp-card flex max-h-[85vh] w-full max-w-lg flex-col"
+        className={`fp-card flex max-h-[85vh] w-full ${sirina} flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-ink-200 px-5 py-3">

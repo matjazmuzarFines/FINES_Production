@@ -9,6 +9,50 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "5.04",
+    datum: "07. 10. 2026",
+    spremembe: [
+      "Prioritete: izvoz v Excel za vsak zavihek posebej (odpreme, prioritete nalogov, artikli) - izvozi se to, kar je na zaslonu.",
+      "Nov TXT izvoz odprem za montažo (Teams sporočilo): datum, količina, ident, naziv, kupec in krovni nalog; kopiraj ali prenesi .txt.",
+      "Filtri na vseh straneh poravnani: naslovi v svoji vrstici nad polji, vsa polja in gumbi enake višine v isti vrsti.",
+      "Checkbox filtri v okvirju enake višine kot ostala polja (vklopljen oranžen).",
+    ],
+  },
+  {
+    verzija: "5.03",
+    datum: "07. 10. 2026",
+    spremembe: [
+      "Prioritete nalogov: vrstici sklopov (Zamuja, Po prvi odpremi) bolj vidni - izrazitejše ozadje in barvna črta levo.",
+      "Vse tabele s temno glavo imajo zaobljene kote (glava zgoraj, zadnja vrstica spodaj).",
+      "Navodila: pravilo usklajevanja komponent po celotnem projektu.",
+    ],
+  },
+  {
+    verzija: "5.02",
+    datum: "07. 10. 2026",
+    spremembe: [
+      "Enotno polje za uvoz datotek: sivo (ni podatkov), modro (nalaganje), zeleno (naloženo), ikona stanja v desnem zgornjem kotu.",
+      "Kartice statusov na Prioritetah: jasno vidno vklopljeno (barvna obroba, ozadje, kljukica) in hover.",
+      "Pogledi Prioritet so zavihki nad filtri; pod njimi filtri izbranega pogleda, Izvoz v desnem zgornjem kotu.",
+      "Prioritete nalogov razdeljene na sklopa: Zamuja (pospeši) in Po prvi odpremi.",
+      "Vse tabele s temno glavo (Prioritete, Zasedenost, Normativi): razvrščanje s klikom na stolpec in glava, ki ostane vidna pri drsenju.",
+      "Navodila: nov razdelek Standardne komponente v app_instructions.md.",
+    ],
+  },
+  {
+    verzija: "5.01",
+    datum: "07. 10. 2026",
+    spremembe: [
+      "Nov zavihek Prioritete (prvi osnutek): uvoz izvoza naročil izvozvd200.xlsx z drag & drop (zgoraj desno).",
+      "Delovni nalogi se ne uvažajo ponovno - uporabi se zadnji uvoz iz Zasedenosti (lahko se uvozi tudi tu, velja za obe strani).",
+      "Zaloga in nalogi se razdelijo po naročilih po datumu odpreme: kaj gre z zaloge, iz katerega naloga, kaj manjka.",
+      "Statusi: Manjka, Nalog zamuja, Nedorečeno, V proizvodnji, Na zalogi (pravila iz Excela + roki nalogov).",
+      "Pogled Odpreme po tednih (kot pivot), Prioritete nalogov (prodano / prosto, predlog za vodjo montaže) in Po artiklih.",
+      "Opomba in oznaka pregledano za vsako postavko (ostane tudi po novem uvozu); izvoz v Excel.",
+      "SQL 005: fp_pri_uvozi, fp_pri_postavke, fp_pri_opombe.",
+    ],
+  },
+  {
     verzija: "4.01",
     datum: "06. 10. 2026",
     spremembe: [

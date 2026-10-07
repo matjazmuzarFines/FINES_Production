@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronLeft, ChevronRight, Download, Search, Settings, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, Settings, Users } from "lucide-react";
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
 import { ODDELKI_NORMATIVA, naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { useNeshranjeno } from "@/lib/neshranjeno";
@@ -34,7 +34,9 @@ import { Modal } from "@/components/ui/Modal";
 import { ConfigMissing, Loading } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
-import { NalogiDropzone } from "./NalogiDropzone";
+import { FilterCheckbox, FilterIskanje, FilterPolje, FilterVrstica } from "@/components/ui/Filtri";
+import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
+import { UvozDropzone } from "@/components/ui/UvozDropzone";
 
 const STEVILO_TEDNOV = 8;
 
@@ -210,7 +212,14 @@ function ZasedenostInner() {
           <p className="text-sm text-ink-500">Tedni od ponedeljka do nedelje · nalogi razvrščeni po roku izdelave</p>
         </div>
         <div className="w-full sm:w-80">
-          <NalogiDropzone uvoz={uvoz} zaseden={uvazam} onFile={izberiDatoteko} />
+          <UvozDropzone
+            naslov="Uvoz nalogov (.xlsx)"
+            hint="Povleci sem xlsx z nalogi ali klikni"
+            enota="nalogov"
+            uvoz={uvoz ? { ...uvoz, stevilo: uvoz.st_nalogov } : null}
+            nalagam={uvazam}
+            onFile={izberiDatoteko}
+          />
         </div>
       </div>
 
@@ -553,6 +562,23 @@ function Legenda({ cls, label }: { cls: string; label: string }) {
 // TABELA NALOGOV IZBRANEGA TEDNA
 // =====================================================================
 
+type NalogKljuc = "nalog" | "krovni" | "skupina" | "koda" | "naziv" | "rok" | "preostala" | OddelekKoda | "skupaj";
+
+const NALOG_VREDNOSTI: Record<NalogKljuc, (n: NalogIzracun) => string | number | null> = {
+  nalog: (n) => n.st_naloga,
+  krovni: (n) => n.krovni_dn,
+  skupina: (n) => n.skupina_dn,
+  koda: (n) => n.koda_artikla,
+  naziv: (n) => n.naziv_artikla,
+  rok: (n) => n.rok_izdelave,
+  preostala: (n) => n.preostala,
+  P: (n) => n.ure.P,
+  M: (n) => n.ure.M,
+  E: (n) => n.ure.E,
+  T: (n) => n.ure.T,
+  skupaj: (n) => (n.normativ ? n.ureSkupaj : null),
+};
+
 function NalogiTabela({
   izracun,
   izbor,
@@ -583,7 +609,8 @@ function NalogiTabela({
           : "Vsi nalogi";
 
   const q = iskanje.trim().toLowerCase();
-  const vrstice = izracun
+  const sort = useRazvrscanje(NALOG_VREDNOSTI);
+  const filtrirane = izracun
     .filter((n) =>
       izbor.tip === "teden"
         ? n.teden === izbor.teden
@@ -609,34 +636,17 @@ function NalogiTabela({
         ),
     )
     .sort((a, b) => (a.rok_izdelave ?? "9999").localeCompare(b.rok_izdelave ?? "9999") || a.st_naloga.localeCompare(b.st_naloga));
+  const vrstice = sort.razvrsti(filtrirane);
 
   const vsota = (k: OddelekKoda | "skupaj") =>
     vrstice.reduce((s, n) => s + (k === "skupaj" ? n.ureSkupaj : n.ure[k]), 0);
 
   return (
     <div className="fp-card flex flex-col gap-3 p-3 sm:p-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-start gap-3">
         <h3 className="mr-auto text-lg font-bold text-ink-900">
           {naslov} <span className="text-sm font-normal text-ink-500">· {vrstice.length} nalogov</span>
         </h3>
-        <div className="flex gap-1">
-          <Button
-            hint="Prikaži vse uvožene naloge"
-            variant={izbor.tip === "vsi" ? "primary" : "neutral"}
-            onClick={() => onIzbor({ tip: "vsi" })}
-          >
-            Vsi
-          </Button>
-          {brezRoka > 0 && (
-            <Button
-              hint="Prikaži naloge brez roka izdelave"
-              variant={izbor.tip === "brez_roka" ? "primary" : "neutral"}
-              onClick={() => onIzbor({ tip: "brez_roka" })}
-            >
-              Brez roka ({brezRoka})
-            </Button>
-          )}
-        </div>
         <Button
           hint="Izvozi prikazane naloge v Excel"
           variant="neutral"
@@ -653,73 +663,93 @@ function NalogiTabela({
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="relative min-w-60 flex-1 sm:max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-ink-400" aria-hidden />
-          <input
-            value={iskanje}
-            onChange={(e) => setIskanje(e.target.value)}
-            placeholder="Išči nalog, kodo, naziv, skupino ..."
-            title="Išči med prikazanimi nalogi"
-            className="h-10 w-full rounded-lg border border-ink-200 pl-8 pr-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
-          />
-        </label>
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter po oddelkih">
-          {ODDELKI_NORMATIVA.map((o) => {
-            const aktiven = filterOddelkov.includes(o.koda);
-            return (
-              <button
-                key={o.koda}
-                type="button"
-                aria-pressed={aktiven}
-                title={`${aktiven ? "Odstrani filter" : "Prikaži naloge z normativom"}: ${o.label}`}
-                onClick={() =>
-                  onFilterOddelkov(aktiven ? filterOddelkov.filter((k) => k !== o.koda) : [...filterOddelkov, o.koda])
-                }
-                className={`h-9 rounded-full border px-3 text-sm font-semibold transition-colors ${
-                  aktiven
-                    ? "border-fines-500 bg-fines-500 text-white"
-                    : "border-ink-200 bg-white text-ink-600 hover:border-fines-500 hover:text-fines-500"
-                }`}
-              >
-                {o.label}
-              </button>
-            );
-          })}
-          {filterOddelkov.length > 0 && (
-            <button
-              type="button"
-              title="Počisti filter oddelkov"
-              onClick={() => onFilterOddelkov([])}
-              className="px-2 text-xs font-semibold text-ink-500 hover:underline"
+      <FilterVrstica>
+        <FilterIskanje
+          value={iskanje}
+          onChange={setIskanje}
+          placeholder="Nalog, koda, naziv, skupina ..."
+          hint="Išči med prikazanimi nalogi"
+        />
+        <FilterPolje label="Prikaz">
+          <div className="flex gap-1">
+            <Button
+              hint="Prikaži vse uvožene naloge"
+              variant={izbor.tip === "vsi" ? "primary" : "neutral"}
+              onClick={() => onIzbor({ tip: "vsi" })}
             >
-              Počisti
-            </button>
-          )}
-        </div>
-        <label title="Prikaži samo naloge brez normativa" className="flex cursor-pointer items-center gap-2 text-sm">
-          <input type="checkbox" checked={samoBrez} onChange={(e) => setSamoBrez(e.target.checked)} className="h-4 w-4 accent-fines-500" />
-          Samo brez normativa
-        </label>
-      </div>
+              Vsi
+            </Button>
+            {brezRoka > 0 && (
+              <Button
+                hint="Prikaži naloge brez roka izdelave"
+                variant={izbor.tip === "brez_roka" ? "primary" : "neutral"}
+                onClick={() => onIzbor({ tip: "brez_roka" })}
+              >
+                Brez roka ({brezRoka})
+              </Button>
+            )}
+          </div>
+        </FilterPolje>
+        <FilterPolje label="Oddelki (normativ > 0)">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter po oddelkih">
+            {ODDELKI_NORMATIVA.map((o) => {
+              const aktiven = filterOddelkov.includes(o.koda);
+              return (
+                <button
+                  key={o.koda}
+                  type="button"
+                  aria-pressed={aktiven}
+                  title={`${aktiven ? "Odstrani filter" : "Prikaži naloge z normativom"}: ${o.label}`}
+                  onClick={() =>
+                    onFilterOddelkov(aktiven ? filterOddelkov.filter((k) => k !== o.koda) : [...filterOddelkov, o.koda])
+                  }
+                  className={`h-10 rounded-full border px-3 text-sm font-semibold transition-colors ${
+                    aktiven
+                      ? "border-fines-500 bg-fines-500 text-white"
+                      : "border-ink-200 bg-white text-ink-600 hover:border-fines-500 hover:text-fines-500"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+            {filterOddelkov.length > 0 && (
+              <button
+                type="button"
+                title="Počisti filter oddelkov"
+                onClick={() => onFilterOddelkov([])}
+                className="h-10 px-2 text-xs font-semibold text-ink-500 hover:underline"
+              >
+                Počisti
+              </button>
+            )}
+          </div>
+        </FilterPolje>
+        <FilterCheckbox
+          checked={samoBrez}
+          onChange={setSamoBrez}
+          label="Samo brez normativa"
+          hint="Prikaži samo naloge brez normativa"
+        />
+      </FilterVrstica>
 
-      <div className="overflow-x-auto">
+      <TabelaOkvir>
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="bg-ink-800 text-left text-xs font-semibold uppercase tracking-wide text-ink-100">
+          <thead className="fp-thead">
             <tr>
-              <th className="px-2 py-2">Nalog</th>
-              <th className="px-2 py-2">Krovni</th>
-              <th className="px-2 py-2">Skupina DN</th>
-              <th className="px-2 py-2">Koda</th>
-              <th className="px-2 py-2">Naziv artikla</th>
-              <th className="px-2 py-2">Rok</th>
-              <th className="px-2 py-2 text-right">Preost.</th>
+              <SortTh sort={sort} kljuc="nalog">Nalog</SortTh>
+              <SortTh sort={sort} kljuc="krovni">Krovni</SortTh>
+              <SortTh sort={sort} kljuc="skupina">Skupina DN</SortTh>
+              <SortTh sort={sort} kljuc="koda">Koda</SortTh>
+              <SortTh sort={sort} kljuc="naziv">Naziv artikla</SortTh>
+              <SortTh sort={sort} kljuc="rok">Rok</SortTh>
+              <SortTh sort={sort} kljuc="preostala" desno>Preost.</SortTh>
               {KODE.map((k) => (
-                <th key={k} className="px-2 py-2 text-right">
+                <SortTh key={k} sort={sort} kljuc={k} desno>
                   {k} h
-                </th>
+                </SortTh>
               ))}
-              <th className="px-2 py-2 text-right">Skupaj h</th>
+              <SortTh sort={sort} kljuc="skupaj" desno>Skupaj h</SortTh>
             </tr>
           </thead>
           <tbody>
@@ -781,7 +811,7 @@ function NalogiTabela({
             </tfoot>
           )}
         </table>
-      </div>
+      </TabelaOkvir>
     </div>
   );
 }
