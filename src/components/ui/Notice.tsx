@@ -1,13 +1,36 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Construction, Database } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Construction, Database, XCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-export function WarningText({ children }: { children: ReactNode }) {
+const TONI = {
+  warn: { cls: "bg-warn-50 text-warn-700", icon: AlertTriangle },
+  ok: { cls: "bg-ok-50 text-ok-600", icon: CheckCircle2 },
+  nok: { cls: "bg-nok-50 text-nok-600", icon: XCircle },
+} satisfies Record<string, { cls: string; icon: LucideIcon }>;
+
+function NoticeText({ ton, className = "", children }: { ton: keyof typeof TONI; className?: string; children: ReactNode }) {
+  const { cls, icon: Icon } = TONI[ton];
   return (
-    <p className="flex items-start gap-2 rounded-lg bg-warn-50 px-3 py-2 text-sm font-medium text-warn-700">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-      {children}
-    </p>
+    <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm font-medium ${cls} ${className}`}>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
+}
+
+/** Opozorilo - rumeno, ikona trikotnika. */
+export function WarningText({ className, children }: { className?: string; children: ReactNode }) {
+  return <NoticeText ton="warn" className={className}>{children}</NoticeText>;
+}
+
+/** Uspeh - zeleno, kljukica. */
+export function SuccessText({ className, children }: { className?: string; children: ReactNode }) {
+  return <NoticeText ton="ok" className={className}>{children}</NoticeText>;
+}
+
+/** Napaka - rdeče, križec. */
+export function ErrorText({ className, children }: { className?: string; children: ReactNode }) {
+  return <NoticeText ton="nok" className={className}>{children}</NoticeText>;
 }
 
 export function ConfigMissing() {

@@ -99,7 +99,7 @@ export function CsvNavodila({ onPredloga }: { onPredloga: () => void }) {
         </p>
       </section>
 
-      <Button hint="Prenesi prazno predlogo CSV z glavo" variant="neutral" icon={Download} onClick={onPredloga} className="self-start">
+      <Button hint="Prenesi prazno predlogo CSV z glavo" variant="primary" icon={Download} onClick={onPredloga} className="self-start">
         Prenesi predlogo
       </Button>
     </div>

@@ -59,11 +59,11 @@ export function MonthCalendar({
     <div className="fp-card p-3 sm:p-5">
       {/* Navigacija koledarja */}
       <div className="mb-4 flex items-center gap-2">
-        <IconButton hint="Prikaži prejšnji mesec" icon={ChevronLeft} onClick={() => onMonthChange(addMonths(mesec, -1))} />
+        <IconButton hint="Prikaži prejšnji mesec" variant="neutral" icon={ChevronLeft} onClick={() => onMonthChange(addMonths(mesec, -1))} />
         <h2 className="flex-1 text-center text-lg font-bold text-ink-800 sm:text-xl" suppressHydrationWarning>
           {formatMonth(mesec)}
         </h2>
-        <IconButton hint="Prikaži naslednji mesec" icon={ChevronRight} onClick={() => onMonthChange(addMonths(mesec, 1))} />
+        <IconButton hint="Prikaži naslednji mesec" variant="neutral" icon={ChevronRight} onClick={() => onMonthChange(addMonths(mesec, 1))} />
         <Button
           hint="Prikaži trenutni mesec"
           variant="neutral"

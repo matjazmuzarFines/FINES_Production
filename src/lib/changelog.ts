@@ -9,6 +9,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "5.05",
+    datum: "08. 10. 2026",
+    spremembe: [
+      "Navodila preseljena v skupni repo FINES_Standardi (enaka za vse Fines aplikacije).",
+      "Barve gumbov po novem pravilu: izvoz (Excel, CSV, TXT, predloga), prenos .txt in Izhod so oranžni; bel ostane samo za prikaz (nazaj, naprej, prekliči).",
+      "Puščice za listanje (tedni, meseci, strani) in nastavitve so beli okrogli gumbi z obrobo.",
+      "Normativi: gumb Prikaži (ponovno prikaže skrite) je zelen.",
+      "Rutina: enoten izbirnik DA/NE in lestvica ocen 1-5 (obarvane stopnje do izbrane, desno opis ocene).",
+      "Napake pri uvozu normativov in skupni spremembi v enotnem rdečem obvestilu.",
+    ],
+  },
+  {
     verzija: "5.04",
     datum: "07. 10. 2026",
     spremembe: [

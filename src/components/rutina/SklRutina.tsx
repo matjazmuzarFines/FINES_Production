@@ -19,7 +19,7 @@ import {
 import { compressImage } from "@/lib/images";
 import { useNeshranjeno } from "@/lib/neshranjeno";
 import { supabaseConfigured } from "@/lib/supabase";
-import { ChoiceGroup, daNeOptions } from "@/components/ui/Choice";
+import { DaNe } from "@/components/ui/Choice";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
@@ -190,9 +190,9 @@ function SklRutinaInner({ datum }: { datum: IsoDate }) {
                 </div>
 
                 {t.tip_vnosa === "DA_NE" ? (
-                  <ChoiceGroup
+                  <DaNe
                     value={v.odgovor}
-                    options={daNeOptions(t.naziv)}
+                    subject={t.naziv}
                     onChange={(x) => nastavi(t.id, { odgovor: x })}
                   />
                 ) : (

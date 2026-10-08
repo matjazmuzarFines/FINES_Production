@@ -3,13 +3,14 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
+/** Barva pove, kaj gumb naredi (app_instructions.md → Barve). */
 export type ButtonVariant =
-  | "primary" // oranžna - glavna akcija / navigacija
-  | "success" // zelena - dodaj, potrdi, shrani
+  | "primary" // oranžna - funkcija v aplikaciji: prenos PDF/ZIP/Excel/TXT, kopiraj, izračun, izhod
+  | "success" // zelena - dodaj, potrdi, shrani, naloži v bazo
   | "danger" // rdeča - izbriši, odstrani
   | "warning" // rumena - opozorilo
-  | "sync" // modra - sync / zunanje funkcije
-  | "neutral"; // siva - sekundarno
+  | "sync" // modra - funkcija zunaj aplikacije: e-mail, workflow, Power Apps, Teams, sync
+  | "neutral"; // bel z obrobo - samo prikaz / navigacija: nazaj, naprej, prekliči, ponastavi filtre
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-fines-500 text-white hover:bg-fines-600 active:bg-fines-700",
@@ -60,7 +61,7 @@ type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title" | "
   variant?: "ghost" | ButtonVariant;
 };
 
-/** Okrogel gumb samo z ikono (puščice, info, zapri ...). */
+/** Okrogel gumb samo z ikono. Barva po istem pravilu; `ghost` samo za info / zapri / meni. */
 export function IconButton({
   hint,
   icon: Icon,

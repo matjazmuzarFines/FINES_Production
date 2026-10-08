@@ -244,8 +244,8 @@ function ZasedenostInner() {
           {/* ============ TEDENSKI PREGLED ============ */}
           <div className="fp-card p-3 sm:p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <IconButton hint="Premakni pregled en teden nazaj" icon={ChevronLeft} onClick={() => setZacetek(addDays(zacetek, -7))} />
-              <IconButton hint="Premakni pregled en teden naprej" icon={ChevronRight} onClick={() => setZacetek(addDays(zacetek, 7))} />
+              <IconButton hint="Premakni pregled en teden nazaj" variant="neutral" icon={ChevronLeft} onClick={() => setZacetek(addDays(zacetek, -7))} />
+              <IconButton hint="Premakni pregled en teden naprej" variant="neutral" icon={ChevronRight} onClick={() => setZacetek(addDays(zacetek, 7))} />
               <Button
                 hint="Začni pregled s tekočim tednom"
                 variant="neutral"
@@ -259,7 +259,8 @@ function ZasedenostInner() {
                 Število zaposlenih vpiši za vsak teden posebej
               </span>
               <IconButton
-                hint="Privzeto število zaposlenih in ure na dan"
+                hint="Nastavi privzeto število zaposlenih in ure na dan"
+                variant="neutral"
                 icon={Settings}
                 onClick={() => setNastavitveOdprte(true)}
               />
@@ -649,7 +650,7 @@ function NalogiTabela({
         </h3>
         <Button
           hint="Izvozi prikazane naloge v Excel"
-          variant="neutral"
+          variant="primary"
           icon={Download}
           disabled={vrstice.length === 0}
           onClick={() =>

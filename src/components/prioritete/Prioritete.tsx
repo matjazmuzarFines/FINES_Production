@@ -442,7 +442,7 @@ function PrioriteteInner() {
                   {pogled === "tedni" && (
                     <Button
                       hint="Sporočilo za montažo (Teams) kot besedilo"
-                      variant="neutral"
+                      variant="primary"
                       icon={FileText}
                       disabled={prikazane.length === 0}
                       onClick={() => setTxtOdprt(true)}
@@ -450,7 +450,7 @@ function PrioriteteInner() {
                       TXT
                     </Button>
                   )}
-                  <Button hint={IZVOZ_HINT[pogled]} variant="neutral" icon={Download} onClick={izvozi}>
+                  <Button hint={IZVOZ_HINT[pogled]} variant="primary" icon={Download} onClick={izvozi}>
                     Excel
                   </Button>
                 </div>
@@ -1101,7 +1101,7 @@ function TxtSporocilo({ besedilo, ime }: { besedilo: string; ime: string }) {
         onFocus={(e) => e.target.select()}
       />
       <div className="flex justify-end gap-2">
-        <Button hint="Prenesi sporočilo kot .txt datoteko" variant="neutral" icon={Download} onClick={() => prenesiTxt(besedilo, ime)}>
+        <Button hint="Prenesi sporočilo kot .txt datoteko" variant="primary" icon={Download} onClick={() => prenesiTxt(besedilo, ime)}>
           Prenesi .txt
         </Button>
         <Button

@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { ODDELKI_NORMATIVA, type SkupnaSprememba } from "@/lib/normativi";
 import { parseNum } from "@/lib/stevila";
 import { Button } from "@/components/ui/Button";
+import { ErrorText } from "@/components/ui/Notice";
 
 type Polje = keyof SkupnaSprememba;
 
@@ -148,14 +149,14 @@ export function SkupnaSpremembaOkno({
       </div>
 
       {napake.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-lg bg-nok-50 p-3 text-nok-600">
+        <ErrorText className="max-h-40 overflow-y-auto">
           <p className="mb-1 font-semibold">Spremembe niso bile uporabljene:</p>
-          <ul className="list-disc space-y-0.5 pl-5">
+          <ul className="list-disc space-y-0.5 pl-5 font-normal">
             {napake.slice(0, 50).map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
-        </div>
+        </ErrorText>
       )}
 
       <div className="flex justify-end gap-2">

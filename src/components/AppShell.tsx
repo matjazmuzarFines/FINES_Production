@@ -77,6 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {!isHome && (
               <IconButton
                 hint="Vrni se na nadrejeno stran"
+                variant="neutral"
                 icon={ChevronLeft}
                 className="sm:hidden"
                 onClick={nazaj}
@@ -87,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               icon={Info}
               onClick={() => setInfoOpen(true)}
             />
-            <Button hint="Zapri aplikacijo" variant="neutral" icon={LogOut} onClick={exitApp}>
+            <Button hint="Zapri aplikacijo" variant="primary" icon={LogOut} onClick={exitApp}>
               <span className="hidden sm:inline">Izhod</span>
             </Button>
           </div>

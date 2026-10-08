@@ -40,7 +40,7 @@ import { supabaseConfigured } from "@/lib/supabase";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
-import { ConfigMissing, Loading } from "@/components/ui/Notice";
+import { ConfigMissing, ErrorText, Loading } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { FilterCheckbox, FilterIskanje, FilterIzbira, FilterVrstica } from "@/components/ui/Filtri";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
@@ -379,7 +379,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
         <IconButton hint="Navodila za CSV uvoz normativov" icon={Info} onClick={() => setNavodilaOdprta(true)} />
         <Button
           hint={izbrani.size ? "Izvozi izbrane normative v CSV" : "Izvozi filtrirane normative v CSV"}
-          variant="neutral"
+          variant="primary"
           icon={Download}
           onClick={izvozi}
         >
@@ -514,7 +514,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
             Skrij
           </Button>
           {fSkriti && (
-            <Button hint="Ponovno prikaži izbrane normative" variant="neutral" icon={Eye} onClick={() => vidnostIzbranih(true)}>
+            <Button hint="Ponovno prikaži izbrane normative" variant="success" icon={Eye} onClick={() => vidnostIzbranih(true)}>
               Prikaži
             </Button>
           )}
@@ -672,12 +672,13 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
           {Math.min((trenutnaStran + 1) * NA_STRAN, filtrirane.length)} od {filtrirane.length}
         </span>
         <div className="flex items-center gap-1">
-          <IconButton hint="Prejšnja stran" icon={ChevronLeft} disabled={trenutnaStran === 0} onClick={() => setStran(trenutnaStran - 1)} />
+          <IconButton hint="Prejšnja stran" variant="neutral" icon={ChevronLeft} disabled={trenutnaStran === 0} onClick={() => setStran(trenutnaStran - 1)} />
           <span className="px-2">
             {trenutnaStran + 1} / {steviloStrani}
           </span>
           <IconButton
             hint="Naslednja stran"
+            variant="neutral"
             icon={ChevronRight}
             disabled={trenutnaStran >= steviloStrani - 1}
             onClick={() => setStran(trenutnaStran + 1)}
@@ -725,14 +726,14 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
               </p>
             )}
             {csv.napake.length > 0 && (
-              <div className="max-h-48 overflow-y-auto rounded-lg bg-nok-50 p-3 text-nok-600">
+              <ErrorText className="max-h-48 overflow-y-auto">
                 <p className="mb-1 font-semibold">Vrstice z napako ne bodo uvožene:</p>
-                <ul className="list-disc space-y-0.5 pl-5">
+                <ul className="list-disc space-y-0.5 pl-5 font-normal">
                   {csv.napake.slice(0, 100).map((n) => (
                     <li key={n}>{n}</li>
                   ))}
                 </ul>
-              </div>
+              </ErrorText>
             )}
             <div className="flex justify-end gap-2">
               <Button hint="Prekliči uvoz" variant="neutral" disabled={uvazam} onClick={() => setCsv(null)}>

@@ -20,7 +20,7 @@ import {
 import { compressImage } from "@/lib/images";
 import { useNeshranjeno } from "@/lib/neshranjeno";
 import { supabaseConfigured } from "@/lib/supabase";
-import { ChoiceGroup, daNeOptions, scoreOptions } from "@/components/ui/Choice";
+import { DaNe, Lestvica, OCENE_1_5 } from "@/components/ui/Choice";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
@@ -209,15 +209,16 @@ function PrRutinaInner({ datum }: { datum: IsoDate }) {
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                           <span className="text-sm font-semibold text-ink-700">{q.label}</span>
                           {q.tip === "DA_NE" ? (
-                            <ChoiceGroup
+                            <DaNe
                               value={v[q.polje] as "DA" | "NE" | null}
-                              options={daNeOptions(q.label)}
+                              subject={q.label}
                               onChange={(x) => nastavi(m.id, { [q.polje]: x })}
                             />
                           ) : (
-                            <ChoiceGroup
+                            <Lestvica
                               value={v[q.polje] as number | null}
-                              options={scoreOptions(q.label)}
+                              stopnje={OCENE_1_5}
+                              subject={q.label}
                               onChange={(x) => nastavi(m.id, { [q.polje]: x })}
                             />
                           )}

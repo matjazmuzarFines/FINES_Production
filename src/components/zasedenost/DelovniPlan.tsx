@@ -445,8 +445,8 @@ function PlanOddelka({
         {/* ============ KOLEDAR DELOVNIH MEST ============ */}
         <div className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <IconButton hint="Premakni plan en teden nazaj" icon={ChevronLeft} onClick={() => onZacetek(addDays(zacetek, -7))} />
-            <IconButton hint="Premakni plan en teden naprej" icon={ChevronRight} onClick={() => onZacetek(addDays(zacetek, 7))} />
+            <IconButton hint="Premakni plan en teden nazaj" variant="neutral" icon={ChevronLeft} onClick={() => onZacetek(addDays(zacetek, -7))} />
+            <IconButton hint="Premakni plan en teden naprej" variant="neutral" icon={ChevronRight} onClick={() => onZacetek(addDays(zacetek, 7))} />
             <Button hint="Začni plan s tekočim tednom" variant="neutral" disabled={jeTaTeden} onClick={() => onZacetek(mondayOf(danes))}>
               Ta teden
             </Button>
@@ -470,11 +470,12 @@ function PlanOddelka({
             </div>
             <span className="ml-auto text-xs text-ink-500">{formatNum(oddelek.ure_na_dan)} h/dan na osebo</span>
             <IconButton
-              hint="Privzeto število zaposlenih na delovnih mestih"
+              hint="Nastavi privzeto število zaposlenih na mestih"
+              variant="neutral"
               icon={Settings}
               onClick={() => setNastavitveOdprte(true)}
             />
-            <Button hint="Izvozi delovni plan oddelka v Excel" variant="neutral" icon={Download} disabled={lokalne.length === 0} onClick={izvozi}>
+            <Button hint="Izvozi delovni plan oddelka v Excel" variant="primary" icon={Download} disabled={lokalne.length === 0} onClick={izvozi}>
               Izvoz
             </Button>
           </div>
@@ -485,7 +486,7 @@ function PlanOddelka({
               <span className="flex-1">
                 Izbran krovni <strong className="font-mono">{izbranKrovni}</strong> - klikni dan na delovnem mestu, kjer naj se začne.
               </span>
-              <IconButton hint="Prekliči izbiro krovnega naloga" icon={X} onClick={() => setIzbranKrovni(null)} />
+              <IconButton hint="Prekliči izbiro krovnega naloga" variant="neutral" icon={X} onClick={() => setIzbranKrovni(null)} />
             </div>
           )}
 
