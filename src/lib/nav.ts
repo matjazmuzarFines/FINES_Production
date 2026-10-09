@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChartColumn, BookOpen, CalendarRange, ClipboardCheck, Factory, Gauge, ListOrdered, Warehouse } from "lucide-react";
+import { ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Gauge, ListOrdered, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -11,66 +11,104 @@ export type NavItem = {
   children?: NavItem[];
 };
 
+/** Razdelek modula (npr. Rutinsko delo, Planiranje) - v meniju oranžen naslov in tanka oranžna črta. */
+export type NavSekcija = {
+  label: string;
+  items: NavItem[];
+};
+
+/** Modul aplikacije (npr. Proizvodnja, Skladišče). */
 export type NavGroup = {
   label: string;
   icon: LucideIcon;
-  items: NavItem[];
+  sekcije: NavSekcija[];
 };
 
 export const NAV: NavGroup[] = [
   {
     label: "Proizvodnja",
     icon: Factory,
-    items: [
+    sekcije: [
       {
-        label: "Rutina",
-        href: "/proizvodnja/rutina",
-        icon: ClipboardCheck,
-        hint: "Odpri dnevno rutino delovnih mest",
-      },
-      {
-        label: "Zasedenost",
-        href: "/proizvodnja/zasedenost",
-        icon: Gauge,
-        hint: "Pokaži pregled zasedenosti in delovni plan",
-        children: [
+        label: "Rutinsko delo",
+        items: [
           {
-            label: "Pregled zasedenosti",
-            href: "/proizvodnja/zasedenost",
-            icon: ChartColumn,
-            hint: "Zasedenost oddelkov po delovnih tednih",
-          },
-          {
-            label: "Delovni plan",
-            href: "/proizvodnja/zasedenost/plan",
-            icon: CalendarRange,
-            hint: "Razporedi krovne naloge na delovna mesta",
+            label: "Rutina",
+            href: "/proizvodnja/rutina",
+            icon: ClipboardCheck,
+            hint: "Odpri dnevno rutino delovnih mest",
           },
         ],
       },
       {
-        label: "Normativi",
-        href: "/proizvodnja/normativi",
-        icon: BookOpen,
-        hint: "Urejanje normativov izdelkov",
+        label: "Planiranje",
+        items: [
+          {
+            label: "Zasedenost",
+            href: "/proizvodnja/zasedenost",
+            icon: Gauge,
+            hint: "Pokaži pregled zasedenosti in delovni plan",
+            children: [
+              {
+                label: "Pregled zasedenosti",
+                href: "/proizvodnja/zasedenost",
+                icon: ChartColumn,
+                hint: "Zasedenost oddelkov po delovnih tednih",
+              },
+              {
+                label: "Delovni plan",
+                href: "/proizvodnja/zasedenost/plan",
+                icon: CalendarRange,
+                hint: "Razporedi krovne naloge na delovna mesta",
+              },
+            ],
+          },
+          {
+            label: "Prioritete",
+            href: "/proizvodnja/prioritete",
+            icon: ListOrdered,
+            hint: "Prioritete odprem in delovnih nalogov",
+          },
+        ],
       },
       {
-        label: "Prioritete",
-        href: "/proizvodnja/prioritete",
-        icon: ListOrdered,
-        hint: "Prioritete odprem in delovnih nalogov",
+        label: "Management",
+        items: [
+          {
+            label: "Change management",
+            href: "/proizvodnja/change-management",
+            icon: TrendingUp,
+            hint: "Tedenski napredek vodij po področjih",
+          },
+        ],
+      },
+      {
+        label: "Podatki proizvodnje",
+        items: [
+          {
+            label: "Normativi",
+            href: "/proizvodnja/normativi",
+            icon: BookOpen,
+            hint: "Urejanje normativov izdelkov",
+          },
+        ],
       },
     ],
   },
   {
     label: "Skladišče",
     icon: Warehouse,
-    items: [
+    sekcije: [
       {
-        label: "Rutina",
-        href: "/skladisce/rutina",
-        icon: ClipboardCheck,
-        hint: "Odpri dnevno rutino skladišča",
+        label: "Rutinsko delo",
+        items: [
+          {
+            label: "Rutina",
+            href: "/skladisce/rutina",
+            icon: ClipboardCheck,
+            hint: "Odpri dnevno rutino skladišča",
+          },
+        ],
       },
     ],
   },
@@ -90,8 +128,10 @@ export function aktivnaPostavka(items: NavItem[], pathname: string): NavItem | n
 
 export function findNav(pathname: string) {
   for (const group of NAV) {
-    const item = aktivnaPostavka(group.items, pathname);
-    if (item) return { group, item, sub: item.children ? aktivnaPostavka(item.children, pathname) : null };
+    for (const sekcija of group.sekcije) {
+      const item = aktivnaPostavka(sekcija.items, pathname);
+      if (item) return { group, sekcija, item, sub: item.children ? aktivnaPostavka(item.children, pathname) : null };
+    }
   }
   return null;
 }
@@ -114,7 +154,7 @@ export function parentHref(pathname: string): string {
   const nadrejena = `/${deli.join("/")}`;
   if (zadnji && DATUM_RE.test(zadnji)) return `${nadrejena}?mesec=${zadnji.slice(0, 7)}`;
   // Strani iz menija (tudi Delovni plan pod Pregledom zasedenosti) vodijo domov.
-  const strani = NAV.flatMap((g) => listiNav(g.items));
+  const strani = NAV.flatMap((g) => g.sekcije.flatMap((s) => listiNav(s.items)));
   if (strani.some((i) => i.href === pathname)) return "/";
   return strani.some((i) => i.href === nadrejena) ? nadrejena : "/";
 }

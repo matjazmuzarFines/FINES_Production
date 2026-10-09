@@ -29,6 +29,7 @@ src/
 supabase/
   migrations/001_schema.sql    tabele, triggerji, RLS, storage
   migrations/002_normativi_zasedenost.sql  normativi (spl_) + zasedenost
+  migrations/004_change_management.sql     change management (fp_cm_)
   seed.sql                     testni podatki iz CSV
   seed_normativi.sql           normativi iz Excela (1237)
 data/                          izvoz Power Appa + CSV (referenca)
@@ -75,6 +76,15 @@ Pravila: podatkov ne brišemo (`visible = false`), DELETE politike v bazi ni. Sl
 3. Nova query → prilepi `supabase/seed.sql` → **Run** (testni podatki).
 4. Nova query → `supabase/migrations/002_normativi_zasedenost.sql` → **Run**, nato `supabase/seed_normativi.sql` → **Run**.
    Nato še `supabase/migrations/003_normativi_vsota.sql` → **Run** (uskladi skupni = vsota oddelkov).
+5. Nova query → `supabase/migrations/004_change_management.sql` → **Run** (Change management: vodje, področja, tedenske ocene),
+   nato `supabase/migrations/005_change_management_cilji.sql` → **Run** (barve, cilji in točke področij).
+   nato `supabase/migrations/007_change_management_operacije.sql` → **Run** (področja vodje operacij po sklopih).
+   nato `supabase/migrations/008_change_management_operacije_zdruzeno.sql` → **Run** (vodja operacij: 3 združena področja).
+   nato `supabase/migrations/009_prioritete_odpreme_vd300.sql` → **Run** (uvoz odprem VD300 za Prioritete).
+6. **Prijava:** Authentication → Users → **Add user** (Auto Confirm) za uporabnika aplikacije;
+   Authentication → Sign In / Providers → izklopi **Allow new users to sign up**.
+   Ko je aplikacija s prijavo objavljena in deluje, zaženi `supabase/migrations/006_prijava.sql`
+   (vse politike samo za prijavljene - brez prijave ni dostopa do podatkov).
 5. Preveri v **Table Editor**, da so tabele `fp_...` napolnjene, in v **Storage**, da obstaja bucket `fp-rutina-slike`.
 6. **Project Settings → API keys**: kopiraj *Project URL* in *Publishable key* (ali *anon* key).
 

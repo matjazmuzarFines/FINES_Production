@@ -27,7 +27,13 @@ import {
   prenesiTxt,
   prioriteteTxt,
   naloziOpombe,
+  naloziZadnjiOdpUvoz,
   naloziZadnjiPriUvoz,
+  preberiVd300Xlsx,
+  shraniOdpUvoz,
+  type OdpUvoz,
+  type OdpUvozPregled,
+  type Odprema,
   opisDelov,
   preberiVd200Xlsx,
   shraniOpombo,
@@ -93,6 +99,10 @@ type Podatki = {
   postavke: Postavka[];
   opombe: Map<string, Opomba>;
   napakaBaze: string | null;
+  odpUvoz: OdpUvoz | null;
+  odpreme: Odprema[];
+  /** Tabele odprem VD300 še niso ustvarjene (SQL 009). */
+  niOdpremTabel: boolean;
 };
 
 async function pridobiPodatke(): Promise<Podatki> {
@@ -102,13 +112,20 @@ async function pridobiPodatke(): Promise<Podatki> {
     nalogi: nal.nalogi,
     montaza: new Map(norm.map((n) => [n.ident, n.normativ_montaza])),
   };
+  const odp = await naloziZadnjiOdpUvoz().then(
+    (x) => ({ odpUvoz: x.uvoz, odpreme: x.odpreme, niOdpremTabel: false }),
+    (e: Error) => {
+      if (!niTabel(e.message)) throw e;
+      return { odpUvoz: null, odpreme: [], niOdpremTabel: true };
+    },
+  );
   try {
     const [pri, op] = await Promise.all([naloziZadnjiPriUvoz(), naloziOpombe()]);
-    return { ...osnova, priUvoz: pri.uvoz, postavke: pri.postavke, opombe: new Map(op.map((o) => [o.kljuc, o])), napakaBaze: null };
+    return { ...osnova, ...odp, priUvoz: pri.uvoz, postavke: pri.postavke, opombe: new Map(op.map((o) => [o.kljuc, o])), napakaBaze: null };
   } catch (e) {
     const m = (e as Error).message;
     if (!niTabel(m)) throw e;
-    return { ...osnova, priUvoz: null, postavke: [], opombe: new Map(), napakaBaze: m };
+    return { ...osnova, ...odp, priUvoz: null, postavke: [], opombe: new Map(), napakaBaze: m };
   }
 }
 
@@ -132,6 +149,9 @@ function PrioriteteInner() {
   const [nalogi, setNalogi] = useState<Nalog[]>([]);
   const [montaza, setMontaza] = useState<Map<string, number>>(new Map());
   const [opombe, setOpombe] = useState<Map<string, Opomba>>(new Map());
+  const [odpUvoz, setOdpUvoz] = useState<OdpUvoz | null>(null);
+  const [odpreme, setOdpreme] = useState<Odprema[]>([]);
+  const [niOdpremTabel, setNiOdpremTabel] = useState(false);
 
   // Nastavitve in filtri
   // Stran pokaže Loading, dokler podatki niso naloženi - branje localStorage ob inicializaciji je varno
@@ -148,11 +168,21 @@ function PrioriteteInner() {
   const [txtOdprt, setTxtOdprt] = useState(false);
   const sortNalogov = useRazvrscanje(NALOG_VREDNOSTI);
   const sortArtiklov = useRazvrscanje(ARTIKEL_VREDNOSTI);
+  const sortOdprem = useRazvrscanje<PostavkaIzracun, OdpremaKljuc>({
+    status: (p) => STATUSI.findIndex((s) => s.koda === p.status),
+    ident: (p) => p.ident,
+    opis: (p) => p.opis,
+    kolicina: (p) => p.kolicina,
+    pokritje: (p) => p.potrebnoDo,
+    opomba: (p) => opombe.get(p.kljuc)?.opomba ?? null,
+    pregledano: (p) => (opombe.get(p.kljuc)?.pregledano ? 1 : 0),
+  });
 
   // Uvoz
   const [vd200Pregled, setVd200Pregled] = useState<(PriUvozPregled & { datoteka: string }) | null>(null);
   const [nalPregled, setNalPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
-  const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | null>(null);
+  const [vd300Pregled, setVd300Pregled] = useState<(OdpUvozPregled & { datoteka: string }) | null>(null);
+  const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | "vd300" | null>(null);
 
   function shraniNastavitve(s: Partial<Shranjeno>) {
     const nove = { tednov, zamikDni, ...s };
@@ -169,6 +199,9 @@ function PrioriteteInner() {
     setNalUvoz(p.nalUvoz);
     setNalogi(p.nalogi);
     setMontaza(p.montaza);
+    setOdpUvoz(p.odpUvoz);
+    setOdpreme(p.odpreme);
+    setNiOdpremTabel(p.niOdpremTabel);
     setNapakaBaze(p.napakaBaze);
     if (p.napakaBaze) return;
     setPriUvoz(p.priUvoz);
@@ -190,8 +223,8 @@ function PrioriteteInner() {
   }, [notify]);
 
   const rezultat = useMemo(
-    () => izracunajPrioritete(postavke, nalogi, { danes, zamikDni, vkljuciNepotrjena, samoIzdelki }),
-    [postavke, nalogi, danes, zamikDni, vkljuciNepotrjena, samoIzdelki],
+    () => izracunajPrioritete(postavke, nalogi, { danes, zamikDni, vkljuciNepotrjena, samoIzdelki }, odpreme),
+    [postavke, nalogi, danes, zamikDni, vkljuciNepotrjena, samoIzdelki, odpreme],
   );
 
   // ---- obseg tednov
@@ -212,12 +245,22 @@ function PrioriteteInner() {
       ujemaIskanje([p.stevilka, p.partner, p.lokacija, p.ident, p.opis, opombe.get(p.kljuc)?.opomba ?? null, ...nalogiDelov(p.deli)]),
   );
   const prikazane = osnova.filter((p) => statusi.includes(p.status));
+  // Razvrščanje ne podira sklopov: razvrsti se samo znotraj istega naročila na isti dan.
+  const prikazaneRazvrscene = razvrstiZnotrajNarocil(prikazane, sortOdprem);
 
   const vseGrupe = useMemo(() => [...new Set(rezultat.postavke.map((p) => p.grupa))].sort(), [rezultat]);
 
   async function izberiVd200(f: File) {
     try {
       setVd200Pregled({ ...(await preberiVd200Xlsx(f)), datoteka: f.name });
+    } catch (e) {
+      notify("error", (e as Error).message, 10000);
+    }
+  }
+
+  async function izberiVd300(f: File) {
+    try {
+      setVd300Pregled({ ...(await preberiVd300Xlsx(f)), datoteka: f.name });
     } catch (e) {
       notify("error", (e as Error).message, 10000);
     }
@@ -231,13 +274,17 @@ function PrioriteteInner() {
     }
   }
 
-  async function potrdi(tip: "vd200" | "nalogi") {
+  async function potrdi(tip: "vd200" | "nalogi" | "vd300") {
     setUvazam(tip);
     try {
       if (tip === "vd200" && vd200Pregled) {
         await shraniPriUvoz(vd200Pregled.datoteka, vd200Pregled.postavke);
         notify("success", `Uvoženih postavk naročil: ${vd200Pregled.postavke.length}.`);
         setVd200Pregled(null);
+      } else if (tip === "vd300" && vd300Pregled) {
+        await shraniOdpUvoz(vd300Pregled.datoteka, vd300Pregled.odpreme);
+        notify("success", `Uvoženih postavk odprem: ${vd300Pregled.odpreme.length}.`);
+        setVd300Pregled(null);
       } else if (tip === "nalogi" && nalPregled) {
         await shraniUvoz(nalPregled.datoteka, nalPregled.nalogi);
         notify("success", `Uvoženih nalogov: ${nalPregled.nalogi.length} (velja tudi za Zasedenost).`);
@@ -287,7 +334,7 @@ function PrioriteteInner() {
   );
 
   function izvozi() {
-    if (pogled === "tedni") izvoziOdpremeXlsx(prikazane, `prioritete_odpreme_${danes}.xlsx`);
+    if (pogled === "tedni") izvoziOdpremeXlsx(prikazaneRazvrscene, `prioritete_odpreme_${danes}.xlsx`);
     else if (pogled === "nalogi")
       izvoziNalogePrioritetXlsx(
         [...sortNalogov.razvrsti(prikazaniNalogi.filter((n) => n.zamuja)), ...sortNalogov.razvrsti(prikazaniNalogi.filter((n) => !n.zamuja))],
@@ -306,7 +353,7 @@ function PrioriteteInner() {
             Potrjena naročila (VD200) · zaloga in delovni nalogi razdeljeni po datumu odpreme
           </p>
         </div>
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
+        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2 xl:grid-cols-3">
           <div className="sm:w-72">
             <UvozDropzone
               naslov="Izvoz VD200 (.xlsx)"
@@ -316,6 +363,17 @@ function PrioriteteInner() {
               nalagam={uvazam === "vd200"}
               onemogoceno={!!napakaBaze || uvazam !== null}
               onFile={izberiVd200}
+            />
+          </div>
+          <div className="sm:w-72">
+            <UvozDropzone
+              naslov="Odpreme VD300 (.xlsx)"
+              hint={niOdpremTabel ? "Najprej zaženi SQL 009 (tabele odprem)" : "Povleci sem izvoz odprem VD300 (dobavnice) ali klikni"}
+              enota="postavk"
+              uvoz={odpUvoz ? { ...odpUvoz, stevilo: odpUvoz.st_postavk } : null}
+              nalagam={uvazam === "vd300"}
+              onemogoceno={niOdpremTabel || uvazam !== null}
+              onFile={izberiVd300}
             />
           </div>
           <div className="sm:w-72">
@@ -357,7 +415,7 @@ function PrioriteteInner() {
           )}
 
           {/* ============ STATUSI ============ */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {STATUSI.map((s) => {
               const xs = osnova.filter((p) => p.status === s.koda && !p.nepotrjeno);
               const kos = xs.reduce((a, p) => a + p.kolicina, 0);
@@ -460,7 +518,8 @@ function PrioriteteInner() {
 
           {pogled === "tedni" && (
             <PoTednih
-              postavke={prikazane}
+              postavke={prikazaneRazvrscene}
+              sort={sortOdprem}
               taTeden={taTeden}
               montaza={montaza}
               opombe={opombe}
@@ -498,6 +557,23 @@ function PrioriteteInner() {
           />
         )}
       </Modal>
+      <Modal open={!!vd300Pregled} title={`Uvoz odprem: ${vd300Pregled?.datoteka ?? ""}`} onClose={() => !uvazam && setVd300Pregled(null)}>
+        {vd300Pregled && (
+          <UvozPotrditev
+            vrstice={[
+              ["Postavk odprem", vd300Pregled.odpreme.length],
+              ["Odpremnih dokumentov", new Set(vd300Pregled.odpreme.map((o) => o.stevilka)).size],
+              ["Postavk z dobavnico (vzeto z zaloge)", vd300Pregled.odpreme.filter((o) => o.dokument).length],
+              ["Vezanih na naročilo VD200", vd300Pregled.odpreme.filter((o) => o.dokument && o.narocilo).length],
+            ]}
+            opomba="Postavke naročil VD200 z dobavnico dobijo status V odpremi in ne porabijo zaloge matičnega skladišča."
+            opozorila={vd300Pregled.opozorila}
+            uvazam={uvazam !== null}
+            onPreklici={() => setVd300Pregled(null)}
+            onPotrdi={() => potrdi("vd300")}
+          />
+        )}
+      </Modal>
       <Modal open={!!nalPregled} title={`Uvoz nalogov: ${nalPregled?.datoteka ?? ""}`} onClose={() => !uvazam && setNalPregled(null)}>
         {nalPregled && (
           <UvozPotrditev
@@ -522,14 +598,30 @@ const nalogiDelov = (deli: Del[]) => deli.flatMap((d) => (d.vir === "nalog" ? [d
 
 type Skupina = { kljuc: string; naslov: string; podnaslov: string; rdeca?: boolean; postavke: PostavkaIzracun[] };
 
+type OdpremaKljuc = "status" | "ident" | "opis" | "kolicina" | "pokritje" | "opomba" | "pregledano";
+
+function razvrstiZnotrajNarocil(
+  postavke: PostavkaIzracun[],
+  sort: Razvrscanje<PostavkaIzracun, OdpremaKljuc>,
+): PostavkaIzracun[] {
+  const sklopi = new Map<string, PostavkaIzracun[]>();
+  for (const p of postavke) {
+    const k = `${p.datum_odpreme ?? ""}|${p.stevilka}`;
+    sklopi.set(k, [...(sklopi.get(k) ?? []), p]);
+  }
+  return [...sklopi.values()].flatMap((xs) => sort.razvrsti(xs));
+}
+
 function PoTednih({
   postavke,
+  sort,
   taTeden,
   montaza,
   opombe,
   onOpomba,
 }: {
   postavke: PostavkaIzracun[];
+  sort: Razvrscanje<PostavkaIzracun, OdpremaKljuc>;
   taTeden: IsoDate;
   montaza: Map<string, number>;
   opombe: Map<string, Opomba>;
@@ -555,7 +647,7 @@ function PoTednih({
   return (
     <div className="flex flex-col gap-4">
       {skupine.map((s) => (
-        <TedenKartica key={s.kljuc} skupina={s} montaza={montaza} opombe={opombe} onOpomba={onOpomba} />
+        <TedenKartica key={s.kljuc} skupina={s} sort={sort} montaza={montaza} opombe={opombe} onOpomba={onOpomba} />
       ))}
     </div>
   );
@@ -563,11 +655,13 @@ function PoTednih({
 
 function TedenKartica({
   skupina,
+  sort,
   montaza,
   opombe,
   onOpomba,
 }: {
   skupina: Skupina;
+  sort: Razvrscanje<PostavkaIzracun, OdpremaKljuc>;
   montaza: Map<string, number>;
   opombe: Map<string, Opomba>;
   onOpomba: (o: Opomba) => void;
@@ -576,7 +670,7 @@ function TedenKartica({
   const { postavke } = skupina;
   const kos = postavke.reduce((s, p) => s + p.kolicina, 0);
   const ureM = postavke
-    .filter((p) => p.status !== "NA_ZALOGI")
+    .filter((p) => p.status !== "NA_ZALOGI" && p.status !== "V_ODPREMI")
     .reduce((s, p) => s + p.kolicina * (montaza.get(p.ident) ?? 0), 0);
 
   // datum -> naročilo -> postavke
@@ -619,17 +713,20 @@ function TedenKartica({
       {odprta && (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1050px] text-sm">
-            <thead className="border-b border-ink-200 bg-ink-50 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
+            {/* glava kartice je že temna - zato glava tabele brez zaobljenih kotov */}
+            <thead className="fp-thead [&_th]:!rounded-none">
               <tr>
-                <th className="w-32 px-3 py-2">Status</th>
-                <th className="px-2 py-2">Ident</th>
-                <th className="px-2 py-2">Kratki opis</th>
-                <th className="px-2 py-2 text-right">Kol.</th>
-                <th className="px-2 py-2">Pokritje (zaloga / nalog)</th>
-                <th className="w-64 px-2 py-2">Opomba</th>
-                <th className="w-10 px-2 py-2" title="Pregledano">
-                  <CheckCircle2 className="h-4 w-4" aria-hidden />
-                </th>
+                <SortTh sort={sort} kljuc="status" className="w-32 pl-3">Status</SortTh>
+                <SortTh sort={sort} kljuc="ident">Ident</SortTh>
+                <SortTh sort={sort} kljuc="opis">Kratki opis</SortTh>
+                <SortTh sort={sort} kljuc="kolicina" desno>Kol.</SortTh>
+                <SortTh sort={sort} kljuc="pokritje" hint="Razvrsti po datumu, do kdaj mora biti iz proizvodnje">
+                  Pokritje (zaloga / nalog)
+                </SortTh>
+                <SortTh sort={sort} kljuc="opomba" className="w-64">Opomba</SortTh>
+                <SortTh sort={sort} kljuc="pregledano" className="w-10" hint="Razvrsti po pregledanih postavkah">
+                  <CheckCircle2 className="h-4 w-4" aria-label="Pregledano" />
+                </SortTh>
               </tr>
             </thead>
             <tbody>
@@ -647,7 +744,7 @@ function TedenKartica({
                           <span className="font-semibold text-ink-900">{xs[0].partner}</span>
                           {xs[0].lokacija && <span className="text-ink-500"> · {xs[0].lokacija}</span>}
                           <span className="ml-2 font-mono text-xs text-ink-400">nar. {stevilka}</span>
-                          {xs[0].vOdpremi && <Oznaka cls="bg-sync-500 text-white">V odpremi</Oznaka>}
+                          {xs.some((x) => x.vOdpremi) && <Oznaka cls="bg-ok-600 text-white">V odpremi</Oznaka>}
                           {xs[0].nepotrjeno && <Oznaka cls="bg-ink-200 text-ink-700">{xs[0].status}</Oznaka>}
                           {xs[0].zaznamek && (
                             <span title={xs[0].zaznamek} className="ml-2 inline-flex items-center gap-1 text-xs text-warn-700">
@@ -684,7 +781,7 @@ function PostavkaVrstica({ p, opomba, onOpomba }: { p: PostavkaIzracun; opomba?:
       <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{formatNum(p.kolicina)}</td>
       <td className="px-2 py-1.5">
         <Pokritje deli={p.deli} />
-        {p.potrebnoDo && p.deli.some((d) => d.vir !== "zaloga") && (
+        {p.potrebnoDo && p.deli.some((d) => d.vir !== "zaloga" && d.vir !== "odprema") && (
           <div className="text-[11px] text-ink-500">iz proizvodnje potrebno do {formatShort(p.potrebnoDo)}</div>
         )}
       </td>
@@ -724,6 +821,12 @@ function Pokritje({ deli }: { deli: Del[] }) {
           return (
             <Cip key={i} cls="bg-ok-50 text-ok-600" hint="Pokrito z zalogo matičnega skladišča">
               {k} zaloga
+            </Cip>
+          );
+        if (d.vir === "odprema")
+          return (
+            <Cip key={i} cls="bg-ok-600 text-white" hint={`Dobavnica ${d.dokument} - vzeto z zaloge, pripravljeno za odpremo`}>
+              {k} v odpremi
             </Cip>
           );
         if (d.vir === "dn")
@@ -911,6 +1014,7 @@ type ArtikelKljuc =
   | "prosta"
   | "naroceno"
   | "izZaloge"
+  | "vOdpremi"
   | "izProizvodnje"
   | "manjka"
   | "zalogaDo"
@@ -926,6 +1030,7 @@ const ARTIKEL_VREDNOSTI: Record<ArtikelKljuc, (a: ArtikelPregled) => string | nu
   prosta: (a) => a.prosta_zaloga,
   naroceno: (a) => a.naroceno,
   izZaloge: (a) => a.izZaloge,
+  vOdpremi: (a) => a.vOdpremi,
   izProizvodnje: (a) => a.izProizvodnje,
   manjka: (a) => a.manjka,
   zalogaDo: (a) => a.zalogaDo,
@@ -957,6 +1062,7 @@ function PoArtiklih({
               <SortTh sort={sort} kljuc="prosta" desno hint="Prosta zaloga v ERP">Prosta</SortTh>
               <SortTh sort={sort} kljuc="naroceno" desno>Naročeno</SortTh>
               <SortTh sort={sort} kljuc="izZaloge" desno>Iz zaloge</SortTh>
+              <SortTh sort={sort} kljuc="vOdpremi" desno hint="Kosi z dobavnico v VD300 (niso več na zalogi)">V odpremi</SortTh>
               <SortTh sort={sort} kljuc="izProizvodnje" desno>Iz proizv.</SortTh>
               <SortTh sort={sort} kljuc="manjka" desno>Manjka</SortTh>
               <SortTh sort={sort} kljuc="zalogaDo" hint="Zadnja odprema, ki jo v celoti pokrije zaloga">Zaloga do</SortTh>
@@ -992,6 +1098,7 @@ function PoArtiklih({
                     </td>
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{formatNum(a.naroceno)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-ok-600">{a.izZaloge ? formatNum(a.izZaloge) : ""}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-ok-600">{a.vOdpremi ? formatNum(a.vOdpremi) : ""}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-sync-600">{a.izProizvodnje ? formatNum(a.izProizvodnje) : ""}</td>
                     <td className="px-2 py-1.5 text-right font-bold tabular-nums text-nok-600">{a.manjka ? formatNum(a.manjka) : ""}</td>
                     <td className="whitespace-nowrap px-2 py-1.5">{a.zalogaDo ? formatShort(a.zalogaDo) : "–"}</td>
@@ -1002,7 +1109,7 @@ function PoArtiklih({
                   {jeOdprt && (
                     <tr className="border-b border-ink-100 bg-ink-50">
                       <td />
-                      <td colSpan={11} className="px-2 py-2">
+                      <td colSpan={12} className="px-2 py-2">
                         <ArtikelPodrobno a={a} postavke={postavke.filter((p) => p.ident === a.ident)} />
                       </td>
                     </tr>
@@ -1012,7 +1119,7 @@ function PoArtiklih({
             })}
             {vrstice.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-2 py-8 text-center text-ink-500">
+                <td colSpan={13} className="px-2 py-8 text-center text-ink-500">
                   Ni artiklov za izbrane filtre.
                 </td>
               </tr>

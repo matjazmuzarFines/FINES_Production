@@ -65,11 +65,21 @@ export function HomeDashboard() {
             <group.icon className="h-5 w-5 text-fines-500" aria-hidden />
             {group.label}
           </h3>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {listiNav(group.items).map((item) => (
-              <Tile key={item.href} item={item} kpi={kpi[item.href]} />
-            ))}
-          </div>
+          {group.sekcije.map((sekcija) => (
+            <div key={sekcija.label} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-wider text-fines-500">
+                  {sekcija.label}
+                </span>
+                <span className="h-px flex-1 bg-fines-200" aria-hidden />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {listiNav(sekcija.items).map((item) => (
+                  <Tile key={item.href} item={item} kpi={kpi[item.href]} />
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
       ))}
     </div>

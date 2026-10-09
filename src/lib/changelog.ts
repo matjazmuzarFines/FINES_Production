@@ -9,6 +9,90 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "8.01",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Prioritete: nov uvoz Odpreme VD300 (tretje polje za uvoz). Postavka naročila, za katero je v VD300 izdana dobavnica, dobi status V odpremi in ne porabi zaloge matičnega skladišča (oprema je že vzeta z zaloge).",
+      "Status naročila VD200 \"V odpremi\" se ne upošteva več - tako naročilo je še odprto in se pokriva normalno (zaloga, nalogi).",
+      "Pokritje pokaže \"v odpremi\" s številko dobavnice; pogled po artiklih ima stolpec V odpremi; TXT sporočilo izpiše \"v odpremi\".",
+      "Ob uvozu VD300 opozorilo za postavke s statusom Pripravljena odprema / Priprava blaga brez dobavnice (štejejo se še na zalogi).",
+    ],
+  },
+  {
+    verzija: "7.03",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Prioritete: nov status V odpremi (naročila s statusom VD200-V odpremi) - enakovreden Na zalogi, privzeto skrit; prikažeš ga s klikom na kartico.",
+      "Oznaka V odpremi pri naročilu je zelena (kot status).",
+    ],
+  },
+  {
+    verzija: "7.02",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Vodja operacij: 3 grafi (Proizvodnja, Skladišče, Tehnologija + razvoj) namesto 8; podrobna področja so zdaj cilji pod grafom (npr. Organizacija: jasne prioritete, ...).",
+      "Change management: manjši grafi in kartice - 3 v vrsti na monitorju (2 na tablici, 1 na telefonu).",
+      "Cilji pod grafom v enem stolpcu, pričakovanja se pokažejo samo, če so vpisana.",
+    ],
+  },
+  {
+    verzija: "7.01",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Change management: zavihka Vodji proizvodnje in montaže ter Vodja operacij.",
+      "Vodja operacij ima 8 področij v treh sklopih: Proizvodnja (organizacija, produktivnost, oprema), Skladišče (organizacija, izdaja, prevzemi materiala) ter Tehnologija + razvoj (sodelovanje, prototipi).",
+      "Sklopi so ločeni z naslovom v barvi sklopa in tanko črto; v oknu za vpis tedna je nad področjem izpisan sklop.",
+      "Grafi so nižji, razlaga barv črt je v hover tekstu legende (čistejši pogled).",
+    ],
+  },
+  {
+    verzija: "6.03",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Aplikacija je zaklenjena: brez prijave (e-mail + geslo) se pokaže samo prijavno okno.",
+      "Izhod odjavi uporabnika; prijavljeni uporabnik je izpisan v glavi.",
+      "Baza dovoli branje in pisanje samo prijavljenim uporabnikom (migracija 006).",
+    ],
+  },
+  {
+    verzija: "6.02",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Change management prenovljen: 7 grafov (eden na področje), na vsakem dve črti - vodja proizvodnje (modra) in vodja montaže (oranžna). Svetel odsek = napredek, temen črtkan = nazadovanje, siv = brez spremembe.",
+      "Grafi v slogu Excela: siv preliv, senca, točke z vrednostjo; os do cilja 40 % in črta pričakovanega tempa v 13 tednih.",
+      "Področja obarvana po infografiki Upravljanje sprememb; pod grafom cilj, na čem se dela in pričakovanja (urejanje s svinčnikom).",
+      "Tabela vpisov pod vsakim grafom (zložljiva) z razvrščanjem po stolpcih; na vrhu glavno sporočilo in povzetek po vodjih z gumbom Vpiši teden.",
+      "Prioritete: tabela odprem ima standardno temno glavo in razvrščanje po stolpcih (znotraj naročila); Excel izvoz upošteva razvrščanje.",
+    ],
+  },
+  {
+    verzija: "6.01",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Nov razdelek Management in stran Change management: tedenski napredek vodje proizvodnje in vodje montaže na 7 področjih (plan dela, ljudje, rutina in sestanki, pomoč, organizacija, napredek, odnos do dela).",
+      "Za vsako področje mali graf, ki se riše teden po tednu od 5. 10. 2026 (0 %); hover / tap pokaže spremembo, skupno vrednost in komentar.",
+      "Vpis tedna za vsa področja naenkrat: sprememba v % (hitri gumbi -1 do +1) in obvezen komentar; vpis lahko kasneje popraviš.",
+      "Klik na graf odpre tabelo vseh vpisov področja. Sekcija Vodja operacij je pripravljena za lastna področja.",
+    ],
+  },
+  {
+    verzija: "5.07",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Meni: moduli (Proizvodnja, Skladišče) so zložljivi bloki z rahlo svetlejšim ozadjem; vsebina modula je zamaknjena desno.",
+      "Modul trenutne strani je vedno razprt, ostale razpreš s klikom - meni ostane pregleden tudi na telefonu in tablici.",
+    ],
+  },
+  {
+    verzija: "5.06",
+    datum: "09. 10. 2026",
+    spremembe: [
+      "Leva navigacija razdeljena na razdelke: Rutinsko delo (Rutina), Planiranje (Zasedenost, Prioritete) in Podatki proizvodnje (Normativi); v Skladišču Rutinsko delo (Rutina).",
+      "Razdelki v meniju ločeni z oranžnim naslovom in tanko oranžno črto; meni drsi, če je postavk veliko.",
+      "Domača stran prikazuje kartice po istih razdelkih.",
+    ],
+  },
+  {
     verzija: "5.05",
     datum: "08. 10. 2026",
     spremembe: [

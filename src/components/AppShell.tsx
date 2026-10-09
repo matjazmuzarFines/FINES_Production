@@ -5,11 +5,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, ChevronLeft, Home, Info, LogOut, Menu, X } from "lucide-react";
-import { NAV, aktivnaPostavka, findNav, parentHref, type NavItem } from "@/lib/nav";
+import { NAV, aktivnaPostavka, findNav, parentHref, type NavGroup, type NavItem, type NavSekcija } from "@/lib/nav";
 import { lahkoZapustim } from "@/lib/neshranjeno";
+import { odjava, useSeja } from "@/lib/auth";
+import { supabaseConfigured } from "@/lib/supabase";
 import { APP_VERSION, CHANGELOG } from "@/lib/changelog";
 import { Button, IconButton } from "./ui/Button";
 import { Modal } from "./ui/Modal";
+import { Loading } from "./ui/Notice";
+import { Prijava } from "./Prijava";
 import { ToastProvider } from "./ui/Toast";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -20,7 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const menuOpen = menuOdprtNa === pathname;
   const setMenuOpen = (open: boolean) => setMenuOdprtNa(open ? pathname : null);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [exitInfo, setExitInfo] = useState(false);
+  // Ročno razprti moduli menija; modul trenutne strani je vedno razprt.
+  const [odprtiModuli, setOdprtiModuli] = useState<Set<string>>(new Set());
+  const seja = useSeja();
 
   const isHome = pathname === "/";
   const current = findNav(pathname);
@@ -28,15 +34,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? [current.group.label, current.item.label, current.sub?.label].filter(Boolean).join(" · ")
     : "Domov";
 
+  function preklopiModul(label: string, prikazan: boolean) {
+    setOdprtiModuli((prej) => {
+      const nov = new Set(prej);
+      if (prikazan) nov.delete(label);
+      else nov.add(label);
+      return nov;
+    });
+  }
+
   function nazaj() {
     if (lahkoZapustim()) router.push(parentHref(pathname));
   }
 
-  function exitApp() {
+  async function exitApp() {
+    if (!lahkoZapustim()) return;
+    // Odjava -> aplikacija pokaže prijavno okno; zavihek se zapre, če ga je odprla skripta.
+    await odjava();
     window.close();
-    // Brskalnik ne dovoli zapiranja zavihka, ki ga ni odprla skripta.
-    setTimeout(() => setExitInfo(true), 200);
   }
+
+  // Brez prijave aplikacija pokaže samo prijavno okno (podatke ščiti tudi RLS v bazi).
+  if (supabaseConfigured && seja === undefined) return <Loading />;
+  if (supabaseConfigured && !seja) return <Prijava />;
 
   return (
     <ToastProvider>
@@ -88,7 +108,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               icon={Info}
               onClick={() => setInfoOpen(true)}
             />
-            <Button hint="Zapri aplikacijo" variant="primary" icon={LogOut} onClick={exitApp}>
+            <span className="hidden text-xs text-ink-500 md:inline" title="Prijavljeni uporabnik">
+              {seja?.user.email}
+            </span>
+            <Button hint="Odjavi se in zapri aplikacijo" variant="primary" icon={LogOut} onClick={exitApp}>
               <span className="hidden sm:inline">Izhod</span>
             </Button>
           </div>
@@ -104,11 +127,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
           )}
           <aside
-            className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-ink-800 text-ink-100 transition-transform lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100dvh-4rem)] lg:w-64 lg:translate-x-0 ${
+            className={`fixed inset-y-0 left-0 z-50 flex w-72 transform flex-col bg-ink-800 text-ink-100 transition-transform lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100dvh-4rem)] lg:w-64 lg:translate-x-0 ${
               menuOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-            <div className="flex h-16 items-center justify-between px-4 lg:hidden">
+            <div className="flex h-16 shrink-0 items-center justify-between px-4 lg:hidden">
               <span className="font-bold text-white">Meni</span>
               <IconButton
                 hint="Zapri navigacijski meni"
@@ -117,36 +140,29 @@ export function AppShell({ children }: { children: ReactNode }) {
                 onClick={() => setMenuOpen(false)}
               />
             </div>
-            <nav className="flex flex-col gap-6 overflow-y-auto px-3 py-4" aria-label="Glavna navigacija">
+            <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4" aria-label="Glavna navigacija">
               <NavLink href="/" active={isHome} icon={Home} hint="Pojdi na domačo stran">
                 Domov
               </NavLink>
-              {NAV.map((group) => (
-                <div key={group.label}>
-                  <div className="mb-2 flex items-center gap-2 px-3 text-xs font-bold uppercase tracking-wider text-fines-200">
-                    <group.icon className="h-4 w-4" aria-hidden />
-                    {group.label}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {group.items.map((item) =>
-                      item.children ? (
-                        <NavPodmeni key={item.href} item={item} pathname={pathname} />
-                      ) : (
-                        <NavLink
-                          key={item.href}
-                          href={item.href}
-                          active={current?.item === item}
-                          icon={item.icon}
-                          hint={item.hint}
-                          kmalu={item.kmalu}
-                        >
-                          {item.label}
-                        </NavLink>
-                      ),
-                    )}
-                  </div>
-                </div>
-              ))}
+              <div className="flex flex-col gap-2">
+                {NAV.map((group) => {
+                  const aktiven = current?.group === group;
+                  const prikazan = aktiven || odprtiModuli.has(group.label);
+                  return (
+                    <NavModul
+                      key={group.label}
+                      group={group}
+                      aktiven={aktiven}
+                      prikazan={prikazan}
+                      onPreklopi={() => preklopiModul(group.label, prikazan)}
+                    >
+                      {group.sekcije.map((sekcija) => (
+                        <NavSekcijaBlok key={sekcija.label} sekcija={sekcija} current={current?.item} pathname={pathname} />
+                      ))}
+                    </NavModul>
+                  );
+                })}
+              </div>
             </nav>
           </aside>
 
@@ -178,13 +194,88 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </Modal>
 
-      <Modal open={exitInfo} title="Izhod" onClose={() => setExitInfo(false)}>
-        <p className="text-sm text-ink-700">
-          Brskalnik ne dovoli samodejnega zapiranja tega zavihka. Aplikacijo zapri tako, da zapreš
-          zavihek brskalnika.
-        </p>
-      </Modal>
     </ToastProvider>
+  );
+}
+
+/**
+ * Modul menija (Proizvodnja, Skladišče ...): rahlo svetlejši blok, glava razpre / zloži vsebino.
+ * Razdelki in postavke so zamaknjeni desno od imena modula.
+ */
+function NavModul({
+  group,
+  aktiven,
+  prikazan,
+  onPreklopi,
+  children,
+}: {
+  group: NavGroup;
+  aktiven: boolean;
+  prikazan: boolean;
+  onPreklopi: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`rounded-xl transition-colors ${prikazan ? "bg-white/5" : "hover:bg-white/5"}`}>
+      <button
+        type="button"
+        title={prikazan ? `Zloži modul ${group.label}` : `Razpri modul ${group.label}`}
+        aria-expanded={prikazan}
+        disabled={aktiven}
+        onClick={onPreklopi}
+        className="flex h-12 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold uppercase tracking-wider text-white disabled:cursor-default"
+      >
+        <group.icon className={`h-5 w-5 shrink-0 ${aktiven ? "text-fines-400" : "text-ink-300"}`} aria-hidden />
+        <span className="flex-1">{group.label}</span>
+        {!aktiven && (
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-ink-300 transition-transform ${prikazan ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        )}
+      </button>
+      {prikazan && <div className="flex flex-col gap-3 pb-3 pl-4 pr-1">{children}</div>}
+    </div>
+  );
+}
+
+/** Razdelek modula: oranžen naslov s tanko oranžno črto, pod njim postavke (brez razpiranja). */
+function NavSekcijaBlok({
+  sekcija,
+  current,
+  pathname,
+}: {
+  sekcija: NavSekcija;
+  current?: NavItem;
+  pathname: string;
+}) {
+  return (
+    <section aria-label={sekcija.label}>
+      <div className="mb-1 flex items-center gap-2 px-3">
+        <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-fines-400">
+          {sekcija.label}
+        </span>
+        <span className="h-px flex-1 bg-fines-500/40" aria-hidden />
+      </div>
+      <div className="flex flex-col gap-1">
+        {sekcija.items.map((item) =>
+          item.children ? (
+            <NavPodmeni key={item.href} item={item} pathname={pathname} />
+          ) : (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              active={current === item}
+              icon={item.icon}
+              hint={item.hint}
+              kmalu={item.kmalu}
+            >
+              {item.label}
+            </NavLink>
+          ),
+        )}
+      </div>
+    </section>
   );
 }
 
