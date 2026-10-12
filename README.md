@@ -81,6 +81,7 @@ Pravila: podatkov ne brišemo (`visible = false`), DELETE politike v bazi ni. Sl
    nato `supabase/migrations/007_change_management_operacije.sql` → **Run** (področja vodje operacij po sklopih).
    nato `supabase/migrations/008_change_management_operacije_zdruzeno.sql` → **Run** (vodja operacij: 3 združena področja).
    nato `supabase/migrations/009_prioritete_odpreme_vd300.sql` → **Run** (uvoz odprem VD300 za Prioritete).
+   nato `supabase/migrations/010_zasedenost_7h.sql` → **Run** (zasedenost: 7 h/dan na osebo namesto 6,5 h).
 6. **Prijava:** Authentication → Users → **Add user** (Auto Confirm) za uporabnika aplikacije;
    Authentication → Sign In / Providers → izklopi **Allow new users to sign up**.
    Ko je aplikacija s prijavo objavljena in deluje, zaženi `supabase/migrations/006_prijava.sql`

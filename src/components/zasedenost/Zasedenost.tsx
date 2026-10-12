@@ -44,7 +44,9 @@ type Izbor =
   | { tip: "teden"; teden: IsoDate }
   | { tip: "zapadlo" }
   | { tip: "brez_roka" }
-  | { tip: "vsi"; samoBrez?: boolean };
+  | { tip: "vsi" };
+
+type NormativFilter = "vsi" | "brez" | "z";
 
 /** Barva obremenitve: do 85 % zelena, do 100 % rumena, nad 100 % rdeča. */
 function obremenitev(potrebno: number, naVoljo: number) {
@@ -83,8 +85,10 @@ function ZasedenostInner() {
   const [pregled, setPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
   const [uvazam, setUvazam] = useState(false);
   const [nastavitveOdprte, setNastavitveOdprte] = useState(false);
-  // Filter oddelkov v tabeli nalogov (ostane ob menjavi tedna)
+  // Filtri tabele nalogov (ostanejo ob menjavi tedna)
   const [filterOddelkov, setFilterOddelkov] = useState<OddelekKoda[]>([]);
+  const [iskanje, setIskanje] = useState("");
+  const [filterNormativ, setFilterNormativ] = useState<NormativFilter>("vsi");
 
   const steviloSprememb = Object.keys(kapEdits).length + Object.keys(dniEdits).length;
   useNeshranjeno(steviloSprememb > 0);
@@ -233,7 +237,10 @@ function ZasedenostInner() {
             <button
               type="button"
               title="Prikaži naloge brez normativa"
-              onClick={() => setIzbor({ tip: "vsi", samoBrez: true })}
+              onClick={() => {
+                setIzbor({ tip: "vsi" });
+                setFilterNormativ("brez");
+              }}
               className="flex items-center gap-2 self-start rounded-lg bg-warn-50 px-3 py-2 text-left text-sm font-medium text-warn-700 hover:underline"
             >
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
@@ -388,7 +395,6 @@ function ZasedenostInner() {
 
           {/* ============ NALOGI ============ */}
           <NalogiTabela
-            key={JSON.stringify(izbor)}
             izracun={izracun}
             izbor={izbor}
             zacetek={zacetek}
@@ -396,6 +402,10 @@ function ZasedenostInner() {
             onIzbor={setIzbor}
             filterOddelkov={filterOddelkov}
             onFilterOddelkov={setFilterOddelkov}
+            iskanje={iskanje}
+            onIskanje={setIskanje}
+            normativ={filterNormativ}
+            onNormativ={setFilterNormativ}
           />
         </>
       )}
@@ -588,6 +598,10 @@ function NalogiTabela({
   onIzbor,
   filterOddelkov,
   onFilterOddelkov,
+  iskanje,
+  onIskanje,
+  normativ,
+  onNormativ,
 }: {
   izracun: NalogIzracun[];
   izbor: Izbor;
@@ -596,10 +610,11 @@ function NalogiTabela({
   onIzbor: (i: Izbor) => void;
   filterOddelkov: OddelekKoda[];
   onFilterOddelkov: (k: OddelekKoda[]) => void;
+  iskanje: string;
+  onIskanje: (q: string) => void;
+  normativ: NormativFilter;
+  onNormativ: (n: NormativFilter) => void;
 }) {
-  const [iskanje, setIskanje] = useState("");
-  const [normativ, setNormativ] = useState<"vsi" | "brez" | "z">(izbor.tip === "vsi" && izbor.samoBrez ? "brez" : "vsi");
-
   const naslov =
     izbor.tip === "teden"
       ? `${isoWeek(izbor.teden)}. teden (${formatShort(izbor.teden)} – ${formatShort(addDays(izbor.teden, 6))})`
@@ -669,7 +684,7 @@ function NalogiTabela({
       <FilterVrstica>
         <FilterIskanje
           value={iskanje}
-          onChange={setIskanje}
+          onChange={onIskanje}
           placeholder="Nalog, koda, naziv, skupina ..."
           hint="Išči med prikazanimi nalogi"
         />
@@ -731,7 +746,7 @@ function NalogiTabela({
         <FilterPreklopnik
           label="Normativ"
           value={normativ}
-          onChange={setNormativ}
+          onChange={onNormativ}
           options={[
             { value: "vsi", label: "Vsi", hint: "Prikaži naloge z normativom in brez" },
             { value: "brez", label: "Brez normativa", hint: "Prikaži samo naloge brez normativa", stevilo: brezSt },

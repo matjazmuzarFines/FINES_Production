@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "8.03",
+    datum: "12. 10. 2026",
+    spremembe: [
+      "Zasedenost: filtri tabele nalogov (iskanje, Normativ, oddelki, razvrščanje) ostanejo nespremenjeni ob kliku na drug teden.",
+      "Zasedenost: razpoložljivost se računa s 7 h/dan na osebo (prej 6,5 h).",
+    ],
+  },
+  {
     verzija: "8.02",
     datum: "12. 10. 2026",
     spremembe: [
