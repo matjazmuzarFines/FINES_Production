@@ -37,6 +37,7 @@ import { SaveBar } from "@/components/rutina/SaveBar";
 import { FilterIskanje, FilterPolje, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
 import { UvozDropzone } from "@/components/ui/UvozDropzone";
+import { LegendaObremenitve, ObremenitevVsebina, SkupajVrstica, TedenGlava, ZapadloCelica } from "./Obremenitev";
 
 const STEVILO_TEDNOV = 8;
 
@@ -47,14 +48,6 @@ type Izbor =
   | { tip: "vsi" };
 
 type NormativFilter = "vsi" | "brez" | "z";
-
-/** Barva obremenitve: do 85 % zelena, do 100 % rumena, nad 100 % rdeča. */
-function obremenitev(potrebno: number, naVoljo: number) {
-  const pct = naVoljo > 0 ? (potrebno / naVoljo) * 100 : potrebno > 0 ? Infinity : 0;
-  const cls = pct > 100 ? "bg-nok-500" : pct > 85 ? "bg-warn-400" : "bg-ok-500";
-  const txt = pct > 100 ? "text-nok-600" : pct > 85 ? "text-warn-700" : "text-ok-600";
-  return { pct, cls, txt };
-}
 
 export function Zasedenost() {
   if (!supabaseConfigured) return <ConfigMissing />;
@@ -282,7 +275,7 @@ function ZasedenostInner() {
                       <TedenGlava
                         naslov={jeTaTeden ? "Zapadlo" : "Prej"}
                         podnaslov={`pred ${formatDayMonth(zacetek)}`}
-                        stNalogov={steviloNalogov("zapadlo")}
+                        stevilo={`${steviloNalogov("zapadlo")} nalogov`}
                         izbran={izbor.tip === "zapadlo"}
                         onClick={() => setIzbor({ tip: "zapadlo" })}
                         rdeca={jeTaTeden}
@@ -293,7 +286,7 @@ function ZasedenostInner() {
                         <TedenGlava
                           naslov={`${isoWeek(t)}. teden`}
                           podnaslov={`${formatDayMonth(t)} – ${formatDayMonth(addDays(t, 6))}`}
-                          stNalogov={steviloNalogov(t)}
+                          stevilo={`${steviloNalogov(t)} nalogov`}
                           izbran={izbor.tip === "teden" && izbor.teden === t}
                           trenutni={t === mondayOf(danes)}
                           onClick={() => setIzbor({ tip: "teden", teden: t })}
@@ -330,16 +323,10 @@ function ZasedenostInner() {
                           <div className="text-sm font-bold text-ink-800">{o.naziv}</div>
                           <div className="text-[11px] font-normal text-ink-500">{formatNum(o.ure_na_dan)} h/dan na osebo</div>
                         </th>
-                        <td className="rounded-lg bg-ink-50 p-2 text-center align-middle">
-                          <div className={`text-base font-bold tabular-nums ${zap > 0 && jeTaTeden ? "text-nok-600" : "text-ink-700"}`}>
-                            {formatUre(zap)} h
-                          </div>
-                          <div className="text-[11px] text-ink-500">potrebno</div>
-                        </td>
+                        <ZapadloCelica ure={zap} rdeca={jeTaTeden} />
                         {prikazaniTedni.map((t) => {
                           const kap = kapaciteta(o, t);
                           const pot = potrebno.get(`${o.koda}|${t}`) ?? 0;
-                          const ob = obremenitev(pot, kap.ure);
                           const kljuc = `${o.id}|${t}`;
                           return (
                             <td key={t} className="rounded-lg border border-ink-200 bg-white p-2 align-top">
@@ -353,22 +340,7 @@ function ZasedenostInner() {
                                 />
                                 <span className="text-[11px] text-ink-500">oseb</span>
                               </div>
-                              <div
-                                className="mt-1.5 text-xs tabular-nums text-ink-700"
-                                title={`Potrebno ${formatUre(pot)} h od razpoložljivih ${formatUre(kap.ure)} h`}
-                              >
-                                <strong>{formatUre(pot)}</strong> / {formatUre(kap.ure)} h
-                              </div>
-                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-ink-100">
-                                <div className={`h-full ${ob.cls}`} style={{ width: `${Math.min(100, ob.pct)}%` }} />
-                              </div>
-                              <div className={`mt-0.5 text-right text-xs font-bold tabular-nums ${ob.txt}`}>
-                                {Number.isFinite(ob.pct) ? `${Math.round(ob.pct)} %` : "∞"}
-                                <span className="ml-1 font-normal text-ink-500">
-                                  ({kap.ure - pot >= 0 ? "+" : ""}
-                                  {formatUre(kap.ure - pot)} h)
-                                </span>
-                              </div>
+                              <ObremenitevVsebina potrebno={pot} naVoljo={kap.ure} />
                             </td>
                           );
                         })}
@@ -385,12 +357,7 @@ function ZasedenostInner() {
               </table>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
-              <Legenda cls="bg-ok-500" label="do 85 %" />
-              <Legenda cls="bg-warn-400" label="85–100 %" />
-              <Legenda cls="bg-nok-500" label="nad 100 % (preobremenjeno)" />
-              <span>Razpoložljivo = zaposleni × ure na dan × delovni dnevi</span>
-            </div>
+            <LegendaObremenitve />
           </div>
 
           {/* ============ NALOGI ============ */}
@@ -455,43 +422,6 @@ function ZasedenostInner() {
 // POMOŽNE KOMPONENTE
 // =====================================================================
 
-function TedenGlava({
-  naslov,
-  podnaslov,
-  stNalogov,
-  izbran,
-  trenutni,
-  rdeca,
-  onClick,
-}: {
-  naslov: string;
-  podnaslov: string;
-  stNalogov: number;
-  izbran: boolean;
-  trenutni?: boolean;
-  rdeca?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={`Prikaži naloge: ${naslov} (${podnaslov})`}
-      onClick={onClick}
-      className={`w-full rounded-lg border-2 px-2 py-1.5 text-center transition-colors ${
-        izbran
-          ? "border-fines-500 bg-fines-500 text-white"
-          : trenutni
-            ? "border-sync-500 bg-white text-sync-600 hover:bg-ink-50"
-            : "border-ink-200 bg-white text-ink-800 hover:border-fines-500"
-      }`}
-    >
-      <div className={`text-sm font-bold ${rdeca && !izbran ? "text-nok-600" : ""}`}>{naslov}</div>
-      <div className="text-[11px] font-normal opacity-80">{podnaslov}</div>
-      <div className="text-[11px] font-semibold opacity-90">{stNalogov} nalogov</div>
-    </button>
-  );
-}
-
 function SteviloInput({
   value,
   onCommit,
@@ -524,48 +454,6 @@ function SteviloInput({
         spremenjeno ? "border-warn-400 bg-warn-50" : "border-ink-200 bg-white"
       }`}
     />
-  );
-}
-
-function SkupajVrstica({
-  oddelki,
-  tedni,
-  potrebno,
-  kapaciteta,
-}: {
-  oddelki: ZasOddelek[];
-  tedni: IsoDate[];
-  potrebno: Map<string, number>;
-  kapaciteta: (o: ZasOddelek, t: IsoDate) => { ure: number };
-}) {
-  const zap = oddelki.reduce((s, o) => s + (potrebno.get(`${o.koda}|zapadlo`) ?? 0), 0);
-  return (
-    <tr>
-      <th className="pr-2 text-right text-sm font-bold text-ink-900">Skupaj</th>
-      <td className="rounded-lg bg-ink-800 p-2 text-center text-sm font-bold tabular-nums text-white">{formatUre(zap)} h</td>
-      {tedni.map((t) => {
-        const pot = oddelki.reduce((s, o) => s + (potrebno.get(`${o.koda}|${t}`) ?? 0), 0);
-        const kap = oddelki.reduce((s, o) => s + kapaciteta(o, t).ure, 0);
-        const ob = obremenitev(pot, kap);
-        return (
-          <td key={t} className="rounded-lg bg-ink-800 p-2 text-center text-xs tabular-nums text-white">
-            <strong>{formatUre(pot)}</strong> / {formatUre(kap)} h
-            <div className={`font-bold ${ob.pct > 100 ? "text-nok-500" : ob.pct > 85 ? "text-warn-400" : "text-ok-500"}`}>
-              {Number.isFinite(ob.pct) ? `${Math.round(ob.pct)} %` : "∞"}
-            </div>
-          </td>
-        );
-      })}
-    </tr>
-  );
-}
-
-function Legenda({ cls, label }: { cls: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`inline-block h-2.5 w-5 rounded-full ${cls}`} />
-      {label}
-    </span>
   );
 }
 

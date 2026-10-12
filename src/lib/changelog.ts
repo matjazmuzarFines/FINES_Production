@@ -9,6 +9,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "9.01",
+    datum: "12. 10. 2026",
+    spremembe: [
+      "Prioritete: nov zavihek Zasedenost naročil - ure po normativu za del naročil, ki ni na zalogi ali v odpremi, po tednih (datum odpreme - rezerva) v primerjavi z razpoložljivostjo iz Zasedenosti.",
+      "Pod pregledom tabela postavk izbranega tedna z urami P / M / E / T; veljajo isti filtri kot na Prioritetah (grupa, iskanje, statusi, nepotrjena naročila, vsi identi) in Excel izvoz.",
+      "Zasedenost in Zasedenost naročil uporabljata iste gradnike pregleda; vrstica Skupaj pokaže tudi presežek / primanjkljaj ur.",
+    ],
+  },
+  {
     verzija: "8.03",
     datum: "12. 10. 2026",
     spremembe: [

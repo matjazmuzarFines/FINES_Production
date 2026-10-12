@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { addDays, isoWeek, mondayOf, parseAnyDate, toIso, type IsoDate } from "./dates";
-import { prenesiDatoteko } from "./normativi";
+import { ODDELKI_NORMATIVA, prenesiDatoteko, type Normativ, type OddelekKoda } from "./normativi";
 import { parseNum } from "./stevila";
 import { fetchAll, getSupabase, kosi } from "./supabase";
 import type { Nalog } from "./zasedenost";
@@ -563,6 +563,45 @@ const jeFines = (s: string | null) => !s || s.toLowerCase().startsWith("fines");
  * 4. če je PROSTA ZALOGA v ERP negativna, je del zaloge/DN rezerviran drugje -
  *    toliko kosov pri najkasnejših naročilih ostane "MANJKA" (pravilo iz Excela: prosta < 0 => MANJKA).
  */
+// =====================================================================
+// ZASEDENOST NAROČIL - ure po normativu za del, ki ga je še treba narediti
+// =====================================================================
+
+export type PostavkaUre = {
+  p: PostavkaIzracun;
+  /** Količina, ki ni pokrita z zalogo ali odpremo (nalog, DN ali manjka). */
+  narediti: number;
+  potrebnoDo: IsoDate | null;
+  /** Ponedeljek tedna, ko mora biti narejeno (datum odpreme - rezerva). */
+  teden: IsoDate | null;
+  normativ: Normativ | null;
+  ure: Record<OddelekKoda, number>;
+  ureSkupaj: number;
+};
+
+/** Ure po normativu za postavke naročil - samo del, ki ga je še treba narediti (brez zaloge in odpreme). */
+export function urePostavk(postavke: PostavkaIzracun[], normativi: Map<string, Normativ>): PostavkaUre[] {
+  return postavke.flatMap((p) => {
+    const narediti = p.deli.reduce((s, d) => s + (d.vir === "zaloga" || d.vir === "odprema" ? 0 : d.kolicina), 0);
+    if (narediti <= 0) return [];
+    const normativ = normativi.get(p.ident) ?? null;
+    const ure = Object.fromEntries(
+      ODDELKI_NORMATIVA.map((o) => [o.koda, normativ ? narediti * normativ[o.polje] : 0]),
+    ) as Record<OddelekKoda, number>;
+    return [
+      {
+        p,
+        narediti,
+        potrebnoDo: p.potrebnoDo,
+        teden: p.potrebnoDo ? mondayOf(p.potrebnoDo) : null,
+        normativ,
+        ure,
+        ureSkupaj: Object.values(ure).reduce((s, x) => s + x, 0),
+      },
+    ];
+  });
+}
+
 export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast: Nastavitve, odpreme: Odprema[] = []): Rezultat {
   const vse = postavke.filter((p) => !nast.samoIzdelki || jeIzdelek(p.ident));
   // Dobavnice VD300: ta del postavke ni več na zalogi (status VD200 "V odpremi" se ne upošteva).
@@ -953,6 +992,31 @@ export function izvoziArtikleXlsx(artikli: ArtikelPregled[], ime: string) {
       Nalogi: a.nalogi.map((n) => `${n.st_naloga} (krovni ${n.krovni_dn ?? "-"}, ${fmtKol(n.preostala)} kos, rok ${fmtDatum(n.rok)})`).join("; "),
     })),
     [14, 16, 40, 10, 10, 10, 10, 10, 10, 10, 12, 9, 14, 16, 70],
+    ime,
+  );
+}
+
+/** Zavihek "Zasedenost naročil". */
+export function izvoziUreNarocilXlsx(vrstice: PostavkaUre[], ime: string) {
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  zapisiXlsx(
+    "Zasedenost naročil",
+    vrstice.map(({ p, narediti, potrebnoDo, normativ, ure, ureSkupaj }) => ({
+      "Datum odpreme": xDatum(p.datum_odpreme),
+      "Potrebno do": xDatum(potrebnoDo),
+      Teden: potrebnoDo ? isoWeek(potrebnoDo) : "",
+      Naročilo: p.stevilka,
+      Kupec: p.partner ?? "",
+      IDENT: p.ident,
+      Naziv: p.opis ?? "",
+      Grupa: p.grupa,
+      Status: STATUS[p.status].label,
+      Količina: p.kolicina,
+      Narediti: narediti,
+      ...Object.fromEntries(ODDELKI_NORMATIVA.map((o) => [`${o.koda} h`, normativ ? r2(ure[o.koda]) : ""])),
+      "Skupaj h": normativ ? r2(ureSkupaj) : "ni normativa",
+    })),
+    [14, 14, 8, 14, 30, 16, 40, 12, 14, 9, 9, 9, 9, 9, 9, 12],
     ime,
   );
 }
