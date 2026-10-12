@@ -129,3 +129,47 @@ export function FilterCheckbox({
     </FilterPolje>
   );
 }
+
+/**
+ * Preklopnik z enim izborom (2-4 možnosti) - namesto dveh checkboxov, ki se izključujeta
+ * (npr. Normativ: Vsi / Brez normativa / Z normativom). Gumbi 40 px v eni skupini z obrobo,
+ * izbran oranžen polni, neizbran bel, hover siv. Neobvezno število v oklepaju za oznako.
+ */
+export function FilterPreklopnik<V extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: V;
+  options: { value: V; label: string; hint: string; stevilo?: number }[];
+  onChange: (v: V) => void;
+}) {
+  return (
+    <FilterPolje label={label}>
+      <div className="inline-flex h-10 overflow-hidden rounded-lg border border-ink-200" role="group" aria-label={label}>
+        {options.map((o, i) => {
+          const izbran = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              title={o.hint}
+              aria-pressed={izbran}
+              onClick={() => onChange(o.value)}
+              className={`whitespace-nowrap px-3 text-sm font-semibold transition-colors ${i > 0 ? "border-l border-ink-200" : ""} ${
+                izbran ? "bg-fines-500 text-white" : "bg-white text-ink-600 hover:bg-ink-100"
+              }`}
+            >
+              {o.label}
+              {o.stevilo !== undefined && (
+                <span className={`ml-1 font-normal tabular-nums ${izbran ? "text-white/80" : "text-ink-400"}`}>({o.stevilo})</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </FilterPolje>
+  );
+}

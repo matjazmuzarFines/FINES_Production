@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "8.02",
+    datum: "12. 10. 2026",
+    spremembe: [
+      "Zasedenost: checkbox \"Samo brez normativa\" zamenjan s preklopnikom Normativ: Vsi / Brez normativa (število) / Z normativom. Z normativom skrije naloge brez normativa.",
+    ],
+  },
+  {
     verzija: "8.01",
     datum: "09. 10. 2026",
     spremembe: [

@@ -34,7 +34,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ConfigMissing, Loading } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
-import { FilterCheckbox, FilterIskanje, FilterPolje, FilterVrstica } from "@/components/ui/Filtri";
+import { FilterIskanje, FilterPolje, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
 import { UvozDropzone } from "@/components/ui/UvozDropzone";
 
@@ -598,7 +598,7 @@ function NalogiTabela({
   onFilterOddelkov: (k: OddelekKoda[]) => void;
 }) {
   const [iskanje, setIskanje] = useState("");
-  const [samoBrez, setSamoBrez] = useState(izbor.tip === "vsi" && !!izbor.samoBrez);
+  const [normativ, setNormativ] = useState<"vsi" | "brez" | "z">(izbor.tip === "vsi" && izbor.samoBrez ? "brez" : "vsi");
 
   const naslov =
     izbor.tip === "teden"
@@ -611,7 +611,7 @@ function NalogiTabela({
 
   const q = iskanje.trim().toLowerCase();
   const sort = useRazvrscanje(NALOG_VREDNOSTI);
-  const filtrirane = izracun
+  const osnova = izracun
     .filter((n) =>
       izbor.tip === "teden"
         ? n.teden === izbor.teden
@@ -621,8 +621,7 @@ function NalogiTabela({
             ? n.teden === null
             : true,
     )
-    .filter((n) => !samoBrez || !n.normativ)
-    // Oddelki: nalog ima normativ > 0 v vsaj enem izbranem oddelku. Nalogi brez normativa so vedno prikazani.
+    // Oddelki: nalog ima normativ > 0 v vsaj enem izbranem oddelku. Nalogi brez normativa ostanejo (skrije jih preklopnik Normativ).
     .filter(
       (n) =>
         filterOddelkov.length === 0 ||
@@ -635,7 +634,10 @@ function NalogiTabela({
         [n.st_naloga, n.koda_artikla, n.naziv_artikla, n.skupina_dn, n.krovni_dn, n.narocnik].some((v) =>
           String(v ?? "").toLowerCase().includes(q),
         ),
-    )
+    );
+  const brezSt = osnova.filter((n) => !n.normativ).length;
+  const filtrirane = osnova
+    .filter((n) => (normativ === "brez" ? !n.normativ : normativ === "z" ? !!n.normativ : true))
     .sort((a, b) => (a.rok_izdelave ?? "9999").localeCompare(b.rok_izdelave ?? "9999") || a.st_naloga.localeCompare(b.st_naloga));
   const vrstice = sort.razvrsti(filtrirane);
 
@@ -726,11 +728,15 @@ function NalogiTabela({
             )}
           </div>
         </FilterPolje>
-        <FilterCheckbox
-          checked={samoBrez}
-          onChange={setSamoBrez}
-          label="Samo brez normativa"
-          hint="Prikaži samo naloge brez normativa"
+        <FilterPreklopnik
+          label="Normativ"
+          value={normativ}
+          onChange={setNormativ}
+          options={[
+            { value: "vsi", label: "Vsi", hint: "Prikaži naloge z normativom in brez" },
+            { value: "brez", label: "Brez normativa", hint: "Prikaži samo naloge brez normativa", stevilo: brezSt },
+            { value: "z", label: "Z normativom", hint: "Skrij naloge brez normativa" },
+          ]}
         />
       </FilterVrstica>
 
