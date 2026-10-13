@@ -1,0 +1,261 @@
+Jaz:
+Smo proizvodnja in imamo 2 vodje. Vodje sedaj niso dejansko "vodje" in slabše vodijo ljudi. Veliko imata tudi operativnega dela, kar posledično pomeni, da se manj ukvarjata z izboljšavami, napredkom, organizacijo itd.
+
+Ena izmed stvari ki nam zelo slabo gre je produktivnost. Rad bi, da zelo izboljšamo produktivnost in zmanjšamo strošek dela na kos (seveda posledično). V to šteje od vseh Lean metod, število gibov, dovolj orodja, manjši SMED, itd itd. Ker pa vodje nista izobražena in sta v podjetju že dolgo, tudi če jih vprašam, kje bi lahko prihranili ne bosta opazila tega v praksi oz. delu ker delata tako že dolgo. To je tako kot da bi vprašal nekoga ki ne razume ničesar, če ima kakšno vprašanje. Razmišljam na kakšen način, da jim dam navodila ali pomoč ali cilje, da bi lahko probali narediti napredek.
+
+Teoretično vem kako bi se tega lotil. Naredil bi celoten projekt, kjer bi temu namenili posebej dovolj časa. Razdelil bi izdelke po družinah in naredil KPIje, cilje in korake za vsako družino. Potem ko je določena družina na celici bi naredili GEMBA action plan. direktno na celici bi našli nekaj izboljšav, ki se implementirajo do naslednje serije. (gre za manjše popravke, izboljšave). Večje bi pač rabili več časa. Nato bi se na 2 tedna sestali in pogledali napredek.
+
+Daj mi svoje ideje in predloge. Problem je ker vem da nismo sposobni delati tako velik projekt ker nihče ne bo dosleden ker imajo preveč operativnega dela
+
+CHAT GPT:
+Po mojem je tvoja ideja z razdelitvijo izdelkov po družinah, Gemba analizami in merjenjem produktivnosti pravilna. Vendar mislim, da imate trenutno še bolj temeljen problem, ki ga morate rešiti pred uvedbo takšnega projekta.
+
+Ne manjka vam toliko idej za izboljšave, kot vam manjka sistem, v katerem bodo vodje izboljšave dejansko izvajali.
+
+Iz tvojega opisa vidim tri povezane težave:
+
+1. Vodji sta preveč operativno vključeni. Večino časa rešujeta trenutne probleme, namesto da bi odpravljali vzroke, zaradi katerih problemi nastajajo.
+2. Nimata razvitega načina opazovanja izgub. Če nekdo že 15 let opravlja delo na enak način, pogosto ne opazi več nepotrebnih gibov, čakanja, slabega razporeda orodja ali neustrezne organizacije.
+3. Manjka rutina izboljševanja. Tudi če danes odkrijete deset možnosti za izboljšave, ni zagotovila, da bo kdo čez dva tedna kaj naredil.
+
+Zato ne bi začel z velikim projektom za vse družine izdelkov. Začel bi z majhnim, zelo strukturiranim sistemom, ki od vodij na začetku ne zahteva veliko znanja, zahteva pa redno izvajanje konkretnih nalog.
+
+To je podobno konceptu Leader Standard Work, pri katerem vodji določimo ponavljajoče se aktivnosti za spremljanje procesov, odpravljanje težav in razvoj zaposlenih, ne zgolj operativnih nalog.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.lean.org\&sz=32)
+
+Lean Enterprise Institute
+
+
+
+## 1. Moj predlog: najprej vzpostavite sistem majhnih izboljšav
+
+Namesto projekta, ki bi zajemal 15 proizvodnih družin, številne KPI-je, velike analize in veliko sestankov, bi uvedel 6-tedenski pilot na eni proizvodni celici oziroma družini izdelkov.
+
+Cilj pilota ne bi bil samo povečanje produktivnosti, temveč tudi naučiti vodji, kako samostojno prepoznavati in izvajati izboljšave.
+
+Predlagani cikel izboljševanja
+
+1\. Opazuj delo
+
+20–30 minut neposredno na delovnem mestu
+
+2\. Izberi eno izgubo
+
+Čakanje, nepotrebno gibanje, orodje, priprava ...
+
+3\. Izvedi manjšo izboljšavo
+
+Ena odgovorna oseba in en rok
+
+4\. Preveri učinek in ohrani spremembo
+
+Meritev pred/po in posodobitev načina dela
+
+Moje začetno pravilo bi bilo: ena zaključena, preverjena izboljšava je vrednejša od desetih zapisanih predlogov.
+
+## 2. Vodjema ne daj naloge »najdita izboljšave«, ampak konkretna vprašanja
+
+To se mi zdi ena najpomembnejših sprememb.
+
+Če vodji rečeš »Poišči možnosti za izboljšanje produktivnosti«, mora že sam poznati principe optimizacije dela, prepoznati izgube in oceniti, katere so pomembne.
+
+Namesto tega bi naredil preprost Gemba kontrolni list za produktivnost, ki vodjo vodi pri opazovanju.
+
+| Kaj opazuje?           | Kaj naj preveri?                                                         |
+| ---------------------- | ------------------------------------------------------------------------ |
+| Gibanje zaposlenih     | Ali zaposleni hodijo po material, orodje ali dokumentacijo? Kolikokrat?  |
+| Čakanje                | Ali kdo čaka na material, stroj, drugega zaposlenega ali navodila?       |
+| Orodje                 | Ali ima vsak vse potrebno? Ali si zaposleni med seboj izposojajo orodje? |
+| Organizacija dela      | Ali nekdo čaka, medtem ko je drugi preobremenjen?                        |
+| Priprava serije (SMED) | Kaj bi lahko pripravili že pred zaključkom prejšnje serije?              |
+| Nepotrebna opravila    | Ali se kaj prestavlja, obrača, čisti ali preverja večkrat?               |
+| Kakovost               | Ali je treba kaj popravljati, ponavljati ali dodatno kontrolirati?       |
+| Delovno mesto          | Ali bi drugačna postavitev materiala, orodja ali mize skrajšala delo?    |
+
+Na začetku vodji niti ne bi dal vseh osmih področij hkrati.
+
+Vsak teden bi izbral eno temo. Na primer: ta teden opazujemo nepotrebno gibanje zaposlenih. Naslednji teden samo čakanje in prekinitve.
+
+Tako bo vodja postopoma razvijal sposobnost prepoznavanja izgub. Namesto da mora vse znati, ima konkretno nalogo, ki jo lahko izvede.
+
+To je posebej primerno za vajino situacijo, ker gre za učenje neposredno v proizvodnji in ne za teoretično izobraževanje. Tudi metode TWI temeljijo na praktičnem usposabljanju vodij za standardizacijo, poučevanje dela in izboljševanje metod.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.nist.gov\&sz=32)
+
+NIST
+
+
+
+## 3. Vodjema moraš najprej ustvariti čas
+
+To je po mojem največji dejavnik, ki bo odločil o uspehu.
+
+Če vodja danes 80 % časa operativno dela, ga ne moreš samo dodatno obremeniti s produktivnostjo, organizacijo in izboljšavami.
+
+Pravzaprav bi jaz izboljševanje produktivnosti povezal še z enim projektom: zmanjševanjem operativnega dela vodij.
+
+Za vsakega vodjo bi naredil kratek popis, za kaj porablja čas. Nato bi označil, katere naloge lahko prevzamejo zaposleni, skladišče, tehnologija ali drugi odgovorni.
+
+Ni treba, da vodji takoj zagotovite polovico dneva za organizacijo. Začel bi s približno eno uro zaščitenega časa na teden.
+
+Predlog tedenske rutine enega vodje
+
+| Gemba opazovanje dela                   | 30 min       |
+| --------------------------------------- | ------------ |
+| Izvedba oziroma organizacija izboljšave | 15 min       |
+| Preverjanje in kratek pregled           | 15 min       |
+| Skupaj                                  | 60 min/teden |
+
+To je začetni minimum za pilot, ne dolgoročno zadostna količina časa za celotno vodenje proizvodnje. Večje izvedbene naloge potrebujejo dodatne izvajalce in čas.
+
+Najpomembnejše: te ure ne sme nadomestiti operativno delo, razen če gre za res nujno situacijo.
+
+Če za eno uro na teden ne morete organizirati nadomeščanja vodje, je to samo po sebi organizacijski problem, ki ga je treba rešiti.
+
+## 4. Produktivnost morate meriti, ampak na začetku samo eno glavno stvar
+
+Tvoja ideja o KPI-jih po družinah je smiselna, vendar bi na začetku meril predvsem dejanski porabljeni čas dela na dober kos.
+
+GLAVNI KPI
+
+## Človek-ure / dober kos
+
+\\[ \frac{\text{Vse neposredne človek-ure za serijo}}{\text{Število dobrih izdelkov}} \\]
+
+Primer: trije zaposleni, 7,5 ur, enaka serija
+
+Pred izboljšavo
+
+# 1,50 h
+
+15 dobrih kosov
+
+Po izboljšavi
+
+# 1,25 h
+
+18 dobrih kosov
+
+Zmanjšanje porabe dela na kos
+
+## −16,7 %
+
+Izmišljen primer ob enaki zahtevnosti, kakovosti, zasedbi in primerljivih pogojih.
+
+Pri vaših družinah morate upoštevati še velikost serije, zahtevnost različic, menjave, pripravo in morebitne dodelave. Sicer lahko dobiš napačen vtis o produktivnosti. Pri maloserijski proizvodnji so primerjave med različnimi izdelki zahtevnejše kot pri enostavni serijski proizvodnji.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.lean.org\&sz=32)
+
+Lean Enterprise Institute
+
+
+
+Ločil bi tudi prihranjene človek-ure od dejanskega finančnega prihranka. Če zaradi izboljšave zaposleni isti izdelek izdelajo hitreje, ste pridobili kapaciteto in zmanjšali kalkulirani strošek dela na kos. Ni pa nujno, da so se že zmanjšali stroški plač. Finančni učinek nastane na primer, če se izognete naduram, z obstoječo ekipo izdelate več prodajnih kosov ali zmanjšate potrebo po dodatnih zaposlitvah.
+
+## 5. Naj vodji izvajata majhne izboljšave z merljivimi rezultati
+
+Predstavljaj si, da imaš na eni proizvodni celici naslednje ugotovitve:
+
+| Opažena izguba                                | Preprost ukrep                              | Merjenje                     |
+| --------------------------------------------- | ------------------------------------------- | ---------------------------- |
+| Delavec večkrat odhaja po orodje              | Dodatno orodje na celici                    | Število odhodov              |
+| Ob začetku serije ni pripravljen ves material | Vnaprej pripravljen komplet materiala       | Minute zamude                |
+| Pri menjavi serije se šele išče pripomočke    | Vse pripravljeno pred menjavo               | Čas menjave                  |
+| Delavec petkrat obrne izdelek                 | Spremenjeno zaporedje operacij ali priprava | Število obratov in čas cikla |
+| Dva delavca čakata tretjega                   | Prerazporeditev dela                        | Čas čakanja in izhod celice  |
+
+Od vodje ne pričakuješ, da bo sam naredil kompleksno študijo, izračunal takte in reorganiziral proizvodnjo.
+
+Pričakuješ, da opazi na primer pet odhodov po orodje in organizira, da tega naslednjič ne bo več.
+
+Pomembno pa je, da za vsako spremembo preverite dejanski učinek. Zmanjšanje gibov na operaciji, ki ni ozko grlo, ne pomeni nujno večjega izhoda celotne celice. Vse spremembe morajo hkrati ohranjati varnost in kakovost.
+
+## 6. Kako bi organiziral šesttedenski pilot
+
+Ne bi se zanašal zgolj na sestanek vsaka dva tedna. Dvotedenski pregled je primeren za rezultate, vendar za operativno izvajanje potrebujete kratko tedensko rutino.
+
+| Teden | Kaj naredite                                                                           |
+| ----- | -------------------------------------------------------------------------------------- |
+| 1     | Izberete družino/celico, določite izhodiščno produktivnost in opazujete delovni proces |
+| 2     | Vodji skupaj z zaposlenimi izvedeta prvo manjšo izboljšavo                             |
+| 3     | Preverite, ali izboljšava deluje, in poiščete naslednjo izgubo                         |
+| 4     | Izvedete drugo izboljšavo, po možnosti iz druge kategorije izgub                       |
+| 5     | Preverite učinke, določite standard in ponovite meritve                                |
+| 6     | Pregledate rezultate in se odločite, ali sistem razširite na drugo celico              |
+
+V prvem ciklu bi oba vodja sodelovala pri isti družini. Eden bi bil odgovoren, drugi bi se učil postopka. Ko bi samostojno obvladala proces, bi lahko vsak prevzel svojo družino.
+
+Družino bi izbral po pogostosti proizvodnje, pomembnosti porabljenih delovnih ur in možnosti za izboljšanje, ne nujno po največjem številu izdelkov. Pri raznovrstni proizvodnji je koristno združevanje po podobnem poteku procesov, ne samo po podobnosti izdelka.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.lean.org\&sz=32)
+
+Lean Enterprise Institute
+
+
+
+### Enostavna tabla izboljšav
+
+To bi bila vsa dokumentacija, ki jo na začetku zahtevam:
+
+| Problem                 | Ukrep                   | Odgovoren           | Rok                  | Rezultat  |
+| ----------------------- | ----------------------- | ------------------- | -------------------- | --------- |
+| Orodje manjka           | Dodatno orodje          | Vodja 1             | Petek                | Preveriti |
+| Material ni pripravljen | Komplet pred serijo     | Vodja 1 + skladišče | Sreda                | Preveriti |
+| Menjava traja 65 min    | Priprava orodja vnaprej | Vodja 2             | Ob naslednji menjavi | Preveriti |
+
+Ne bi dovolil, da je naenkrat v izvajanju deset odprtih ukrepov. Najprej dokončajte dva ali tri, nato odprite nove.
+
+To je lahko tabla v proizvodnji, Excel ali obstoječa aplikacija. Nove aplikacije za ta namen za zdaj ne bi razvijal.
+
+## 7. Nekaj pomembnih stvari, ki bi jih naredil drugače od tvojega predloga
+
+Prvič: več časa bi namenil razvoju vodij kot pripravi projekta. Prva dva ali tri Gemba oglede bi opravil skupaj z njima. Pokazal bi, kako opazovati delo, izmeriti izgubo in poiskati vzrok. Kasneje bi ju vedno manj usmerjal.
+
+Drugič: določil bi konkretna pričakovanja do vodenja. Ne samo cilja »izboljšaj produktivnost za 10 %«, ampak tudi pričakovano ravnanje: vodja mora vsak teden opazovati proces, odstraniti vsaj eno konkretno oviro, kadar je to izvedljivo, in preveriti učinkovitost ukrepa. Števila izboljšav pa ne bi uporabljal kot glavnega kazalnika uspešnosti, ker bi lahko spodbujalo nepomembne spremembe.
+
+Tretjič: zaposlene bi aktivno vključil. Delavec verjetno pozna marsikatero nepotrebno opravilo, ki ga vodja ne opazi. Vprašanje naj ne bo samo »Kaj bi izboljšali?«, ampak na primer »Kaj te danes največkrat prekine?«, »Po kaj moraš hoditi?« ali »Kaj te ovira, da bi delo opravil brez ustavljanja?«
+
+Četrtič: ločil bi majhne izboljšave od velikih projektov. Če je problem rešljiv v 30 minutah in z nekaj deset evri, ga ne bi pošiljal v dolg projektni postopek. Če pa zahteva spremembo tehnologije, večjo investicijo ali sodelovanje razvoja, mora dobiti drugega odgovornega nosilca. Vodja proizvodnje ne more sam rešiti vsega.
+
+Petič: ne bi se osredotočil samo na gibanje delavcev. Morda največji problem sploh niso počasne operacije, ampak slaba priprava dela, nepravočasen material, nepravilni normativi, slabo razporejeni ljudje ali ponavljajoče se menjave serij. SMED in 5S sta uporabni orodji, nista pa vnaprej prava rešitev za vsako proizvodnjo.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.nist.gov\&sz=32)
+
+NIST
+
+
+
+## 8. Kaj pa če se kljub temu nič ne premakne?
+
+Tu moraš ločiti dve situaciji.
+
+Če vodji nimata časa, ker celoten sistem temelji na njunem operativnem delu, odgovornost za spremembo nosi tudi višje vodstvo. Potrebna bo prerazporeditev nalog, pomoč zaposlenih ali drugačna organizacija.
+
+Če pa imata zaščiten čas, konkretna navodila, pomoč, jasne odgovornosti in redne preglede, izboljšav pa še vedno ne izvajata, potem ne gre več primarno za problem poznavanja Lean metod, temveč za problem izvajanja vodstvene funkcije.
+
+Takrat bi resno razmislil o praktičnem mentorstvu za vodji ali podpori tehnologa oziroma procesnega inženirja, ki zna voditi opazovanja in merjenja. Zunanjega svetovalca bi vzel samo, če bi z vodjema dejansko delal na proizvodni celici in ju naučil samostojnega dela — ne za teoretično poročilo.
+
+## Kaj bi jaz dejansko uvedel v vašem podjetju?
+
+Zaščitena ura vodje vsak teden
+
+Vsakemu vodji organizacijsko omogočiti vsaj eno uro za izboljšave, brez stalnih operativnih prekinitev.
+
+Vodeni Gemba pregled
+
+En kontrolni list, ena tema opazovanja na teden, ena konkretna težava za rešitev.
+
+Meritev človek-ur na dober kos
+
+Izbrati eno ponavljajočo se družino in spremljati primerljive proizvodne serije.
+
+Kratek nadzor izvedbe
+
+Vsak teden 15 minut preverjanja odprtih ukrepov, vsaka dva tedna pregled učinkov z nadrejenim.
+
+Najpomembnejše sporočilo: tvoj dolgoročni projekt po družinah izdelkov bi ohranil kot cilj, ne pa kot prvi korak. Najprej morate dokazati, da sta vodji sposobni šest tednov zapored dosledno opazovati delo, izvesti nekaj sprememb in preveriti rezultate. Šele potem bi sistem razširil.
+
+In še ena stvar, ki bi jo posebej poudaril: če je glavni cilj produktivnost, naj tudi odpravljanje operativnih obremenitev vodij postane del tega cilja. V nasprotnem primeru bodo vodje še naprej gasili iste probleme, organizacija pa bo od njih pričakovala, da jih istočasno sistemsko odpravijo.
+
+Zanima me še ena stvar, ki bi bistveno vplivala na moj nadaljnji predlog: ali imata vodji pod seboj kakšne vodje izmen, skupin oziroma bolj izkušene zaposlene, na katere bi lahko prenesla del organizacije dela, ali sta dejansko sama odgovorna za vse zaposlene in celotno operativo?

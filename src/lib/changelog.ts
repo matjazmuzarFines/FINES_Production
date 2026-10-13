@@ -9,6 +9,68 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "13.01",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Produktivnost: stran ima zavihka - Koledar (privzet: koledar gemb in tabla izboljšav) in KPI (grafi in statistika).",
+      "Nov KPI 5 Faktor investicije: letni prihranek izvedenih akcij / investirano (enkratni stroški teh akcij); cilj 1,5 (100 € → 150 € na leto).",
+      "KPI kartice so manjše - vseh 5 grafov v eni vrsti na monitorju; krajša besedila.",
+      "Statistika v zavihku KPI: potencial, akcije, doslednost, strošek ukrepov in tabela akcij po vrsti izgube.",
+      "SQL: 013_produktivnost_faktor_investicije.sql (cilj faktorja v nastavitvah leta).",
+    ],
+  },
+  {
+    verzija: "12.01",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Produktivnost: na prvi strani 4 KPI-ji z grafi - 1. izvedene gembe (%), 2. prihranek €/leto, 3. prihranek dela h/leto, 4. zmanjšanje normativov (%); cilji po letih (2026 od 42. tedna: 80 %, 10.000 €, 40 h, 10 %; 2027: 80 %, 50.000 €, 200 h, 10 %).",
+      "Kalkulator prihranka: 2 vpisa - čas (min/kos) in material (€/kos); čas × urna postavka + material = €/kos, × letna količina družine = €/leto in h/leto.",
+      "Akcija ima družino pečic (in po potrebi lastno letno količino); tabla izboljšav kaže min/kos, €/kos in €/leto.",
+      "Novo okno Družine: letna količina in cilj zmanjšanja normativa po družini, povprečni normativ ob izhodišču in zdaj, prihranek h/leto zaradi nižjega normativa.",
+      "Posnetki normativov: izhodišče 13. 10. 2026 (migracija 012), gumb Nov posnetek shrani trenutno stanje; KPI 4 primerja normative ident z identom.",
+      "Pod grafi kazalniki: potencial odprtih akcij (€ in h), akcije, doslednost, strošek ukrepov s povračilom. Nastavitve: cilji leta, začetni teden gemb, urna postavka.",
+      "PDF in e-mail gembe prikazujeta prihranek v min/kos, €/kos in €/leto.",
+    ],
+  },
+  {
+    verzija: "11.01",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Gemba (teden): izvoz poročila - gumb PDF (prenos) in gumb E-mail (Outlook .eml s PDF v priponki in osnovnimi podatki v besedilu).",
+      "PDF po vrsti: osnovni podatki (teden, datum, čas začetka, trajanje, celica, udeleženci, tema), zapisnik z meritvami operacij, števci, KPI tedna in oceno prihranka, celotna tabla izboljšav, priloge (slike, skice, povpraševanja).",
+      "Časovnik gembe shrani uro začetka in trajanje (ob pavzi) - prikazano v PDF in e-mailu.",
+      "Prilagojeno za pečice (1-2 h na kos): štoparica meri posamezne operacije, KPI je tedenski (človek-ure / dobre pečice v tednu) in se ne meri na gembi.",
+    ],
+  },
+  {
+    verzija: "10.03",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Časovnik gembe in štoparica: številke ob zagonu ne utripnejo več in ob ponovnem zagonu ne skočijo nazaj.",
+      "Časovnik gembe: odstranjen gumb za vpis trajanja v zapisnik (za beleženje časa dogodka je gumb Ura ob zapisniku).",
+    ],
+  },
+  {
+    verzija: "10.02",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Tabla za skiciranje: poteza se pokaže takoj, ko dvigneš prst (prej je včasih izginila do naslednjega dotika).",
+      "Tabla je hitrejša pri veliko potezah (ozadje in risba se ne rišeta znova ob vsakem premiku), hitri gibi so gladkejši, drugi prst ali dlan med potezo ne pokvari risbe.",
+    ],
+  },
+  {
+    verzija: "10.01",
+    datum: "13. 10. 2026",
+    spremembe: [
+      "Rutina ima podmeni: Rutina vodij (dosedanja dnevna rutina) in Produktivnost (nova stran).",
+      "Produktivnost: tedenski Gemba walk - koledar tednov (zaključena / v delu / ni izvedena), kazalniki prihranka, graf prihranka in človek-ur na kos, tabla vseh akcij, nastavitve (urna postavka, tedni, cilj).",
+      "Zapisnik tedna: podatki gembe (datum, celica, udeleženci, tema tedna s predlogom), velik zapisnik, vodič gembe po korakih, vprašanja po 10 temah izgub (klik vstavi vprašanje v zapisnik), orodja (časovnik, štoparica ciklov, števci, KPI človek-ure / dober kos, kalkulator prihranka).",
+      "Tabla izboljšav: akcije s problemom, ukrepom, izgubo, odgovornim, rokom, statusom, oceno prihranka (h/teden, EUR/leto) in rezultatom; odprte akcije prejšnjih tednov se pokažejo na vsaki gembi; opozorilo nad 3 odprte akcije.",
+      "Priloge gembe: slike (več naenkrat), tabla za skiciranje (pero, marker, oblike, puščice, tekst, radirka, mreža, risanje na sliko) in povpraševanja (PDF, Word, Excel, Outlook) s statusom.",
+      "Datoteke so v bucketu fp-rutina-slike v mapi prod/ (ločeno od rutin). SQL: 011_produktivnost.sql.",
+    ],
+  },
+  {
     verzija: "9.01",
     datum: "12. 10. 2026",
     spremembe: [

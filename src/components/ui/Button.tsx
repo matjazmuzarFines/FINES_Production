@@ -59,6 +59,8 @@ type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title" | "
   hint: string;
   icon: LucideIcon;
   variant?: "ghost" | ButtonVariant;
+  /** Med pripravo (npr. PDF) se namesto ikone vrti krog. */
+  delam?: boolean;
 };
 
 /** Okrogel gumb samo z ikono. Barva po istem pravilu; `ghost` samo za info / zapri / meni. */
@@ -68,6 +70,7 @@ export function IconButton({
   variant = "ghost",
   className = "",
   type = "button",
+  delam,
   ...rest
 }: IconButtonProps) {
   const style =
@@ -82,7 +85,8 @@ export function IconButton({
       className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${style} ${className}`}
       {...rest}
     >
-      <Icon className="h-5 w-5" aria-hidden />
+      <Icon className={`h-5 w-5 ${delam ? "hidden" : ""}`} aria-hidden />
+      {delam && <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
     </button>
   );
 }

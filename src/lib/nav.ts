@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Gauge, ListOrdered, Warehouse } from "lucide-react";
+import { ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Footprints, Gauge, ListOrdered, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -36,7 +36,21 @@ export const NAV: NavGroup[] = [
             label: "Rutina",
             href: "/proizvodnja/rutina",
             icon: ClipboardCheck,
-            hint: "Odpri dnevno rutino delovnih mest",
+            hint: "Pokaži rutino vodij in produktivnost",
+            children: [
+              {
+                label: "Rutina vodij",
+                href: "/proizvodnja/rutina",
+                icon: ClipboardCheck,
+                hint: "Odpri dnevno rutino delovnih mest",
+              },
+              {
+                label: "Produktivnost",
+                href: "/proizvodnja/rutina/produktivnost",
+                icon: Footprints,
+                hint: "Tedenski Gemba walk in akcije produktivnosti",
+              },
+            ],
           },
         ],
       },
