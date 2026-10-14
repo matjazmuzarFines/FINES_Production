@@ -35,7 +35,7 @@ import {
   type Razpored,
   type ZaposleniDan,
 } from "@/lib/plan";
-import { formatNum, formatUre, parseNum } from "@/lib/stevila";
+import { formatNum, formatUre, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
   izracunajNaloge,
@@ -878,7 +878,7 @@ function ZaposleniInput({
 }) {
   return (
     <input
-      defaultValue={formatNum(value)}
+      defaultValue={formatVnos(value)}
       inputMode="decimal"
       title={hint}
       aria-label={hint}
@@ -887,7 +887,7 @@ function ZaposleniInput({
       onBlur={(e) => {
         const n = parseNum(e.target.value);
         if (n === null || n < 0 || n > 99) {
-          e.target.value = formatNum(value);
+          e.target.value = formatVnos(value);
           return;
         }
         if (n !== value) onCommit(n);
@@ -1149,7 +1149,7 @@ function UrediPostavitev({
 }) {
   const [celicaId, setCelicaId] = useState(postavitev.delovno_mesto_id);
   const [datum, setDatum] = useState(postavitev.datum_zacetka);
-  const [ure, setUre] = useState(formatNum(postavitev.ure));
+  const [ure, setUre] = useState(formatVnos(postavitev.ure));
   const [opomba, setOpomba] = useState(postavitev.opomba ?? "");
 
   const ureNum = parseNum(ure);

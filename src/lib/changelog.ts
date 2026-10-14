@@ -9,6 +9,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "13.02",
+    datum: "14. 10. 2026",
+    spremembe: [
+      "Popravek: vnosna polja števil (cilji KPI, družine, akcije, normativi, zasedenost) ne pišejo več ločila tisočic - 10.000 se ob ponovnem shranjevanju ni več spremenilo v 10.",
+      "Produktivnost: graf KPI 3 kaže točke skrajšano (40k) kot KPI 2.",
+      "E-mail gembe: tedenska tema v zadevi, povezava do zapisnika v aplikaciji, večja pisava, naslov \"Nove akcije\", krepka odgovorni in rok, poziv, naj odgovorni javijo, ko akcijo zaključijo.",
+      "Zapisnik gembe: odstranjeno orodje KPI tedna; predlog teme se skrije, ko je tema izbrana; ko je tema izbrana, so ostale teme pod vprašanji skrite (gumb Prikaži ostale teme).",
+      "Vprašanja: gumb Dodaj vprašanje (zelen +) v vsaki skupini in odstranjevanje vprašanj (koš). SQL: 014_produktivnost_vprasanja.sql.",
+      "Tablica: naslov strani se ne stiska več v eno besedo na vrstico - gumbi se prelomijo v novo vrsto.",
+      "Koledar gemb: legenda barv tem tedna (krogec levo zgoraj v tednu).",
+    ],
+  },
+  {
     verzija: "13.01",
     datum: "13. 10. 2026",
     spremembe: [

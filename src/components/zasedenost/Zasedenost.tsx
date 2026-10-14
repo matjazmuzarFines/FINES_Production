@@ -6,7 +6,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Download, Settings, Users } f
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
 import { ODDELKI_NORMATIVA, naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { useNeshranjeno } from "@/lib/neshranjeno";
-import { formatNum, formatUre, parseNum } from "@/lib/stevila";
+import { formatNum, formatUre, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
   KODE,
@@ -437,7 +437,7 @@ function SteviloInput({
 }) {
   return (
     <input
-      defaultValue={formatNum(value)}
+      defaultValue={formatVnos(value)}
       inputMode="decimal"
       title={hint}
       aria-label={hint}
@@ -445,7 +445,7 @@ function SteviloInput({
       onBlur={(e) => {
         const n = parseNum(e.target.value);
         if (n === null || n < 0 || (max !== undefined && n > max)) {
-          e.target.value = formatNum(value);
+          e.target.value = formatVnos(value);
           return;
         }
         if (n !== value) onCommit(n);
@@ -798,7 +798,7 @@ function OddelkiNastavitve({
   onNapaka: (m: string) => void;
 }) {
   const [vrednosti, setVrednosti] = useState(
-    Object.fromEntries(oddelki.map((o) => [o.id, { zap: formatNum(o.privzeto_zaposlenih), ure: formatNum(o.ure_na_dan) }])),
+    Object.fromEntries(oddelki.map((o) => [o.id, { zap: formatVnos(o.privzeto_zaposlenih), ure: formatVnos(o.ure_na_dan) }])),
   );
   const [shranjujem, setShranjujem] = useState(false);
 

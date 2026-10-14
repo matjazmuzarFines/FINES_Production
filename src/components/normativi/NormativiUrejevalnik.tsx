@@ -35,7 +35,7 @@ import {
   type SkupnaSprememba,
 } from "@/lib/normativi";
 import { useNeshranjeno } from "@/lib/neshranjeno";
-import { formatNum, parseNum } from "@/lib/stevila";
+import { formatNum, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -216,7 +216,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
       const nova = { ...n, ...sprememba };
       setPrimerjavaId(n.id);
       setFDruzine(nova.druzina ? [nova.druzina] : []);
-      setFVelikost(nova.velikost === null ? "" : formatNum(nova.velikost));
+      setFVelikost(nova.velikost === null ? "" : formatVnos(nova.velikost));
       setStran(0);
     }
   }
@@ -817,7 +817,7 @@ function NumCell({
 }) {
   return (
     <input
-      defaultValue={formatNum(value)}
+      defaultValue={formatVnos(value)}
       inputMode="decimal"
       title={hint}
       aria-label={hint}
@@ -831,12 +831,12 @@ function NumCell({
         const raw = e.target.value.trim();
         const n = parseNum(raw);
         if (raw !== "" && (n === null || n < 0)) {
-          e.target.value = formatNum(value);
+          e.target.value = formatVnos(value);
           return;
         }
         const nova = n ?? (dovoliPrazno ? null : 0);
         if (nova !== value) onCommit(nova);
-        e.target.value = formatNum(nova);
+        e.target.value = formatVnos(nova);
       }}
       className={`${CELL} w-20 text-right tabular-nums ${poudarjeno ? "font-bold" : ""}`}
     />

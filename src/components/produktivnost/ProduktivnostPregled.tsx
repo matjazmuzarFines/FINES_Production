@@ -39,7 +39,7 @@ import {
   type NormStanje,
   type Posnetek,
 } from "@/lib/produktivnost";
-import { formatNum, parseNum } from "@/lib/stevila";
+import { formatNum, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import { Button, IconButton } from "@/components/ui/Button";
 import { FilterPolje, FilterPreklopnik } from "@/components/ui/Filtri";
@@ -78,7 +78,7 @@ async function naloziVse(): Promise<Podatki> {
 
 const fmtPct = (n: number) => `${formatNum(Math.round(n * 10) / 10)} %`;
 const fmtFaktor = (n: number) => `${formatNum(Math.round(n * 100) / 100)}×`;
-const kEur = (n: number) => (Math.abs(n) >= 1000 ? `${formatNum(Math.round(n / 100) / 10)}k` : String(Math.round(n)));
+const kSkrajsano = (n: number) => (Math.abs(n) >= 1000 ? `${formatNum(Math.round(n / 100) / 10)}k` : String(Math.round(n)));
 
 export function ProduktivnostPregled({ zacetniMesec }: { zacetniMesec?: string }) {
   if (!supabaseConfigured) return <ConfigMissing />;
@@ -154,7 +154,7 @@ function Pregled({ zacetniMesec }: { zacetniMesec?: string }) {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[min(100%,18rem)] flex-1">
           <h2 className="text-xl font-bold">Produktivnost - tedenski Gemba walk</h2>
           <p className="text-sm text-ink-500">Klik na teden odpre zapisnik gembe. KPI-ji leta so v zavihku KPI.</p>
         </div>
@@ -258,7 +258,7 @@ function Pregled({ zacetniMesec }: { zacetniMesec?: string }) {
                   </>
                 }
               >
-                <KpiGraf kpi={kpi} naziv="Prihranek EUR na leto" barva={BARVE_SERIJ.zelena} vrednosti={kpi.eur} cilj={c.cilj_eur_leto} format={formatEur} formatTocka={kEur} />
+                <KpiGraf kpi={kpi} naziv="Prihranek EUR na leto" barva={BARVE_SERIJ.zelena} vrednosti={kpi.eur} cilj={c.cilj_eur_leto} format={formatEur} formatTocka={kSkrajsano} />
               </KpiKartica>
 
               <KpiKartica
@@ -271,7 +271,7 @@ function Pregled({ zacetniMesec }: { zacetniMesec?: string }) {
                 napredek={c.cilj_h_leto ? kpi.hLeto / c.cilj_h_leto : null}
                 spodaj={`Cilj ${formatH(c.cilj_h_leto)} · potencial ${formatH(kpi.potencialH)}`}
               >
-                <KpiGraf kpi={kpi} naziv="Prihranek ur dela na leto" barva={BARVE_SERIJ.oranzna} vrednosti={kpi.h} cilj={c.cilj_h_leto} format={formatH} />
+                <KpiGraf kpi={kpi} naziv="Prihranek ur dela na leto" barva={BARVE_SERIJ.oranzna} vrednosti={kpi.h} cilj={c.cilj_h_leto} format={formatH} formatTocka={kSkrajsano} />
               </KpiKartica>
 
               <KpiKartica
@@ -742,6 +742,15 @@ function KoledarTednov({
           število akcij
         </span>
       </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
+        <span className="font-semibold text-ink-700">Tema tedna (krogec levo zgoraj):</span>
+        {IZGUBE.map((i) => (
+          <span key={i.koda} className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: i.barva }} />
+            {i.naziv}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -766,13 +775,13 @@ function NastavitveOkno({
 }) {
   const notify = useToast();
   const [f, setF] = useState({
-    urna: formatNum(urnaPostavka),
+    urna: formatVnos(urnaPostavka),
     zacetni: cilji.zacetni_teden ?? "",
-    doslednost: formatNum(cilji.cilj_doslednost_pct),
-    eur: formatNum(cilji.cilj_eur_leto),
-    h: formatNum(cilji.cilj_h_leto),
-    normativ: formatNum(cilji.cilj_normativ_pct),
-    faktor: formatNum(cilji.cilj_faktor_inv),
+    doslednost: formatVnos(cilji.cilj_doslednost_pct),
+    eur: formatVnos(cilji.cilj_eur_leto),
+    h: formatVnos(cilji.cilj_h_leto),
+    normativ: formatVnos(cilji.cilj_normativ_pct),
+    faktor: formatVnos(cilji.cilj_faktor_inv),
   });
   const [napaka, setNapaka] = useState<string | null>(null);
   const [shranjujem, setShranjujem] = useState(false);
@@ -881,7 +890,7 @@ function DruzineOkno({
     Object.fromEntries(
       nastavitve.druzine.map((d) => [
         d.druzina_id,
-        { kol: d.kolicina_leto !== null ? formatNum(d.kolicina_leto) : "", cilj: d.cilj_normativ_pct !== null ? formatNum(d.cilj_normativ_pct) : "" },
+        { kol: d.kolicina_leto !== null ? formatVnos(d.kolicina_leto) : "", cilj: d.cilj_normativ_pct !== null ? formatVnos(d.cilj_normativ_pct) : "" },
       ]),
     ),
   );

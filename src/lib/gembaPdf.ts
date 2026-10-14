@@ -549,6 +549,10 @@ function base64(bajti: Uint8Array) {
 }
 const vrstice76 = (b64: string) => b64.replace(/.{1,76}/g, (m) => m + CRLF);
 const utf8Glava = (t: string) => `=?UTF-8?B?${base64(new TextEncoder().encode(t))}?=`;
+/** Naslov aplikacije za povezavo do zapisnika (lokalni build tudi kaže na produkcijo). */
+const URL_APLIKACIJE = (process.env.NEXT_PUBLIC_APP_URL || "https://finesproduction.vercel.app").replace(/\/$/, "");
+const PISAVA = "16px";
+const PISAVA_NASLOV = "21px";
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function teloEmaila(p: GembaPorocilo) {
@@ -563,26 +567,31 @@ function teloEmaila(p: GembaPorocilo) {
   ];
   const td = "padding:3px 12px 3px 0;vertical-align:top";
   const tabela =
-    `<table style="border-collapse:collapse;font-size:11pt">` +
+    `<table style="border-collapse:collapse;font-size:${PISAVA}">` +
     pari
       .filter(([, v]) => v)
       .map(([o, v]) => `<tr><td style="${td};color:#6b6b72">${esc(o)}</td><td style="${td};font-weight:bold">${esc(v)}</td></tr>`)
       .join("") +
     `</table>`;
   const akcije = p.akcijeTedna.length
-    ? `<p style="margin-top:14px"><b>Nove akcije:</b></p><ul>` +
+    ? `<p style="margin:18px 0 6px;font-size:${PISAVA_NASLOV};font-weight:bold">Nove akcije</p><ul style="margin-top:0">` +
       p.akcijeTedna
-        .map(
-          (a) =>
-            `<li>${esc(a.problem)}${a.ukrep ? ` &rarr; ${esc(a.ukrep)}` : ""}` +
-            `${a.odgovoren || a.rok ? ` <span style="color:#6b6b72">(${esc([a.odgovoren, a.rok ? `rok ${formatShort(a.rok)}` : ""].filter(Boolean).join(", "))})</span>` : ""}</li>`,
-        )
+        .map((a) => {
+          const kdo = [a.odgovoren ? `<b>${esc(a.odgovoren)}</b>` : "", a.rok ? `rok <b>${esc(formatShort(a.rok))}</b>` : ""].filter(Boolean).join(", ");
+          return (
+            `<li style="margin-bottom:4px">${esc(a.problem)}${a.ukrep ? ` &rarr; ${esc(a.ukrep)}` : ""}` +
+            `${kdo ? ` <span style="color:#45454b">(${kdo})</span>` : ""}</li>`
+          );
+        })
         .join("") +
-      `</ul>`
+      `</ul>` +
+      `<p>Prosim, da odgovorni javite, ko akcijo zaključite, in na kratko opišete, kaj ste naredili.</p>`
     : "";
+  const povezava = `${URL_APLIKACIJE}/proizvodnja/rutina/produktivnost/${p.teden}`;
   return (
-    `<html><body style="font-family:Calibri,Arial,sans-serif;font-size:11pt">` +
+    `<html><body style="font-family:Calibri,Arial,sans-serif;font-size:${PISAVA}">` +
     `<p>Pozdravljeni,</p><p>v priponki pošiljam zapisnik gemba walka (${isoWeek(p.teden)}. teden).</p>` +
+    `<p>Zapisnik v aplikaciji: <a href="${esc(povezava)}">${esc(povezava)}</a></p>` +
     tabela +
     akcije +
     `</body></html>`
@@ -592,8 +601,10 @@ function teloEmaila(p: GembaPorocilo) {
 export async function pripraviEmail(p: GembaPorocilo) {
   const pdf = new Uint8Array(await (await ustvariPdf(p)).arrayBuffer());
   const imePdf = `${imeDatoteke(p)}.pdf`;
+  const tema = izgubaPoKodi(p.polja.tema);
   const zadeva = [
     `Gemba walk T${isoWeek(p.teden)}`,
+    tema ? `Tedenska tema: ${tema.naziv}` : "",
     p.polja.lokacija,
     p.polja.datum ? formatShort(p.polja.datum) : obdobjeTedna(p.teden),
   ]

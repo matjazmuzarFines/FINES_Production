@@ -232,6 +232,54 @@ export async function skrijAkcijo(id: number) {
   if (error) throw new Error(error.message);
 }
 
+// =====================================================================
+// LASTNA VPRAŠANJA GEMBE (dodana + odstranjena vgrajena)
+// =====================================================================
+
+export type VprasanjeSkupina = "OPAZUJ" | "VPRASAJ" | "SPLOSNO";
+export type LastnoVprasanje = {
+  id: number;
+  /** Koda izgube; "" = splošna vprašanja. */
+  tema: string;
+  skupina: VprasanjeSkupina;
+  besedilo: string;
+  /** true = odstranjeno vgrajeno vprašanje. */
+  izbrisano: boolean;
+};
+
+const BREZ_MIGRACIJE_014 = "Manjka tabela vprašanj - zaženi migracijo 014_produktivnost_vprasanja.sql.";
+const niTabele = (e: { code?: string; message: string }) => e.code === "42P01" || e.code === "PGRST205" || /fp_prod_vprasanja/.test(e.message);
+
+/** Brez migracije 014 vrne prazen seznam (prikažejo se samo vgrajena vprašanja). */
+export async function naloziVprasanja(): Promise<LastnoVprasanje[]> {
+  const { data, error } = await getSupabase()
+    .from("fp_prod_vprasanja")
+    .select("id, tema, skupina, besedilo, izbrisano")
+    .eq("visible", true)
+    .order("id");
+  if (error) {
+    if (niTabele(error)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []) as LastnoVprasanje[];
+}
+
+export async function dodajVprasanje(v: Omit<LastnoVprasanje, "id">): Promise<LastnoVprasanje> {
+  const { data, error } = await getSupabase()
+    .from("fp_prod_vprasanja")
+    .insert({ ...v, besedilo: v.besedilo.trim() })
+    .select("id, tema, skupina, besedilo, izbrisano")
+    .single();
+  if (error) throw new Error(niTabele(error) ? BREZ_MIGRACIJE_014 : error.message);
+  return data as LastnoVprasanje;
+}
+
+/** Podatkov ne brišemo - dodano vprašanje skrijemo. */
+export async function skrijVprasanje(id: number) {
+  const { error } = await getSupabase().from("fp_prod_vprasanja").update({ visible: false }).eq("id", id);
+  if (error) throw new Error(niTabele(error) ? BREZ_MIGRACIJE_014 : error.message);
+}
+
 export const akcijaOdprta = (a: Akcija) => a.status === "ODPRTO" || a.status === "V_DELU";
 export const akcijaIzvedena = (a: Akcija) => a.status === "IZVEDENO" || a.status === "PREVERJENO";
 export const akcijaZamuja = (a: Akcija, danes: IsoDate) => akcijaOdprta(a) && !!a.rok && a.rok < danes;

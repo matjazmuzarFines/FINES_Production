@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { Flag, Minus, Pause, Play, Plus, RotateCcw, Square, TextCursorInput, Trash2 } from "lucide-react";
 import {
   formatCas,
-  formatHKos,
-  hNaKos,
   novId,
   opisMeritve,
   statistika,
@@ -16,9 +14,7 @@ import {
   type Stevec,
   type AkcijaVnos,
 } from "@/lib/produktivnost";
-import { formatNum, parseNum } from "@/lib/stevila";
 import { Button, IconButton } from "@/components/ui/Button";
-import { FilterPolje } from "@/components/ui/Filtri";
 import { KalkulatorPrihranka, preberiPrihranek, prihranekVnosIz, type PrihranekVnos } from "./Akcije";
 
 const PREDLOGI_STEVCEV = ["Hoja po orodje", "Hoja po material", "Iskanje", "Čakanje", "Obračanje kosa", "Dodelava", "Prekinitev"];
@@ -58,21 +54,15 @@ const pretecenoMs = (zdaj: number, zacetek: number | null) => (zacetek === null 
 export function GembaOrodja({
   polja,
   nastavi,
-  prejsnjiHKos,
   nastavitve,
   onVstavi,
   onNovaAkcija,
-  verzija,
 }: {
   polja: GembaPolja;
   nastavi: (p: Partial<GembaPolja>) => void;
-  /** h/kos zadnje prejšnje gembe z meritvijo (za primerjavo). */
-  prejsnjiHKos: { vrednost: number; teden: string } | null;
   nastavitve: Nastavitve;
   onVstavi: (tekst: string) => void;
   onNovaAkcija: (prihranek: Partial<AkcijaVnos>) => void;
-  /** Ob preklicu sprememb se vnosna polja KPI ponastavijo. */
-  verzija: number;
 }) {
   const orodja = polja.orodja;
   const nastaviOrodja = (o: Partial<Orodja>) => nastavi({ orodja: { ...orodja, ...o } });
@@ -82,7 +72,6 @@ export function GembaOrodja({
       <Casovnik orodja={orodja} onChange={nastaviOrodja} />
       <Stoparica meritve={orodja.meritve} onChange={(meritve) => nastaviOrodja({ meritve })} onVstavi={onVstavi} />
       <Stevci stevci={orodja.stevci} onChange={(stevci) => nastaviOrodja({ stevci })} onVstavi={onVstavi} />
-      <KpiMeritev key={verzija} polja={polja} nastavi={nastavi} prejsnji={prejsnjiHKos} onVstavi={onVstavi} />
       <Kalkulator nastavitve={nastavitve} onNovaAkcija={onNovaAkcija} />
     </div>
   );
@@ -423,110 +412,6 @@ function Stevci({ stevci, onChange, onVstavi }: { stevci: Stevec[]; onChange: (s
           V zapisnik
         </Button>
       )}
-    </Blok>
-  );
-}
-
-// ---------------------------------------------------------------------
-// KPI: ČLOVEK-URE NA DOBER KOS
-// ---------------------------------------------------------------------
-
-function KpiMeritev({
-  polja,
-  nastavi,
-  prejsnji,
-  onVstavi,
-}: {
-  polja: GembaPolja;
-  nastavi: (p: Partial<GembaPolja>) => void;
-  prejsnji: { vrednost: number; teden: string } | null;
-  onVstavi: (t: string) => void;
-}) {
-  // Vnos kot besedilo (decimalna vejica), v polja se zapiše število.
-  const [ure, setUre] = useState(formatNum(polja.kpi_ure));
-  const [kosi, setKosi] = useState(formatNum(polja.kpi_kosi));
-  const [ljudje, setLjudje] = useState("");
-  const [trajanje, setTrajanje] = useState("");
-  const h = hNaKos(polja);
-  const razlika = h !== null && prejsnji ? ((h - prejsnji.vrednost) / prejsnji.vrednost) * 100 : null;
-
-  return (
-    <Blok
-      naslov="KPI tedna: človek-ure na dobro pečico"
-      opis="Na enourni gembi se ne meri: vpiši porabljene človek-ure in izdelane dobre pečice družine v tem tednu (iz nalogov / evidence ur)."
-    >
-      <div className="grid grid-cols-2 gap-2">
-        <FilterPolje label="Ljudi na celici">
-          <input value={ljudje} onChange={(e) => setLjudje(e.target.value)} inputMode="decimal" title="Število ljudi na celici" className={`${POLJE} text-right`} />
-        </FilterPolje>
-        <FilterPolje label="Ur na osebo (teden)">
-          <input value={trajanje} onChange={(e) => setTrajanje(e.target.value)} inputMode="decimal" title="Delovne ure na osebo v tednu" className={`${POLJE} text-right`} />
-        </FilterPolje>
-      </div>
-      {parseNum(ljudje) && parseNum(trajanje) ? (
-        <Button
-          hint="Izračunaj človek-ure: ljudje × ure"
-          variant="primary"
-          className="self-start"
-          onClick={() => {
-            const v = Math.round(parseNum(ljudje)! * parseNum(trajanje)! * 100) / 100;
-            setUre(formatNum(v));
-            nastavi({ kpi_ure: v });
-          }}
-        >
-          = {formatNum(parseNum(ljudje)! * parseNum(trajanje)!)} človek-ur
-        </Button>
-      ) : null}
-      <div className="grid grid-cols-2 gap-2">
-        <FilterPolje label="Človek-ure (teden)">
-          <input
-            value={ure}
-            onChange={(e) => {
-              setUre(e.target.value);
-              nastavi({ kpi_ure: parseNum(e.target.value) });
-            }}
-            inputMode="decimal"
-            title="Vse neposredne človek-ure družine v tednu"
-            className={`${POLJE} text-right`}
-          />
-        </FilterPolje>
-        <FilterPolje label="Dobre pečice (teden)">
-          <input
-            value={kosi}
-            onChange={(e) => {
-              setKosi(e.target.value);
-              nastavi({ kpi_kosi: parseNum(e.target.value) });
-            }}
-            inputMode="decimal"
-            title="Število izdelanih dobrih pečic v tednu"
-            className={`${POLJE} text-right`}
-          />
-        </FilterPolje>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-2xl font-bold tabular-nums text-ink-900">{h !== null ? formatHKos(h) : "- h/kos"}</span>
-        {razlika !== null && (
-          <span
-            title={`Primerjava z gembo ${prejsnji!.teden} (${formatHKos(prejsnji!.vrednost)})`}
-            className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${razlika <= 0 ? "bg-ok-50 text-ok-600" : "bg-nok-50 text-nok-600"}`}
-          >
-            {razlika > 0 ? "+" : ""}
-            {formatNum(Math.round(razlika * 10) / 10)} % vs. {prejsnji!.teden}
-          </span>
-        )}
-        {h !== null && (
-          <Button
-            hint="Vpiši KPI meritev v zapisnik"
-            variant="primary"
-            icon={TextCursorInput}
-            className="ml-auto"
-            onClick={() => onVstavi(`KPI: ${formatNum(polja.kpi_ure)} človek-ur / ${formatNum(polja.kpi_kosi)} dobrih pečic = ${formatHKos(h)}`)}
-          >
-            V zapisnik
-          </Button>
-        )}
-      </div>
-      <p className="text-xs text-ink-500">Primerjaj samo primerljive tedne (ista družina pečic, podobna zahtevnost). Kasneje lahko primerjamo z normativom iz Normativov.</p>
     </Blok>
   );
 }

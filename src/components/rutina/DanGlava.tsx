@@ -24,7 +24,7 @@ export function DanGlava({
 
   return (
     <div className="fp-card flex flex-wrap items-center gap-3 p-4">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[min(100%,18rem)] flex-1">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold capitalize text-ink-900 sm:text-2xl" suppressHydrationWarning>
             {formatLong(datum)}

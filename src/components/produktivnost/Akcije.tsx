@@ -19,7 +19,7 @@ import {
   type AkcijaVnos,
   type Nastavitve,
 } from "@/lib/produktivnost";
-import { formatNum, parseNum } from "@/lib/stevila";
+import { formatNum, formatVnos, parseNum } from "@/lib/stevila";
 import { Button } from "@/components/ui/Button";
 import { FilterIzbira, FilterPolje, FilterPreklopnik } from "@/components/ui/Filtri";
 import { Modal } from "@/components/ui/Modal";
@@ -230,7 +230,7 @@ export function AkcijaOkno({
     odgovoren: z.odgovoren ?? "",
     rok: z.rok ?? "",
     status: z.status ?? "ODPRTO",
-    strosek: z.strosek_eur !== null && z.strosek_eur !== undefined ? formatNum(z.strosek_eur) : "",
+    strosek: z.strosek_eur !== null && z.strosek_eur !== undefined ? formatVnos(z.strosek_eur) : "",
     rezultat: z.rezultat ?? "",
     zakljuceno: z.zakljuceno ?? "",
     prihranek: prihranekVnosIz(z),
@@ -424,7 +424,7 @@ export type PrihranekVnos = { min: string; eur: string; druzina: number | null; 
 type PrihranekPolja = Pick<AkcijaVnos, "prihranek_min_kos" | "prihranek_eur_kos" | "druzina_id" | "kolicina_leto">;
 
 export function prihranekVnosIz(a: Partial<PrihranekPolja>): PrihranekVnos {
-  const t = (v: number | null | undefined) => (v === null || v === undefined ? "" : formatNum(v));
+  const t = (v: number | null | undefined) => (v === null || v === undefined ? "" : formatVnos(v));
   return { min: t(a.prihranek_min_kos), eur: t(a.prihranek_eur_kos), druzina: a.druzina_id ?? null, kolicina: t(a.kolicina_leto) };
 }
 
