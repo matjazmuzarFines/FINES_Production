@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { Save, Trash2, X } from "lucide-react";
+import { Check, Save, Trash2, X } from "lucide-react";
 import { formatShort, isoWeek, toIso, type IsoDate } from "@/lib/dates";
 import { IZGUBE, izgubaPoKodi } from "@/lib/gembaVodic";
 import {
@@ -48,6 +48,17 @@ export function AkcijaZnacka({ a, danes }: { a: Akcija; danes: IsoDate }) {
     <span title={s.hint} className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${s.cls}`}>
       {s.label}
     </span>
+  );
+}
+
+/** Krogec stanja na začetku vrstice: zelen s kljukico = izvedena (vidno tudi, ko je stolpec Status izven zaslona). */
+export function AkcijaKljukica({ a }: { a: Akcija }) {
+  return akcijaIzvedena(a) ? (
+    <span title={AKCIJA_STATUS[a.status].hint} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ok-500 text-white">
+      <Check size={14} strokeWidth={3} aria-hidden />
+    </span>
+  ) : (
+    <span title="Akcija še ni izvedena" className="inline-block h-5 w-5 shrink-0 rounded-full border-2 border-ink-300" />
   );
 }
 
@@ -147,7 +158,12 @@ export function AkcijeTabela({
                       onClick={() => onOdpri(a)}
                       className="cursor-pointer border-b border-ink-100 align-top hover:bg-ink-50"
                     >
-                      <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink-600">T{isoWeek(a.teden)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink-600">
+                        <span className="inline-flex items-center gap-2">
+                          <AkcijaKljukica a={a} />
+                          T{isoWeek(a.teden)}
+                        </span>
+                      </td>
                       <td className="min-w-48 px-2 py-2 font-semibold text-ink-900">{a.problem}</td>
                       <td className="min-w-48 px-2 py-2 text-ink-700">{a.ukrep ?? <span className="text-ink-400">-</span>}</td>
                       <td className="px-2 py-2 text-ink-700">

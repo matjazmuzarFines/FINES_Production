@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Boxes, CalendarDays, Camera, ChartLine, ChevronLeft, ChevronRight, Gauge, ListChecks, PiggyBank, Save, Settings, TrendingDown, X } from "lucide-react";
+import { Boxes, CalendarDays, Camera, ChartLine, ChevronDown, ChevronLeft, ChevronRight, Gauge, ListChecks, PiggyBank, Save, Settings, TrendingDown, X } from "lucide-react";
 import { formatDayMonth, formatShort, isoWeek, mondayOf, toIso, weekday, type IsoDate } from "@/lib/dates";
 import { IZGUBE, izgubaPoKodi } from "@/lib/gembaVodic";
 import {
@@ -191,7 +191,7 @@ function Pregled({ zacetniMesec }: { zacetniMesec?: string }) {
 
         {pogled === "KOLEDAR" ? (
           <div className="fp-card flex flex-col gap-5 rounded-tl-none p-3 sm:p-4">
-            <KoledarTednov leto={prikazanoLeto} gembe={gembe} akcije={akcije} taTeden={taTeden} zacetek={zacetekGemb(cilji)} oznaciMesec={zacetniMesec} />
+            <KoledarTednov key={prikazanoLeto} leto={prikazanoLeto} gembe={gembe} akcije={akcije} taTeden={taTeden} zacetek={zacetekGemb(cilji)} oznaciMesec={zacetniMesec} />
 
             <div className="flex flex-col gap-3 border-t border-ink-200 pt-4">
               <div className="flex flex-wrap items-end gap-3">
@@ -667,6 +667,18 @@ function KoledarTednov({
   const tedni = tedniLeta(leto);
   const poTednu = new Map(gembe.map((g) => [g.teden, g]));
   const meseci = Array.from({ length: 12 }, (_, m) => ({ m, tedni: tedni.filter((t) => mesecTedna(t) === m) }));
+  // Telefon: razprt samo trenutni mesec (ali mesec iz povezave), ostali se razprejo s klikom. Od sm naprej so vsi razprti.
+  const [razprti, setRazprti] = useState<Set<number>>(() => {
+    if (oznaciMesec?.startsWith(`${leto}-`) && oznaciMesec !== `${leto}-01`) return new Set([Number(oznaciMesec.slice(5, 7)) - 1]);
+    return new Set([letoTedna(taTeden) === leto ? mesecTedna(taTeden) : 0]);
+  });
+  const preklopi = (m: number) =>
+    setRazprti((s) => {
+      const n = new Set(s);
+      if (n.has(m)) n.delete(m);
+      else n.add(m);
+      return n;
+    });
 
   function status(t: IsoDate): keyof typeof STIL {
     const g = poTednu.get(t);
@@ -679,52 +691,75 @@ function KoledarTednov({
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {meseci.map(({ m, tedni: tm }) => (
-          <div
-            key={m}
-            className={`rounded-lg p-1.5 ${oznaciMesec === `${leto}-${String(m + 1).padStart(2, "0")}` ? "bg-fines-50 ring-1 ring-fines-200" : ""}`}
-          >
-            <div className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-500">{MESECI[m]}</div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {tm.map((t) => {
-                const s = status(t);
-                const g = poTednu.get(t);
-                const nAkcij = g ? akcije.filter((a) => a.gemba_id === g.id).length : 0;
-                const jeTa = t === taTeden;
-                const tema = izgubaPoKodi(g?.tema);
-                return (
-                  <Link
-                    key={t}
-                    href={`${OSNOVA}/${t}`}
-                    title={`Odpri gembo ${isoWeek(t)}. tedna (${obdobjeTedna(t)})${jeTa ? " - ta teden" : ""} - ${STIL[s].label}${
-                      tema ? ` · tema: ${tema.naziv}` : ""
-                    }${nAkcij ? ` · ${nAkcij} akcij` : ""}${g?.datum ? ` · izvedena ${formatShort(g.datum)}` : ""}`}
-                    className={`relative flex h-14 flex-col items-center justify-center rounded-lg border-2 font-bold transition-transform hover:scale-105 hover:shadow-md ${
-                      jeTa ? TA_TEDEN_CLS : STIL[s].cls
-                    }`}
-                  >
-                    <span className="text-sm leading-tight">T{isoWeek(t)}</span>
-                    <span className="text-[10px] font-semibold leading-tight opacity-90">{formatDayMonth(t)}</span>
-                    {tema && (
-                      <span className="absolute left-1 top-1 h-2 w-2 rounded-full border border-white" style={{ background: tema.barva }} aria-hidden />
-                    )}
-                    {nAkcij > 0 && (
-                      <span className="absolute right-0.5 top-0.5 rounded-full bg-ink-800 px-1 text-[9px] leading-tight text-white" aria-hidden>
-                        {nAkcij}
-                      </span>
-                    )}
-                    {jeTa && g && (
-                      <span
-                        className={`absolute bottom-1 right-1 h-2 w-2 rounded-full border border-white ${g.status === "ZAKLJUCEN" ? "bg-ok-500" : "bg-warn-400"}`}
-                        aria-hidden
-                      />
-                    )}
-                  </Link>
-                );
-              })}
+        {meseci.map(({ m, tedni: tm }) => {
+          const odprt = razprti.has(m);
+          return (
+            <div
+              key={m}
+              className={`rounded-lg p-1.5 ${oznaciMesec === `${leto}-${String(m + 1).padStart(2, "0")}` ? "bg-fines-50 ring-1 ring-fines-200" : ""}`}
+            >
+              <div className="mb-1 hidden text-xs font-bold uppercase tracking-wide text-ink-500 sm:block">{MESECI[m]}</div>
+              {/* Telefon: glava meseca je gumb za razpiranje; zložen mesec pokaže stanje tednov kot pike. */}
+              <button
+                type="button"
+                onClick={() => preklopi(m)}
+                aria-expanded={odprt}
+                title={`${odprt ? "Skrij" : "Prikaži"} tedne meseca ${MESECI[m].toLowerCase()}`}
+                className={`flex h-10 w-full items-center gap-2 rounded-lg border px-3 text-left sm:hidden ${
+                  odprt ? "mb-1.5 border-fines-200 bg-fines-50" : "border-ink-200 bg-white hover:bg-ink-100"
+                }`}
+              >
+                <span className="text-xs font-bold uppercase tracking-wide text-ink-700">{MESECI[m]}</span>
+                {!odprt && (
+                  <span className="flex gap-1" aria-hidden>
+                    {tm.map((t) => (
+                      <span key={t} className={`h-3 w-3 rounded-full border-2 ${t === taTeden ? TA_TEDEN_CLS : STIL[status(t)].cls}`} />
+                    ))}
+                  </span>
+                )}
+                <ChevronDown size={16} className={`ml-auto text-ink-500 transition-transform ${odprt ? "rotate-180" : ""}`} aria-hidden />
+              </button>
+              <div className={`grid-cols-5 gap-1.5 sm:grid ${odprt ? "grid" : "hidden"}`}>
+                {tm.map((t) => {
+                  const s = status(t);
+                  const g = poTednu.get(t);
+                  const nAkcij = g ? akcije.filter((a) => a.gemba_id === g.id).length : 0;
+                  const jeTa = t === taTeden;
+                  const tema = izgubaPoKodi(g?.tema);
+                  return (
+                    <Link
+                      key={t}
+                      href={`${OSNOVA}/${t}`}
+                      title={`Odpri gembo ${isoWeek(t)}. tedna (${obdobjeTedna(t)})${jeTa ? " - ta teden" : ""} - ${STIL[s].label}${
+                        tema ? ` · tema: ${tema.naziv}` : ""
+                      }${nAkcij ? ` · ${nAkcij} akcij` : ""}${g?.datum ? ` · izvedena ${formatShort(g.datum)}` : ""}`}
+                      className={`relative flex h-14 flex-col items-center justify-center rounded-lg border-2 font-bold transition-transform hover:scale-105 hover:shadow-md ${
+                        jeTa ? TA_TEDEN_CLS : STIL[s].cls
+                      }`}
+                    >
+                      <span className="text-sm leading-tight">T{isoWeek(t)}</span>
+                      <span className="text-[10px] font-semibold leading-tight opacity-90">{formatDayMonth(t)}</span>
+                      {tema && (
+                        <span className="absolute left-1 top-1 h-2 w-2 rounded-full border border-white" style={{ background: tema.barva }} aria-hidden />
+                      )}
+                      {nAkcij > 0 && (
+                        <span className="absolute right-0.5 top-0.5 rounded-full bg-ink-800 px-1 text-[9px] leading-tight text-white" aria-hidden>
+                          {nAkcij}
+                        </span>
+                      )}
+                      {jeTa && g && (
+                        <span
+                          className={`absolute bottom-1 right-1 h-2 w-2 rounded-full border border-white ${g.status === "ZAKLJUCEN" ? "bg-ok-500" : "bg-warn-400"}`}
+                          aria-hidden
+                        />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
         <span className="flex items-center gap-1.5">

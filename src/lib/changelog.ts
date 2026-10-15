@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "13.03",
+    datum: "15. 10. 2026",
+    spremembe: [
+      "Tabla izboljšav: na začetku vrstice krogec stanja - zelen s kljukico = akcija izvedena (vidno na telefonu brez drsenja do stolpca Status).",
+      "Koledar gemb na telefonu: razprt je samo trenutni mesec, ostali so zloženi (pike pokažejo stanje tednov) in se razprejo s klikom. Na tablici in monitorju ostane prikaz vseh mesecev.",
+    ],
+  },
+  {
     verzija: "13.02",
     datum: "14. 10. 2026",
     spremembe: [
