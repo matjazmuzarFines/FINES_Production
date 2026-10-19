@@ -9,6 +9,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "17.02",
+    datum: "19. 10. 2026",
+    spremembe: [
+      "Telefon: glava aplikacije ni več širša od zaslona (manjši logo, gumb Izhod kot ikona) - gumb Izhod in plavajoči gumb Nov audit sta spet na zaslonu.",
+      "Stran se na telefonu ne more več razširiti čez rob zaslona; preklopniki filtrov (npr. Odprte / Zamuja / Vse) se po potrebi drsijo.",
+      "KPI auditov: odstranjena pokritost oddelkov (kartica, tabela in nastavitev).",
+    ],
+  },
+  {
     verzija: "17.01",
     datum: "19. 10. 2026",
     spremembe: [

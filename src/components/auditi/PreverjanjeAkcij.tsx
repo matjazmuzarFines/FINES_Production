@@ -116,7 +116,7 @@ function Kartica({ a, danes, onOdpri, onSpremenjeno }: { a: AuditAkcija; danes: 
               title={ODLOCITVE[o].hint}
               aria-pressed={izbran}
               onClick={() => izberi(o)}
-              className={`flex h-11 items-center justify-center gap-1 rounded-lg border text-sm font-bold transition-colors ${
+              className={`flex h-11 min-w-0 items-center justify-center gap-1 rounded-lg border px-1 text-sm font-bold transition-colors ${
                 izbran
                   ? o === "ODPRTO"
                     ? "border-fines-500 bg-fines-500 text-white"

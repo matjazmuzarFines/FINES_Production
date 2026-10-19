@@ -147,8 +147,8 @@ export function FilterPreklopnik<V extends string>({
   onChange: (v: V) => void;
 }) {
   return (
-    <FilterPolje label={label}>
-      <div className="inline-flex h-10 overflow-hidden rounded-lg border border-ink-200" role="group" aria-label={label}>
+    <FilterPolje label={label} className="min-w-0 max-w-full">
+      <div className="inline-flex h-10 max-w-full overflow-x-auto rounded-lg border border-ink-200" role="group" aria-label={label}>
         {options.map((o, i) => {
           const izbran = o.value === value;
           return (

@@ -60,10 +60,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="flex min-h-dvh flex-col">
+      <div className="flex min-h-dvh flex-col overflow-x-clip">
         {/* ============ GLAVA ============ */}
         <header className="sticky top-0 z-40 border-b-4 border-fines-500 bg-white">
-          <div className="flex h-16 items-center gap-2 px-3 sm:px-4">
+          <div className="flex h-16 min-w-0 items-center gap-1.5 px-2 sm:gap-2 sm:px-4">
             <IconButton
               hint="Odpri navigacijski meni"
               icon={Menu}
@@ -73,12 +73,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               href="/"
               title="Pojdi na domačo stran"
-              className="flex shrink-0 items-center"
+              className="flex min-w-0 shrink items-center"
               onClick={(e) => {
                 if (!lahkoZapustim()) e.preventDefault();
               }}
             >
-              <Image src="/fines-logo.png" alt="FINES d.o.o. logotip" width={136} height={36} priority />
+              <Image src="/fines-logo.png" alt="FINES d.o.o. logotip" width={136} height={36} priority className="h-auto w-24 sm:w-[136px]" />
             </Link>
             {!isHome && (
               <Button
@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 Nazaj
               </Button>
             )}
-            <h1 className="ml-2 min-w-0 flex-1 truncate text-base font-bold text-ink-800 sm:text-lg">
+            <h1 className="ml-1 min-w-0 flex-1 truncate text-sm font-bold text-ink-800 sm:ml-2 sm:text-lg">
               {title}
             </h1>
             {!isHome && (
@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="hidden text-xs text-ink-500 md:inline" title="Prijavljeni uporabnik">
               {seja?.user.email}
             </span>
-            <Button hint="Odjavi se in zapri aplikacijo" variant="primary" icon={LogOut} onClick={exitApp}>
+            <Button hint="Odjavi se in zapri aplikacijo" variant="primary" icon={LogOut} onClick={exitApp} className="max-sm:w-10 max-sm:shrink-0 max-sm:px-0">
               <span className="hidden sm:inline">Izhod</span>
             </Button>
           </div>
