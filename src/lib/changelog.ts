@@ -9,6 +9,23 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "15.01",
+    datum: "19. 10. 2026",
+    spremembe: [
+      "Nova testna stran /test: sync izvozov (nalogi, naročila VD200, odpreme VD300) iz mape na serverju \\\\rokadasrv\\RISPSQL$\\Dokumentacija\\Podatki za aplikacije.",
+      "Nova komponenta ikona Sync: krogec stanja (zelena = sinhronizirano, modra = sync v teku, rdeča = ni sinhronizirano), klik pokaže datoteke strani s časom izvoza na serverju in časom zadnjega uvoza ter gumb Sync. Po izbiri samodejni sync ob prihodu na stran.",
+      "Deluje samo, ko aplikacija teče na strežniku v omrežju podjetja (lokalno), ne na Vercelu.",
+    ],
+  },
+  {
+    verzija: "14.01",
+    datum: "19. 10. 2026",
+    spremembe: [
+      "Prioritete nalogov: nov prikaz \"Grupiraj po krovnih nalogih\" - krovni nalogi razvrščeni po prvi odpremi (najzgodnejša med njegovimi nalogi), v vsakem krovnem nalogi po prvi odpremi. Nalog brez krovnega je samostojna skupina. Rok naloga ne določa vrstnega reda, nalog, ki ne bo pravočasno končan, ima oznako \"zamuja\".",
+      "Grupiran prikaz ima svoj TXT za vodjo montaže (krovni → nalog, količina, ident, naziv, kupci z datumom odpreme) in Excel s stolpcem \"Prva odprema krovnega\". TXT v Odpremah po tednih ostaja nespremenjen.",
+    ],
+  },
+  {
     verzija: "13.03",
     datum: "15. 10. 2026",
     spremembe: [

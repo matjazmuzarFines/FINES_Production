@@ -970,6 +970,31 @@ export function izvoziNalogePrioritetXlsx(nalogi: NalogPrioriteta[], ime: string
   );
 }
 
+/** Zavihek "Prioritete nalogov", grupirano po krovnih nalogih (brez roka naloga - šteje prva odprema). */
+export function izvoziKrovneXlsx(skupine: KrovniSkupina[], ime: string) {
+  zapisiXlsx(
+    "Krovni nalogi",
+    skupine.flatMap((k) =>
+      k.nalogi.map((n) => ({
+        "Krovni DN": k.krovni ?? "",
+        "Prva odprema krovnega": xDatum(k.prvaOdprema),
+        Nalog: n.st_naloga,
+        IDENT: n.ident,
+        Naziv: n.opis ?? "",
+        "Prva odprema": xDatum(n.prvaPotreba),
+        "Odprta količina": n.preostala,
+        Prodano: n.prodano,
+        Prosto: n.prosto,
+        Zamuja: n.zamuja ? `Zamuja (rok ${fmtDatum(n.rok)})` : "",
+        Predlog: n.predlog,
+        Naročila: n.dodelitve.map((d) => `${fmtKol(d.kolicina)}× ${d.partner ?? d.stevilka} (${fmtDatum(d.datum)})`).join("; "),
+      })),
+    ),
+    [10, 12, 14, 16, 40, 12, 10, 9, 9, 22, 70, 80],
+    ime,
+  );
+}
+
 /** Zavihek "Po artiklih". */
 export function izvoziArtikleXlsx(artikli: ArtikelPregled[], ime: string) {
   zapisiXlsx(
@@ -1114,7 +1139,109 @@ export function prioriteteTxt(postavke: PostavkaIzracun[], od: IsoDate, doo: Iso
   return vrstice.join("\n");
 }
 
-const fromIsoMs = (iso: IsoDate) => new Date(`${iso}T00:00:00`).getTime();
+// =====================================================================
+// PRIORITETE PO KROVNIH NALOGIH
+// Material se nabere za krovni nalog, montaža pa pobira iz več krovnih hkrati - vodja montaže
+// potrebuje krovne naloge po prvi odpremi in v vsakem naloge, ki čakajo na odpremo.
+// =====================================================================
+
+export type KrovniSkupina = {
+  kljuc: string;
+  /** Krovni DN; null = nalog brez krovnega (samostojna skupina). */
+  krovni: string | null;
+  /** Najzgodnejša prva odprema med (prikazanimi) nalogi krovnega. */
+  prvaOdprema: IsoDate | null;
+  nalogi: NalogPrioriteta[];
+  odprto: number;
+  prodano: number;
+  zamuja: number;
+};
+
+/** Nalogi, grupirani po krovnih nalogih; krovni po prvi odpremi, nalogi v krovnem po prvi odpremi. */
+export function nalogiPoKrovnih(nalogi: NalogPrioriteta[]): KrovniSkupina[] {
+  const skupine = new Map<string, KrovniSkupina>();
+  const poOdpremi = [...nalogi].sort(
+    (x, y) => (x.prvaPotreba ?? "9999").localeCompare(y.prvaPotreba ?? "9999") || x.st_naloga.localeCompare(y.st_naloga),
+  );
+  for (const n of poOdpremi) {
+    const kljuc = n.krovni_dn ? `k:${n.krovni_dn}` : `n:${n.st_naloga}`;
+    let k = skupine.get(kljuc);
+    if (!k) {
+      k = { kljuc, krovni: n.krovni_dn, prvaOdprema: null, nalogi: [], odprto: 0, prodano: 0, zamuja: 0 };
+      skupine.set(kljuc, k);
+    }
+    k.nalogi.push(n);
+    k.odprto += n.preostala;
+    k.prodano += n.prodano;
+    if (n.zamuja) k.zamuja++;
+    if (n.prvaPotreba && (!k.prvaOdprema || n.prvaPotreba < k.prvaOdprema)) k.prvaOdprema = n.prvaPotreba;
+  }
+  return [...skupine.values()].sort(
+    (x, y) =>
+      (x.prvaOdprema ?? "9999").localeCompare(y.prvaOdprema ?? "9999") ||
+      (x.krovni ?? x.nalogi[0].st_naloga).localeCompare(y.krovni ?? y.nalogi[0].st_naloga, "sl", { numeric: true }),
+  );
+}
+
+export const steviloNalogov = (k: number) => `${k} ${k === 1 ? "nalog" : k === 2 ? "naloga" : k <= 4 ? "nalogi" : "nalogov"}`;
+
+/**
+ * Sporočilo za montažo po krovnih nalogih (krovni po prvi odpremi, v vsakem nalogi po prvi odpremi):
+ *
+ *   Prioritete po krovnih nalogih - 19.10.2026 (OC-B)
+ *   Povzetek: 4 krovni, 9 nalogov - 120 kos odprto, 110 prodano.
+ *
+ *   Krovni 2329 - prva odprema 22.10.2026 - 3 nalogi, 45 kos
+ *   22.10. DN 2601240: 20x 100-301.2001; Peč konvekcijska HTB-5 (10x Tim Zip 22.10., 10x Pekarna Kaučič 29.10.)
+ *   29.10. DN 2601241: 15x 100-301.2002; ... - 5 ni prodanih - ZAMUJA (rok 5.11.2026)
+ */
+export function krovniTxt(skupine: KrovniSkupina[], danes: IsoDate, grupe: string[]): string {
+  if (skupine.length === 0) return "Ni nalogov za izbrane filtre.";
+  const vsi = skupine.flatMap((k) => k.nalogi);
+  const odprto = vsi.reduce((s, n) => s + n.preostala, 0);
+  const prodano = vsi.reduce((s, n) => s + n.prodano, 0);
+  const stKrovnih = skupine.filter((k) => k.krovni).length;
+  const brez = skupine.length - stKrovnih;
+  const dm = (iso: IsoDate) => datumTxt(iso).replace(/\d{4}$/, "");
+
+  const vrstice: string[] = [
+    `Prioritete po krovnih nalogih - ${datumTxt(danes)}${grupe.length ? ` (${grupe.join(", ")})` : ""}`,
+    `Povzetek: ${stKrovnih} ${stKrovnih === 1 ? "krovni" : stKrovnih === 2 ? "krovna" : stKrovnih <= 4 ? "krovni" : "krovnih"}${brez ? ` + ${steviloNalogov(brez)} brez krovnega` : ""}, skupaj ${steviloNalogov(vsi.length)} - ${fmtKol(
+      odprto,
+    )} kos odprto, ${fmtKol(prodano)} prodano.`,
+  ];
+
+  for (const k of skupine) {
+    const naslov = k.krovni ? `Krovni ${k.krovni}` : `Nalog ${k.nalogi[0].st_naloga} (brez krovnega)`;
+    vrstice.push(
+      "",
+      `${naslov} - prva odprema ${k.prvaOdprema ? datumTxt(k.prvaOdprema) : "brez datuma"} - ${steviloNalogov(k.nalogi.length)}, ${fmtKol(
+        k.odprto,
+      )} kos${k.zamuja ? ` - ${k.zamuja} ZAMUJA` : ""}`,
+    );
+    for (const n of k.nalogi) {
+      // Kupci z datumom odpreme (isti kupec in datum seštet)
+      const kupci = new Map<string, number>();
+      for (const d of n.dodelitve) {
+        const kj = `${kratkoIme(d.partner) || `nar. ${d.stevilka}`}${d.datum ? ` ${dm(d.datum)}` : ""}`;
+        kupci.set(kj, (kupci.get(kj) ?? 0) + d.kolicina);
+      }
+      const kupciTxt = kupci.size ? [...kupci].map(([kj, kol]) => `${fmtKol(kol)}x ${kj}`).join(", ") : "za zalogo";
+      const dodatki: string[] = [];
+      if (n.predviden) dodatki.push("predviden");
+      if (n.prodano > 0 && n.prosto > 0) dodatki.push(`${fmtKol(n.prosto)} ni prodanih`);
+      if (n.zamuja) dodatki.push(`ZAMUJA (rok ${n.rok ? datumTxt(n.rok) : "-"})`);
+      vrstice.push(
+        `${n.prvaPotreba ? dm(n.prvaPotreba) : "-"} DN ${n.st_naloga}: ${fmtKol(n.preostala)}x ${n.ident}; ${n.opis ?? ""} (${kupciTxt})${
+          dodatki.length ? ` - ${dodatki.join(" - ")}` : ""
+        }`,
+      );
+    }
+  }
+  return vrstice.join("\n");
+}
+
+const fromIsoMs =(iso: IsoDate) => new Date(`${iso}T00:00:00`).getTime();
 
 /** Prenese besedilo kot .txt (UTF-8 z BOM, da se šumniki pravilno prikažejo v Beležnici). */
 export function prenesiTxt(besedilo: string, ime: string) {

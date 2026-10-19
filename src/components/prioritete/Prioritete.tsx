@@ -25,7 +25,12 @@ import {
   danesIso,
   izracunajPrioritete,
   izvoziArtikleXlsx,
+  izvoziKrovneXlsx,
   izvoziNalogePrioritetXlsx,
+  krovniTxt,
+  nalogiPoKrovnih,
+  steviloNalogov,
+  type KrovniSkupina,
   izvoziOdpremeXlsx,
   izvoziUreNarocilXlsx,
   urePostavk,
@@ -218,6 +223,7 @@ function PrioriteteInner() {
   const [pogled, setPogled] = useState<Pogled>("tedni");
   const [samoNepregledano, setSamoNepregledano] = useState(false);
   const [samoVezani, setSamoVezani] = useState(true);
+  const [poKrovnih, setPoKrovnih] = useState(false);
   const [txtOdprt, setTxtOdprt] = useState(false);
   // Zasedenost naročil
   const [zacetekZas, setZacetekZas] = useState<IsoDate>(() => mondayOf(danesIso()));
@@ -417,6 +423,10 @@ function PrioriteteInner() {
       (grupe.length === 0 || grupe.includes(rezultat.artikli.find((a) => a.ident === n.ident)?.grupa ?? "Ostalo")) &&
       ujemaIskanje([n.st_naloga, n.krovni_dn, n.ident, n.opis, n.narocnik, ...n.dodelitve.map((d) => d.partner)]),
   );
+  // Grupirano po krovnih: razvrščanje glave velja znotraj krovnega (krovni ostanejo po prvi odpremi)
+  const krovneSkupine = nalogiPoKrovnih(prikazaniNalogi).map((k) => ({ ...k, nalogi: sortNalogov.razvrsti(k.nalogi) }));
+  const grupaArtikla = new Map(rezultat.artikli.map((a) => [a.ident, a.grupa]));
+  const grupeNalogov = [...new Set(prikazaniNalogi.map((n) => grupaArtikla.get(n.ident) ?? "Ostalo"))].sort();
   const prikazaniArtikli = rezultat.artikli.filter(
     (a) =>
       statusi.includes(a.status) &&
@@ -426,6 +436,7 @@ function PrioriteteInner() {
 
   function izvozi() {
     if (pogled === "tedni") izvoziOdpremeXlsx(prikazaneRazvrscene, `prioritete_odpreme_${danes}.xlsx`);
+    else if (pogled === "nalogi" && poKrovnih) izvoziKrovneXlsx(krovneSkupine, `prioritete_krovni_${danes}.xlsx`);
     else if (pogled === "nalogi")
       izvoziNalogePrioritetXlsx(
         [...sortNalogov.razvrsti(prikazaniNalogi.filter((n) => n.zamuja)), ...sortNalogov.razvrsti(prikazaniNalogi.filter((n) => !n.zamuja))],
@@ -602,12 +613,20 @@ function PrioriteteInner() {
                   </>
                 )}
                 {pogled === "nalogi" && (
-                  <FilterCheckbox
-                    checked={samoVezani}
-                    onChange={setSamoVezani}
-                    label="Samo vezani na naročila"
-                    hint="Skrij naloge, ki niso vezani na naročila"
-                  />
+                  <>
+                    <FilterCheckbox
+                      checked={samoVezani}
+                      onChange={setSamoVezani}
+                      label="Samo vezani na naročila"
+                      hint="Skrij naloge, ki niso vezani na naročila"
+                    />
+                    <FilterCheckbox
+                      checked={poKrovnih}
+                      onChange={setPoKrovnih}
+                      label="Grupiraj po krovnih nalogih"
+                      hint="Krovni nalogi po datumu prve odpreme"
+                    />
+                  </>
                 )}
                 <FilterCheckbox
                   checked={!samoIzdelki}
@@ -618,12 +637,12 @@ function PrioriteteInner() {
               </FilterVrstica>
               <FilterPolje label="Izvoz" className="ml-auto">
                 <div className="flex gap-2">
-                  {pogled === "tedni" && (
+                  {(pogled === "tedni" || (pogled === "nalogi" && poKrovnih)) && (
                     <Button
-                      hint="Sporočilo za montažo (Teams) kot besedilo"
+                      hint={pogled === "tedni" ? "Sporočilo za montažo (Teams) kot besedilo" : "Krovni nalogi za montažo kot besedilo"}
                       variant="primary"
                       icon={FileText}
-                      disabled={prikazane.length === 0}
+                      disabled={pogled === "tedni" ? prikazane.length === 0 : krovneSkupine.length === 0}
                       onClick={() => setTxtOdprt(true)}
                     >
                       TXT
@@ -647,7 +666,12 @@ function PrioriteteInner() {
               onOpomba={posodobiOpombo}
             />
           )}
-          {pogled === "nalogi" && <PoNalogih nalogi={prikazaniNalogi} sort={sortNalogov} />}
+          {pogled === "nalogi" &&
+            (poKrovnih ? (
+              <PoKrovnih skupine={krovneSkupine} sort={sortNalogov} />
+            ) : (
+              <PoNalogih nalogi={prikazaniNalogi} sort={sortNalogov} />
+            ))}
           {pogled === "artikli" && <PoArtiklih artikli={prikazaniArtikli} postavke={rezultat.postavke} sort={sortArtiklov} />}
           {pogled === "zasedenost" && (
             <ZasedenostNarocil
@@ -678,7 +702,20 @@ function PrioriteteInner() {
       )}
 
       <Modal open={txtOdprt} title="Sporočilo za montažo (TXT)" onClose={() => setTxtOdprt(false)} sirina="max-w-3xl">
-        {txtOdprt && <TxtSporocilo besedilo={prioriteteTxt(prikazane, taTeden, konec)} ime={`prioritete_${danes}.txt`} />}
+        {txtOdprt &&
+          (pogled === "nalogi" ? (
+            <TxtSporocilo
+              opis="Prikazani nalogi po krovnih nalogih (glede na izbrane filtre) - krovni po prvi odpremi, v vsakem nalog, količina, ident, naziv in kupci z datumom odpreme."
+              besedilo={krovniTxt(krovneSkupine, danes, grupeNalogov)}
+              ime={`prioritete_krovni_${danes}.txt`}
+            />
+          ) : (
+            <TxtSporocilo
+              opis="Prikazane odpreme (glede na izbrane filtre in statuse) - datum, količina, ident, naziv, kupec in krovni nalog."
+              besedilo={prioriteteTxt(prikazane, taTeden, konec)}
+              ime={`prioritete_${danes}.txt`}
+            />
+          ))}
       </Modal>
 
       {/* ============ PREGLED UVOZA ============ */}
@@ -1067,66 +1104,14 @@ function PoNalogih({ nalogi, sort }: { nalogi: NalogPrioriteta[]; sort: Razvrsca
                   <span className="ml-2 text-xs opacity-80">· {s.opis}</span>
                 </td>
               </tr>
-              {s.nalogi.map((n) => {
-                const jeOdprt = odprt === n.st_naloga;
-                return (
-                  <Fragment key={n.st_naloga}>
-                    <tr
-                      className="cursor-pointer border-b border-ink-100 align-top hover:bg-ink-50"
-                      title="Prikaži naročila, vezana na ta nalog"
-                      onClick={() => setOdprt(jeOdprt ? null : n.st_naloga)}
-                    >
-                      <td className="px-2 py-1.5">
-                        {n.dodelitve.length > 0 &&
-                          (jeOdprt ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />)}
-                      </td>
-                      <td className="px-2 py-1.5 font-mono">
-                        {n.st_naloga}
-                        {n.predviden && <Oznaka cls="bg-warn-400 text-ink-900">predviden</Oznaka>}
-                      </td>
-                      <td className="px-2 py-1.5">{n.krovni_dn}</td>
-                      <td className="px-2 py-1.5">
-                        <div className="font-mono text-xs text-ink-500">{n.ident}</div>
-                        <div>{n.opis}</div>
-                        {n.narocnik && !n.narocnik.toLowerCase().startsWith("fines") && (
-                          <div className="text-xs text-ink-500">za: {n.narocnik}</div>
-                        )}
-                      </td>
-                      <td className={`whitespace-nowrap px-2 py-1.5 ${n.zamuja ? "font-bold text-nok-600" : ""}`}>
-                        {n.rok ? formatShort(n.rok) : "–"}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-1.5">{n.prvaPotreba ? formatShort(n.prvaPotreba) : "–"}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">{formatNum(n.preostala)}</td>
-                      <td className="px-2 py-1.5 text-right font-bold tabular-nums">{formatNum(n.prodano)}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-ink-500">{formatNum(n.prosto)}</td>
-                      <td className="px-2 py-1.5 text-sm">
-                        <span className={n.zamuja ? "font-semibold text-nok-600" : n.prodano === 0 ? "text-ink-500" : "text-ink-800"}>
-                          {n.predlog}
-                        </span>
-                      </td>
-                    </tr>
-                    {jeOdprt && (
-                      <tr className="border-b border-ink-100 bg-ink-50">
-                        <td />
-                        <td colSpan={9} className="px-2 py-2">
-                          <table className="text-xs">
-                            <tbody>
-                              {n.dodelitve.map((d) => (
-                                <tr key={d.kljuc}>
-                                  <td className="pr-4 font-semibold tabular-nums">{formatNum(d.kolicina)} kos</td>
-                                  <td className="pr-4">{d.datum ? formatShort(d.datum) : "brez datuma"}</td>
-                                  <td className="pr-4">{d.partner}</td>
-                                  <td className="font-mono text-ink-500">nar. {d.stevilka}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
+              {s.nalogi.map((n) => (
+                <NalogVrstica
+                  key={n.st_naloga}
+                  n={n}
+                  odprt={odprt === n.st_naloga}
+                  onOdpri={() => setOdprt(odprt === n.st_naloga ? null : n.st_naloga)}
+                />
+              ))}
               {s.nalogi.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-3 py-3 text-center text-ink-500">
@@ -1136,6 +1121,135 @@ function PoNalogih({ nalogi, sort }: { nalogi: NalogPrioriteta[]; sort: Razvrsca
               )}
             </tbody>
           ))}
+        </table>
+      </TabelaOkvir>
+    </div>
+  );
+}
+
+/** Vrstica naloga (s podrobnostmi naročil). Grupirano po krovnih: brez stolpcev Krovni in Rok naloga, zamujanje kot oznaka. */
+function NalogVrstica({ n, odprt, onOdpri, poKrovnih = false }: { n: NalogPrioriteta; odprt: boolean; onOdpri: () => void; poKrovnih?: boolean }) {
+  return (
+    <>
+      <tr
+        className="cursor-pointer border-b border-ink-100 align-top hover:bg-ink-50"
+        title="Prikaži naročila, vezana na ta nalog"
+        onClick={onOdpri}
+      >
+        <td className="px-2 py-1.5">
+          {n.dodelitve.length > 0 &&
+            (odprt ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />)}
+        </td>
+        <td className="whitespace-nowrap px-2 py-1.5 font-mono">
+          {n.st_naloga}
+          {n.predviden && <Oznaka cls="bg-warn-400 text-ink-900">predviden</Oznaka>}
+          {poKrovnih && n.zamuja && (
+            <span title={`Rok naloga ${n.rok ? formatShort(n.rok) : "–"} je po datumu odpreme`}>
+              <Oznaka cls={STATUS.ZAMUJA.badge}>zamuja</Oznaka>
+            </span>
+          )}
+        </td>
+        {!poKrovnih && <td className="px-2 py-1.5">{n.krovni_dn}</td>}
+        <td className="px-2 py-1.5">
+          <div className="font-mono text-xs text-ink-500">{n.ident}</div>
+          <div>{n.opis}</div>
+          {n.narocnik && !n.narocnik.toLowerCase().startsWith("fines") && <div className="text-xs text-ink-500">za: {n.narocnik}</div>}
+        </td>
+        {!poKrovnih && (
+          <td className={`whitespace-nowrap px-2 py-1.5 ${n.zamuja ? "font-bold text-nok-600" : ""}`}>{n.rok ? formatShort(n.rok) : "–"}</td>
+        )}
+        <td className={`whitespace-nowrap px-2 py-1.5 ${poKrovnih ? "font-semibold" : ""}`}>
+          {n.prvaPotreba ? formatShort(n.prvaPotreba) : "–"}
+        </td>
+        <td className="px-2 py-1.5 text-right tabular-nums">{formatNum(n.preostala)}</td>
+        <td className="px-2 py-1.5 text-right font-bold tabular-nums">{formatNum(n.prodano)}</td>
+        <td className="px-2 py-1.5 text-right tabular-nums text-ink-500">{formatNum(n.prosto)}</td>
+        <td className="px-2 py-1.5 text-sm">
+          <span className={n.zamuja ? "font-semibold text-nok-600" : n.prodano === 0 ? "text-ink-500" : "text-ink-800"}>{n.predlog}</span>
+        </td>
+      </tr>
+      {odprt && (
+        <tr className="border-b border-ink-100 bg-ink-50">
+          <td />
+          <td colSpan={poKrovnih ? 7 : 9} className="px-2 py-2">
+            <table className="text-xs">
+              <tbody>
+                {n.dodelitve.map((d) => (
+                  <tr key={d.kljuc}>
+                    <td className="pr-4 font-semibold tabular-nums">{formatNum(d.kolicina)} kos</td>
+                    <td className="pr-4">{d.datum ? formatShort(d.datum) : "brez datuma"}</td>
+                    <td className="pr-4">{d.partner}</td>
+                    <td className="font-mono text-ink-500">nar. {d.stevilka}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// =====================================================================
+// POGLED: PRIORITETE NALOGOV, GRUPIRANO PO KROVNIH NALOGIH
+// Krovni po prvi odpremi (najzgodnejša med njegovimi nalogi), v krovnem nalogi po prvi odpremi.
+// Rok naloga ne določa vrstnega reda - zamujanje je samo oznaka pri nalogu.
+// =====================================================================
+
+function PoKrovnih({ skupine, sort }: { skupine: KrovniSkupina[]; sort: Razvrscanje<NalogPrioriteta, NalogKljuc> }) {
+  const [odprt, setOdprt] = useState<string | null>(null);
+  return (
+    <div className="fp-card p-3 sm:p-4">
+      <TabelaOkvir>
+        <table className="w-full min-w-[950px] text-sm">
+          <thead className="fp-thead">
+            <tr>
+              <th className="w-8 px-2 py-2" />
+              <SortTh sort={sort} kljuc="nalog">Nalog</SortTh>
+              <SortTh sort={sort} kljuc="artikel">Artikel</SortTh>
+              <SortTh sort={sort} kljuc="odprema">Prva odprema</SortTh>
+              <SortTh sort={sort} kljuc="odprto" desno>Odprto</SortTh>
+              <SortTh sort={sort} kljuc="prodano" desno>Prodano</SortTh>
+              <SortTh sort={sort} kljuc="prosto" desno>Prosto</SortTh>
+              <th className="px-2 py-2">Predlog</th>
+            </tr>
+          </thead>
+          {skupine.map((k) => (
+            <tbody key={k.kljuc}>
+              <tr>
+                <td colSpan={8} className="border-l-4 border-ink-600 bg-ink-200 px-3 py-2.5 text-base text-ink-900">
+                  <span className="font-bold">{k.krovni ? `Krovni ${k.krovni}` : `Nalog ${k.nalogi[0].st_naloga}`}</span>
+                  {!k.krovni && <span className="ml-2 text-xs font-semibold">brez krovnega</span>}
+                  <span className="ml-2 text-xs font-semibold">
+                    prva odprema {k.prvaOdprema ? formatShort(k.prvaOdprema) : "–"}
+                  </span>
+                  <span className="ml-2 text-xs opacity-80">
+                    · {steviloNalogov(k.nalogi.length)} · {formatNum(k.odprto)} kos odprto, {formatNum(k.prodano)} prodano
+                  </span>
+                  {k.zamuja > 0 && <Oznaka cls={STATUS.ZAMUJA.badge}>{k.zamuja} zamuja</Oznaka>}
+                </td>
+              </tr>
+              {k.nalogi.map((n) => (
+                <NalogVrstica
+                  key={n.st_naloga}
+                  n={n}
+                  poKrovnih
+                  odprt={odprt === n.st_naloga}
+                  onOdpri={() => setOdprt(odprt === n.st_naloga ? null : n.st_naloga)}
+                />
+              ))}
+            </tbody>
+          ))}
+          {skupine.length === 0 && (
+            <tbody>
+              <tr>
+                <td colSpan={8} className="px-2 py-8 text-center text-ink-500">
+                  Ni nalogov za izbrane filtre.
+                </td>
+              </tr>
+            </tbody>
+          )}
         </table>
       </TabelaOkvir>
     </div>
@@ -1625,14 +1739,11 @@ function Oznaka({ cls, children }: { cls: string; children: React.ReactNode }) {
   return <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{children}</span>;
 }
 
-function TxtSporocilo({ besedilo, ime }: { besedilo: string; ime: string }) {
+function TxtSporocilo({ opis, besedilo, ime }: { opis: string; besedilo: string; ime: string }) {
   const notify = useToast();
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-ink-600">
-        Prikazane odpreme (glede na izbrane filtre in statuse) - datum, količina, ident, naziv, kupec in krovni nalog.
-        Kopiraj v Teams ali prenesi kot .txt.
-      </p>
+      <p className="text-sm text-ink-600">{opis} Kopiraj v Teams ali prenesi kot .txt.</p>
       <textarea
         readOnly
         value={besedilo}
