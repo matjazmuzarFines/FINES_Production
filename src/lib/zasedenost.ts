@@ -75,6 +75,12 @@ const STOLPCI: Record<string, keyof Nalog> = {
 
 const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
+/** Krovni DN: izvoz ima pri nalogu brez krovnega 0 - to ni krovni nalog. */
+const krovniDn = (x: unknown) => {
+  const s = String(x ?? "").trim();
+  return s === "" || s === "0" ? null : s;
+};
+
 export type UvozPregled = { nalogi: Nalog[]; opozorila: string[] };
 
 export async function preberiNalogeXlsx(file: File): Promise<UvozPregled> {
@@ -111,7 +117,7 @@ export async function preberiNalogeXlsx(file: File): Promise<UvozPregled> {
     if (!rok) opozorila.push(`Nalog ${st}: manjka ali ni veljaven rok izdelave.`);
     nalogi.push({
       st_naloga: st,
-      krovni_dn: txt(v.krovni_dn),
+      krovni_dn: krovniDn(v.krovni_dn),
       skupina_dn: txt(v.skupina_dn),
       koda_artikla: koda,
       naziv_artikla: txt(v.naziv_artikla),
@@ -182,6 +188,7 @@ export async function naloziZadnjiUvoz(): Promise<{ uvoz: Uvoz | null; nalogi: N
     uvoz,
     nalogi: nalogi.map((n) => ({
       ...n,
+      krovni_dn: krovniDn(n.krovni_dn),
       razpisana_kolicina: Number(n.razpisana_kolicina),
       izdelana_kolicina: Number(n.izdelana_kolicina),
     })),

@@ -15,6 +15,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Nova testna stran /test: sync izvozov (nalogi, naročila VD200, odpreme VD300) iz mape na serverju \\\\rokadasrv\\RISPSQL$\\Dokumentacija\\Podatki za aplikacije.",
       "Nova komponenta ikona Sync: krogec stanja (zelena = sinhronizirano, modra = sync v teku, rdeča = ni sinhronizirano), klik pokaže datoteke strani s časom izvoza na serverju in časom zadnjega uvoza ter gumb Sync. Po izbiri samodejni sync ob prihodu na stran.",
       "Deluje samo, ko aplikacija teče na strežniku v omrežju podjetja (lokalno), ne na Vercelu.",
+      "Popravek: nalog s Krovni DN = 0 (izvoz pri nalogu brez krovnega) ni več prikazan kot krovni nalog \"0\" (grupiranje po krovnih, TXT).",
     ],
   },
   {
