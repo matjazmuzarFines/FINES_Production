@@ -3,7 +3,8 @@
 // slike, skice (tabla) in povpraševanja. Datoteke so v bucketu fp-rutina-slike pod "prod/".
 
 import { addDays, formatDayMonth, fromIso, isoWeek, mondayOf, toIso, type IsoDate } from "./dates";
-import { fetchAll, getSupabase, kosi, SLIKE_BUCKET } from "./supabase";
+import { prenesiPrilogo, virPrilog } from "./priloge";
+import { fetchAll, getSupabase, kosi } from "./supabase";
 
 // =====================================================================
 // TIPI
@@ -60,22 +61,7 @@ export type Akcija = {
 
 export type AkcijaVnos = Omit<Akcija, "id" | "gemba_id" | "teden">;
 
-export type PrilogaTip = "SLIKA" | "SKICA" | "POVPRASEVANJE";
-export const POVP_STATUSI = ["POSLANO", "PONUDBA", "NAROCENO", "ZAVRNJENO"] as const;
-export type PovpStatus = (typeof POVP_STATUSI)[number];
-
-export type Priloga = {
-  id: number;
-  gemba_id: number;
-  tip: PrilogaTip;
-  storage_path: string;
-  ime: string | null;
-  opis: string | null;
-  status: PovpStatus | null;
-  velikost: number | null;
-  created_at: string;
-  url?: string;
-};
+export type { PovpStatus, Priloga, PrilogaTip } from "./priloge";
 
 /** Družina pečic z letno količino (ocena) in ciljem zmanjšanja normativa. */
 export type ProdDruzina = { druzina_id: number; koda: string; kolicina_leto: number | null; cilj_normativ_pct: number | null };
@@ -280,9 +266,11 @@ export async function skrijVprasanje(id: number) {
   if (error) throw new Error(niTabele(error) ? BREZ_MIGRACIJE_014 : error.message);
 }
 
-export const akcijaOdprta = (a: Akcija) => a.status === "ODPRTO" || a.status === "V_DELU";
-export const akcijaIzvedena = (a: Akcija) => a.status === "IZVEDENO" || a.status === "PREVERJENO";
-export const akcijaZamuja = (a: Akcija, danes: IsoDate) => akcijaOdprta(a) && !!a.rok && a.rok < danes;
+/** Akcija gembe ali audita (skupna stanja in rok). */
+type StanjeAkcije = Pick<Akcija, "status" | "rok">;
+export const akcijaOdprta = (a: StanjeAkcije) => a.status === "ODPRTO" || a.status === "V_DELU";
+export const akcijaIzvedena = (a: StanjeAkcije) => a.status === "IZVEDENO" || a.status === "PREVERJENO";
+export const akcijaZamuja = (a: StanjeAkcije, danes: IsoDate) => akcijaOdprta(a) && !!a.rok && a.rok < danes;
 
 // =====================================================================
 // PRILOGE (bucket fp-rutina-slike, mapa prod/)
@@ -290,134 +278,14 @@ export const akcijaZamuja = (a: Akcija, danes: IsoDate) => akcijaOdprta(a) && !!
 
 const compact = (iso: IsoDate) => iso.replaceAll("-", "");
 
-const TIP_V_POTI: Record<PrilogaTip, string> = { SLIKA: "slika", SKICA: "skica", POVPRASEVANJE: "povp" };
+/** Pot datoteke: prod/{YYYYMMDD}/{YYYYMMDD}-gemba-{slika|skica|povp}-{čas}.{končnica} (rutine imajo pr/ in skl/). */
+export const PRILOGE_GEMBE = virPrilog({ tabela: "fp_prod_priloge", stolpec: "gemba_id", mapa: "prod", oznaka: "gemba" });
+/** Mapa prilog gembe tedna (YYYYMMDD ponedeljka). */
+export const kljucPrilogGembe = compact;
 
-/** Vrsta datoteke po končnici (Outlook .msg brskalnik pogosto pošlje brez tipa). */
-const MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  msg: "application/vnd.ms-outlook",
-  eml: "message/rfc822",
-  txt: "text/plain",
-};
-export const POVP_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.msg,.eml,.txt,.jpg,.jpeg,.png,.webp";
-export const MAX_VELIKOST = 10 * 1024 * 1024;
+export const naloziPriloge = PRILOGE_GEMBE.nalozi;
 
-export const koncnica = (ime: string) => (ime.includes(".") ? ime.split(".").pop()!.toLowerCase() : "");
-export const dovoljenaDatoteka = (ime: string) => koncnica(ime) in MIME;
-
-/**
- * Pot datoteke: prod/{YYYYMMDD}/{YYYYMMDD}-gemba-{slika|skica|povp}-{čas}.{končnica}
- * (rutine imajo pr/ in skl/, zato so datoteke gembe ločene).
- */
-function potPriloge(teden: IsoDate, tip: PrilogaTip, ext: string) {
-  const t = compact(teden);
-  const nakljucno = Math.random().toString(36).slice(2, 6);
-  return `prod/${t}/${t}-gemba-${TIP_V_POTI[tip]}-${Date.now()}${nakljucno}.${ext}`;
-}
-
-async function podpisaniUrlji(paths: string[]): Promise<Record<string, string>> {
-  if (paths.length === 0) return {};
-  const { data, error } = await getSupabase().storage.from(SLIKE_BUCKET).createSignedUrls(paths, 60 * 60);
-  if (error) throw new Error(error.message);
-  const out: Record<string, string> = {};
-  for (const d of data ?? []) if (d.path && d.signedUrl) out[d.path] = d.signedUrl;
-  return out;
-}
-
-export async function naloziPriloge(gembaId: number): Promise<Priloga[]> {
-  const { data, error } = await getSupabase()
-    .from("fp_prod_priloge")
-    .select("id, gemba_id, tip, storage_path, ime, opis, status, velikost, created_at")
-    .eq("visible", true)
-    .eq("gemba_id", gembaId)
-    .order("created_at");
-  if (error) throw new Error(error.message);
-  const priloge = (data ?? []) as Priloga[];
-  // Podpisani URL-ji samo za slike in skice (povpraševanja se prenesejo na klik).
-  const urls = await podpisaniUrlji(priloge.filter((p) => p.tip !== "POVPRASEVANJE").map((p) => p.storage_path));
-  return priloge.map((p) => ({ ...p, url: urls[p.storage_path] }));
-}
-
-async function uploadDatoteke(path: string, blob: Blob, contentType: string) {
-  const { error } = await getSupabase().storage.from(SLIKE_BUCKET).upload(path, blob, { contentType, upsert: true });
-  if (error) throw new Error(error.message);
-}
-
-/** Datoteke se brišejo (prostor). Napaka pri brisanju ne ustavi shranjevanja. */
-async function odstraniDatoteko(path: string) {
-  await getSupabase().storage.from(SLIKE_BUCKET).remove([path]);
-}
-
-export async function dodajPrilogo(
-  gembaId: number,
-  teden: IsoDate,
-  tip: PrilogaTip,
-  blob: Blob,
-  ime: string,
-  opis: string | null = null,
-) {
-  const ext = tip === "SKICA" ? "png" : tip === "SLIKA" ? "jpg" : koncnica(ime);
-  const contentType = MIME[ext] ?? blob.type;
-  const path = potPriloge(teden, tip, ext);
-  await uploadDatoteke(path, blob, contentType);
-  const { error } = await getSupabase()
-    .from("fp_prod_priloge")
-    .insert({
-      gemba_id: gembaId,
-      tip,
-      storage_path: path,
-      ime,
-      opis,
-      status: tip === "POVPRASEVANJE" ? "POSLANO" : null,
-      velikost: blob.size,
-    });
-  if (error) {
-    await odstraniDatoteko(path);
-    throw new Error(error.message);
-  }
-}
-
-/** Zamenjaj datoteko obstoječe priloge (npr. popravljena skica); stara datoteka se izbriše. */
-export async function zamenjajPrilogo(p: Priloga, teden: IsoDate, blob: Blob) {
-  const path = potPriloge(teden, p.tip, koncnica(p.storage_path) || "png");
-  await uploadDatoteke(path, blob, blob.type || "image/png");
-  const { error } = await getSupabase()
-    .from("fp_prod_priloge")
-    .update({ storage_path: path, velikost: blob.size })
-    .eq("id", p.id);
-  if (error) {
-    await odstraniDatoteko(path);
-    throw new Error(error.message);
-  }
-  await odstraniDatoteko(p.storage_path);
-}
-
-export async function posodobiPrilogo(id: number, v: { opis?: string | null; status?: PovpStatus | null }) {
-  const { error } = await getSupabase().from("fp_prod_priloge").update(v).eq("id", id);
-  if (error) throw new Error(error.message);
-}
-
-/** Slika / datoteka se izbriše iz storage, vrstica ostane skrita (zgodovina). */
-export async function odstraniPrilogo(p: Priloga) {
-  const { error } = await getSupabase().from("fp_prod_priloge").update({ visible: false }).eq("id", p.id);
-  if (error) throw new Error(error.message);
-  await odstraniDatoteko(p.storage_path);
-}
-
-/** Vsebina datoteke (npr. skica ali slika kot ozadje table). */
-export async function prenesiPrilogo(p: Priloga): Promise<Blob> {
-  const { data, error } = await getSupabase().storage.from(SLIKE_BUCKET).download(p.storage_path);
-  if (error) throw new Error(error.message);
-  return data;
-}
+export { prenesiPrilogo };
 
 // =====================================================================
 // NASTAVITVE

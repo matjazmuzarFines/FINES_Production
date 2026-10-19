@@ -9,6 +9,32 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "17.01",
+    datum: "19. 10. 2026",
+    spremembe: [
+      "Auditi - ugotovitve: vrsta (Nevarno, Neskladnost, Opažanje, Predlog izboljšave, Dobra praksa), prioriteta A / B / C, ki sama nastavi rok (1 / 7 / 30 dni), in Rešeno na mestu (akcija se zapiše in zapre).",
+      "Ocena akcije: velikost napake / škode 1-5, pomembnost za vodstvo 1-5 (pomen = velikost × pomembnost), ocena prihranka €/leto in cena ukrepa (povračilo v mesecih).",
+      "Slike akcije PRED in PO (kamera telefona); za zaprtje akcije je potrebna slika PO ali opis rezultata.",
+      "Hitro preverjanje odprtih akcij oddelka na auditu: Še odprto (komentar, nov rok) / Izvedeno / Preverjeno z enim klikom, komentar se doda k rezultatu z datumom.",
+      "Nova stran Nastavitve auditov: oddelki (barva, vodja, e-mail, aktiven), teme, vprašanja in tipični ukrepi (dodaj, popravi, premakni, odstrani), cilji KPI in roki prioritet. Vodja oddelka je predlagan kot odgovoren in naveden v PDF.",
+      "Nov zavihek KPI: auditi na teden, zamujene akcije, pravočasno zaprte, ocenjen prihranek; graf odprtih in zamujenih akcij, ugotovitve po oddelku in vrsti, matrika pomena, najpogostejše teme, top 10 akcij in akcije po odgovornih.",
+      "Telefon: zavihki delov audita, spodnja vrstica Slika / + Ugotovitev / Shrani, okna čez cel zaslon z vedno vidnim gumbom Shrani, kartice namesto tabel, plavajoč gumb Nov audit, večja polja (brez povečevanja strani na iPhonu), osnutek audita se sproti hrani v brskalniku.",
+      "Tipičen ukrep v vprašanjih odpre novo ugotovitev s tem ukrepom. Excel izvoz tudi na zavihku Akcije. PDF in e-mail z vrsto, prioriteto, oceno, slikami ugotovitev in pohvalami (dobre prakse).",
+      "Baza: migracija 016_auditi_nastavitve_ocena.sql (šifranti oddelkov, tem, vprašanj, nastavitve; novi stolpci akcij in slik).",
+    ],
+  },
+  {
+    verzija: "16.01",
+    datum: "19. 10. 2026",
+    spremembe: [
+      "Nov modul Management (prvi v meniju in na domači strani) z razdelkom Rutinsko delo.",
+      "Nova stran Auditi (/management/auditi): splošni gemba walki vodstva po oddelkih - tabela izvedenih auditov (filtri oddelek, status, iskanje, Excel) z gumbom Nov audit in zavihek Akcije (akcije vseh auditov po oddelkih).",
+      "Nov audit se odpre na svoji strani: datum, oddelek (Proizvodnja, Montaža, Skladišče, Logistika, Kakovost, Tehnologija), tema oddelka, področje, izvajalec, udeleženci; zapisnik, vodič, vprašanja po oddelku in temi (dodajanje / odstranjevanje lastnih vprašanj), časovnik, prazni števci, akcije, slike, tabla / skice, povpraševanja, PDF in e-mail - enake funkcije kot pri Produktivnosti.",
+      "Baza: migracija 015_management_auditi.sql (tabele fp_aud_audit, fp_aud_akcije, fp_aud_priloge, fp_aud_vprasanja; datoteke v mapi aud/).",
+      "Priloge, vprašanja, časovnik, števci in PDF / e-mail so skupne komponente Produktivnosti in Auditov (popravek se prenese v oba modula).",
+    ],
+  },
+  {
     verzija: "15.01",
     datum: "19. 10. 2026",
     spremembe: [

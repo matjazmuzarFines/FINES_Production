@@ -438,7 +438,7 @@ function Pregled({ zacetniMesec }: { zacetniMesec?: string }) {
 
 const VISINA_GRAFA = 120;
 
-function KpiKartica({
+export function KpiKartica({
   st,
   barva,
   naslov,

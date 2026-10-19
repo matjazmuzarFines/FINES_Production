@@ -9,6 +9,7 @@ import { IZGUBE, izgubaPoKodi, predlogTeme } from "@/lib/gembaVodic";
 import { lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import {
   PRAZNA_POLJA,
+  PRILOGE_GEMBE,
   akcijaOdprta,
   formatEur,
   prihranekAkcije,
@@ -18,6 +19,7 @@ import {
   naloziNastavitve,
   naloziPriloge,
   obdobjeTedna,
+  kljucPrilogGembe,
   shraniGembo,
   type Akcija,
   type AkcijaVnos,
@@ -57,7 +59,7 @@ const izGembe = (g: Gemba | null): GembaPolja =>
     : PRAZNA_POLJA;
 
 /** Okrogel gumb izvoza; med pripravo se vrti (oranžen = PDF, moder = e-mail v Outlooku). */
-function IzvozGumb({
+export function IzvozGumb({
   hint,
   icon,
   variant = "primary",
@@ -435,7 +437,7 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
         />
       </section>
 
-      <Priloge teden={teden} priloge={priloge} pridobiGembaId={pridobiGembaId} onSpremenjeno={osveziPriloge} />
+      <Priloge vir={PRILOGE_GEMBE} kljuc={kljucPrilogGembe(teden)} pridobiId={pridobiGembaId} priloge={priloge} onSpremenjeno={osveziPriloge} />
 
       <SaveBar
         steviloSprememb={spremenjena.length}

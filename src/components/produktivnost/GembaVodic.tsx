@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BookOpen, Check, ChevronDown, CircleHelp, FileText, Plus, Trash2, Wrench, X } from "lucide-react";
-import { IZGUBE, KORAKI, PRAVILA, PREDLOGA_ZAPISNIKA, SPLOSNA_VPRASANJA, izgubaPoKodi, type Izguba } from "@/lib/gembaVodic";
+import { IZGUBE, KORAKI, PRAVILA, PREDLOGA_ZAPISNIKA, SPLOSNA_VPRASANJA, izgubaPoKodi, type Izguba, type KorakVodica } from "@/lib/gembaVodic";
 import {
   dodajVprasanje,
   naloziVprasanja,
@@ -70,13 +70,26 @@ export function GembaVodic({
   );
 }
 
-function Vodic({ onVstavi, prazenZapisnik }: { onVstavi: (t: string) => void; prazenZapisnik: boolean }) {
+/** Pravila, potek korak za korakom in predloga zapisnika. */
+export function Vodic({
+  onVstavi,
+  prazenZapisnik,
+  pravila = PRAVILA,
+  koraki = KORAKI,
+  predloga = PREDLOGA_ZAPISNIKA,
+}: {
+  onVstavi: (t: string) => void;
+  prazenZapisnik: boolean;
+  pravila?: string[];
+  koraki?: KorakVodica[];
+  predloga?: string;
+}) {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-lg border-l-4 border-fines-500 bg-fines-50 p-3">
         <h4 className="mb-1 text-sm font-bold text-fines-700">Pravila</h4>
         <ul className="list-disc space-y-1 pl-4 text-sm text-ink-800">
-          {PRAVILA.map((p) => (
+          {pravila.map((p) => (
             <li key={p}>{p}</li>
           ))}
         </ul>
@@ -87,12 +100,12 @@ function Vodic({ onVstavi, prazenZapisnik }: { onVstavi: (t: string) => void; pr
         icon={FileText}
         className="self-start"
         disabled={!prazenZapisnik}
-        onClick={() => onVstavi(PREDLOGA_ZAPISNIKA)}
+        onClick={() => onVstavi(predloga)}
       >
         Predloga zapisnika
       </Button>
       <ol className="flex flex-col gap-2">
-        {KORAKI.map((k, i) => (
+        {koraki.map((k, i) => (
           <li key={k.naslov} className="rounded-lg border border-ink-200 p-3">
             <div className="mb-1 flex items-center gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-bold text-white">{i + 1}</span>
@@ -111,27 +124,37 @@ function Vodic({ onVstavi, prazenZapisnik }: { onVstavi: (t: string) => void; pr
   );
 }
 
-type VprasanjaApi = {
+export type VprasanjaApi = {
   /** Vgrajena (brez odstranjenih) + dodana vprašanja skupine. */
   seznam: (tema: string, skupina: VprasanjeSkupina, vgrajena: string[]) => { besedilo: string; id: number | null }[];
   dodaj: (tema: string, skupina: VprasanjeSkupina, besedilo: string) => Promise<boolean>;
   izbrisi: (tema: string, skupina: VprasanjeSkupina, v: { besedilo: string; id: number | null }) => void;
 };
 
-/** Vprašanja iz baze (dodana in odstranjena vgrajena). Brez migracije 014 ostanejo samo vgrajena. */
-function useVprasanja(): VprasanjaApi {
+/** Tabela lastnih vprašanj modula (Produktivnost: fp_prod_vprasanja, Auditi: fp_aud_vprasanja). */
+export type VirVprasanj = {
+  nalozi: () => Promise<LastnoVprasanje[]>;
+  dodaj: (v: Omit<LastnoVprasanje, "id">) => Promise<LastnoVprasanje>;
+  skrij: (id: number) => Promise<void>;
+};
+
+const VIR_GEMBE: VirVprasanj = { nalozi: naloziVprasanja, dodaj: dodajVprasanje, skrij: skrijVprasanje };
+
+/** Vprašanja iz baze (dodana in odstranjena vgrajena). Brez migracije ostanejo samo vgrajena. vir mora biti stalen (konstanta modula). */
+export function useVprasanja(vir: VirVprasanj = VIR_GEMBE): VprasanjaApi {
   const notify = useToast();
   const [lastna, setLastna] = useState<LastnoVprasanje[]>([]);
 
   useEffect(() => {
     let preklic = false;
-    naloziVprasanja()
+    vir
+      .nalozi()
       .then((v) => !preklic && setLastna(v))
       .catch((e) => notify("error", `Napaka pri nalaganju vprašanj: ${e.message}`, 10000));
     return () => {
       preklic = true;
     };
-  }, [notify]);
+  }, [notify, vir]);
 
   return {
     seznam(tema, skupina, vgrajena) {
@@ -144,7 +167,7 @@ function useVprasanja(): VprasanjaApi {
     },
     async dodaj(tema, skupina, besedilo) {
       try {
-        const v = await dodajVprasanje({ tema, skupina, besedilo, izbrisano: false });
+        const v = await vir.dodaj({ tema, skupina, besedilo, izbrisano: false });
         setLastna((s) => [...s, v]);
         notify("success", "Vprašanje je dodano.");
         return true;
@@ -157,11 +180,11 @@ function useVprasanja(): VprasanjaApi {
       if (!window.confirm(`Odstranim vprašanje "${v.besedilo}"?`)) return;
       try {
         if (v.id !== null) {
-          await skrijVprasanje(v.id);
+          await vir.skrij(v.id);
           setLastna((s) => s.filter((x) => x.id !== v.id));
         } else {
           // vgrajeno vprašanje - zapišemo, da je odstranjeno
-          const z = await dodajVprasanje({ tema, skupina, besedilo: v.besedilo, izbrisano: true });
+          const z = await vir.dodaj({ tema, skupina, besedilo: v.besedilo, izbrisano: true });
           setLastna((s) => [...s, z]);
         }
         notify("success", "Vprašanje je odstranjeno.");
@@ -175,13 +198,13 @@ function useVprasanja(): VprasanjaApi {
 function VprasanjeVrstica({ v, onVstavi, onIzbrisi }: { v: string; onVstavi: (t: string) => void; onIzbrisi: () => void }) {
   return (
     <li className="group flex items-start gap-1.5 rounded-md py-1 pl-1 hover:bg-ink-50">
-      <span className="flex-1 text-sm text-ink-800">{v}</span>
+      <span className="flex-1 self-center text-sm text-ink-800">{v}</span>
       <button
         type="button"
         title="Odstrani vprašanje s seznama"
         aria-label={`Odstrani vprašanje: ${v}`}
         onClick={onIzbrisi}
-        className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-300 hover:bg-nok-50 hover:text-nok-600"
+        className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-300 hover:bg-nok-50 hover:text-nok-600 sm:h-7 sm:w-7"
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden />
       </button>
@@ -190,7 +213,7 @@ function VprasanjeVrstica({ v, onVstavi, onIzbrisi }: { v: string; onVstavi: (t:
         title="Vstavi vprašanje v zapisnik"
         aria-label={`Vstavi v zapisnik: ${v}`}
         onClick={() => onVstavi(`V: ${v}\nO: `)}
-        className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink-200 bg-white text-fines-500 hover:border-fines-500 hover:bg-fines-50"
+        className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-200 bg-white text-fines-500 hover:border-fines-500 hover:bg-fines-50 sm:h-7 sm:w-7"
       >
         <Plus className="h-4 w-4" aria-hidden />
       </button>
@@ -199,7 +222,7 @@ function VprasanjeVrstica({ v, onVstavi, onIzbrisi }: { v: string; onVstavi: (t:
 }
 
 /** Vprašanja ene skupine z gumbom za dodajanje novega vprašanja. */
-function SeznamVprasanj({
+export function SeznamVprasanj({
   api,
   tema,
   skupina,
@@ -314,7 +337,7 @@ function IzgubaBlok({ i, odprt, api, onVstavi }: { i: Izguba; odprt: boolean; ap
   );
 }
 
-function Skupina({ naslov, children }: { naslov: string; children: React.ReactNode }) {
+export function Skupina({ naslov, children }: { naslov: string; children: React.ReactNode }) {
   return (
     <div>
       <h5 className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-fines-600">{naslov}</h5>

@@ -22,7 +22,7 @@ const PREDLOGI_STEVCEV = ["Hoja po orodje", "Hoja po material", "Iskanje", "Čak
 const POLJE =
   "h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100";
 
-function Blok({ naslov, opis, children }: { naslov: string; opis?: string; children: React.ReactNode }) {
+export function Blok({ naslov, opis, children }: { naslov: string; opis?: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-ink-200 p-3">
       <div>
@@ -111,7 +111,7 @@ function Kalkulator({ nastavitve, onNovaAkcija }: { nastavitve: Nastavitve; onNo
 // ---------------------------------------------------------------------
 
 /** Trajanje gembe se ob pavzi zapiše v podatke gembe (shrani se z zapisnikom) - za PDF in e-mail. */
-function Casovnik({ orodja, onChange }: { orodja: Orodja; onChange: (o: Partial<Orodja>) => void }) {
+export function Casovnik({ orodja, onChange }: { orodja: Orodja; onChange: (o: Partial<Orodja>) => void }) {
   const [zacetek, setZacetek] = useState<number | null>(null);
   const prej = (orodja.trajanje_s ?? 0) * 1000;
   const zdaj = useZdaj(zacetek !== null);
@@ -337,7 +337,20 @@ function Stoparica({
 // ŠTEVCI
 // ---------------------------------------------------------------------
 
-function Stevci({ stevci, onChange, onVstavi }: { stevci: Stevec[]; onChange: (s: Stevec[]) => void; onVstavi: (t: string) => void }) {
+export function Stevci({
+  stevci,
+  onChange,
+  onVstavi,
+  predlogi: vsiPredlogi = PREDLOGI_STEVCEV,
+  opis = "Štej, kolikokrat se izguba zgodi med opazovanjem (npr. hoja po orodje).",
+}: {
+  stevci: Stevec[];
+  onChange: (s: Stevec[]) => void;
+  onVstavi: (t: string) => void;
+  /** Predlagani števci (en klik); prazno = samo lastni števci. */
+  predlogi?: string[];
+  opis?: string;
+}) {
   const [naziv, setNaziv] = useState("");
   const dodaj = (n: string) => {
     if (!n.trim() || stevci.some((s) => s.naziv === n.trim())) return;
@@ -346,10 +359,10 @@ function Stevci({ stevci, onChange, onVstavi }: { stevci: Stevec[]; onChange: (s
   };
   const spremeni = (id: string, d: number) =>
     onChange(stevci.map((s) => (s.id === id ? { ...s, stevilo: Math.max(0, s.stevilo + d) } : s)));
-  const predlogi = PREDLOGI_STEVCEV.filter((p) => !stevci.some((s) => s.naziv === p));
+  const predlogi = vsiPredlogi.filter((p) => !stevci.some((s) => s.naziv === p));
 
   return (
-    <Blok naslov="Števci dogodkov" opis="Štej, kolikokrat se izguba zgodi med opazovanjem (npr. hoja po orodje).">
+    <Blok naslov="Števci dogodkov" opis={opis}>
       {stevci.map((s) => (
         <div key={s.id} className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-800" title={s.naziv}>

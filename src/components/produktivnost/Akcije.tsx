@@ -35,7 +35,7 @@ export const AKCIJA_STATUS: Record<AkcijaStatus, { label: string; cls: string; h
   OPUSCENO: { label: "Opuščeno", cls: "bg-ink-200 text-ink-600", hint: "Akcija ne bo izvedena" },
 };
 
-export function AkcijaZnacka({ a, danes }: { a: Akcija; danes: IsoDate }) {
+export function AkcijaZnacka({ a, danes }: { a: Pick<Akcija, "status" | "rok">; danes: IsoDate }) {
   if (akcijaZamuja(a, danes)) {
     return (
       <span title={`Rok ${formatShort(a.rok!)} je pretekel`} className="whitespace-nowrap rounded-full bg-fines-500 px-2.5 py-0.5 text-xs font-bold text-white">
@@ -52,7 +52,7 @@ export function AkcijaZnacka({ a, danes }: { a: Akcija; danes: IsoDate }) {
 }
 
 /** Krogec stanja na začetku vrstice: zelen s kljukico = izvedena (vidno tudi, ko je stolpec Status izven zaslona). */
-export function AkcijaKljukica({ a }: { a: Akcija }) {
+export function AkcijaKljukica({ a }: { a: Pick<Akcija, "status" | "rok"> }) {
   return akcijaIzvedena(a) ? (
     <span title={AKCIJA_STATUS[a.status].hint} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ok-500 text-white">
       <Check size={14} strokeWidth={3} aria-hidden />
@@ -74,7 +74,7 @@ export function IzgubaOznaka({ koda }: { koda: string | null }) {
   );
 }
 
-const STATUS_RED: Record<AkcijaStatus, number> = { ODPRTO: 1, V_DELU: 2, IZVEDENO: 3, PREVERJENO: 4, OPUSCENO: 5 };
+export const STATUS_RED: Record<AkcijaStatus, number> = { ODPRTO: 1, V_DELU: 2, IZVEDENO: 3, PREVERJENO: 4, OPUSCENO: 5 };
 
 export type SkupinaAkcij = { naslov: string; opis: string; akcije: Akcija[] };
 

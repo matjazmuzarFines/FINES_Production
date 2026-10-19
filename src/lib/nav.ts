@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Footprints, Gauge, ListOrdered, Warehouse } from "lucide-react";
+import { BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Footprints, Gauge, ListOrdered, ShieldCheck, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -25,6 +25,23 @@ export type NavGroup = {
 };
 
 export const NAV: NavGroup[] = [
+  {
+    label: "Management",
+    icon: BriefcaseBusiness,
+    sekcije: [
+      {
+        label: "Rutinsko delo",
+        items: [
+          {
+            label: "Auditi",
+            href: "/management/auditi",
+            icon: ShieldCheck,
+            hint: "Gemba walki vodstva po oddelkih podjetja",
+          },
+        ],
+      },
+    ],
+  },
   {
     label: "Proizvodnja",
     icon: Factory,

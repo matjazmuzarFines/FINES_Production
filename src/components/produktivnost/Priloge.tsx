@@ -2,22 +2,19 @@
 
 import { useRef, useState } from "react";
 import { Camera, Download, FileText, Image as ImageIcon, Loader2, PenLine, Plus, Send, Trash2, UploadCloud, ZoomIn } from "lucide-react";
-import { formatShort, toIso, type IsoDate } from "@/lib/dates";
+import { formatShort, toIso } from "@/lib/dates";
 import { compressImage } from "@/lib/images";
 import {
   MAX_VELIKOST,
   POVP_ACCEPT,
   POVP_STATUSI,
-  dodajPrilogo,
   dovoljenaDatoteka,
-  odstraniPrilogo,
-  posodobiPrilogo,
-  prenesiPrilogo,
-  zamenjajPrilogo,
   type PovpStatus,
   type Priloga,
+  prenesiPrilogo,
   type PrilogaTip,
-} from "@/lib/produktivnost";
+  type VirPrilog,
+} from "@/lib/priloge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
@@ -37,16 +34,25 @@ const POVP_STATUS: Record<PovpStatus, string> = {
 /** Odprta tabla: nova skica, popravek skice ali risanje na sliko. */
 type TablaStanje = { naslov: string; ozadje: Blob | null; zamenjaj?: Priloga };
 
+/** Slike, skice (tabla) in povpraševanja zapisnika (gemba, audit). */
 export function Priloge({
-  teden,
+  vir,
+  kljuc,
+  pridobiId,
   priloge,
-  pridobiGembaId,
   onSpremenjeno,
+  label = "Priloge gembe",
+  opisSkic = "Tloris celice, pot delavca (špageti diagram), predlog nove postavitve ...",
 }: {
-  teden: IsoDate;
+  vir: VirPrilog;
+  /** Mapa datotek zapisnika (npr. YYYYMMDD tedna). */
+  kljuc: string;
+  /** Id zapisnika; če še ne obstaja, se ustvari ob prvi prilogi. */
+  pridobiId: () => Promise<number>;
   priloge: Priloga[];
-  pridobiGembaId: () => Promise<number>;
   onSpremenjeno: () => Promise<void>;
+  label?: string;
+  opisSkic?: string;
 }) {
   const notify = useToast();
   const [pogled, setPogled] = useState<Pogled>("SLIKE");
@@ -64,15 +70,14 @@ export function Priloge({
     let ok = 0;
     const napake: string[] = [];
     try {
-      const gembaId = await pridobiGembaId();
       for (const f of files) {
         try {
           if (tip === "SLIKA") {
-            await dodajPrilogo(gembaId, teden, "SLIKA", await compressImage(f), f.name);
+            await vir.dodaj(await pridobiId(), kljuc, "SLIKA", await compressImage(f), f.name);
           } else {
             if (!dovoljenaDatoteka(f.name)) throw new Error("nepodprta vrsta datoteke");
             if (f.size > MAX_VELIKOST) throw new Error("večja od 10 MB");
-            await dodajPrilogo(gembaId, teden, "POVPRASEVANJE", f, f.name);
+            await vir.dodaj(await pridobiId(), kljuc, "POVPRASEVANJE", f, f.name);
           }
           ok++;
         } catch (e) {
@@ -92,7 +97,7 @@ export function Priloge({
   async function odstrani(p: Priloga) {
     if (!window.confirm(`Odstranim ${p.tip === "POVPRASEVANJE" ? "datoteko" : p.tip === "SKICA" ? "skico" : "sliko"}? Datoteka bo izbrisana.`)) return;
     try {
-      await odstraniPrilogo(p);
+      await vir.odstrani(p);
       await onSpremenjeno();
       notify("success", "Odstranjeno.");
     } catch (e) {
@@ -111,8 +116,8 @@ export function Priloge({
 
   async function shraniSkico(png: Blob) {
     try {
-      if (tabla?.zamenjaj) await zamenjajPrilogo(tabla.zamenjaj, teden, png);
-      else await dodajPrilogo(await pridobiGembaId(), teden, "SKICA", png, `skica-${toIso(new Date())}.png`);
+      if (tabla?.zamenjaj) await vir.zamenjaj(tabla.zamenjaj, kljuc, png);
+      else await vir.dodaj(await pridobiId(), kljuc, "SKICA", png, `skica-${toIso(new Date())}.png`);
       setTabla(null);
       setPogled("SKICE");
       await onSpremenjeno();
@@ -125,7 +130,7 @@ export function Priloge({
   return (
     <section className="flex flex-col">
       <Zavihki
-        label="Priloge gembe"
+        label={label}
         value={pogled}
         onChange={setPogled}
         zavihki={[
@@ -150,7 +155,7 @@ export function Priloge({
               prazno="Ni slik. Slikaj stanje pred izboljšavo (in kasneje po njej)."
               onZoom={setZoom}
               onOpis={async (p, opis) => {
-                await posodobiPrilogo(p.id, { opis }).catch((e) => notify("error", e.message));
+                await vir.posodobi(p.id, { opis }).catch((e) => notify("error", e.message));
                 await onSpremenjeno();
               }}
               gumbi={(p) => (
@@ -169,14 +174,14 @@ export function Priloge({
               <Button hint="Odpri prazno tablo za skiciranje" variant="success" icon={Plus} onClick={() => odpriTablo("Nova skica")}>
                 Nova skica
               </Button>
-              <p className="text-sm text-ink-500">Tloris celice, pot delavca (špageti diagram), predlog nove postavitve ...</p>
+              <p className="text-sm text-ink-500">{opisSkic}</p>
             </div>
             <Galerija
               priloge={skice}
               prazno="Ni skic. Klikni Nova skica ali nariši na eno od slik."
               onZoom={setZoom}
               onOpis={async (p, opis) => {
-                await posodobiPrilogo(p.id, { opis }).catch((e) => notify("error", e.message));
+                await vir.posodobi(p.id, { opis }).catch((e) => notify("error", e.message));
                 await onSpremenjeno();
               }}
               gumbi={(p) => (
@@ -202,7 +207,7 @@ export function Priloge({
             <PovpTabela
               priloge={povp}
               onSpremeni={async (p, v) => {
-                await posodobiPrilogo(p.id, v).catch((e) => notify("error", e.message));
+                await vir.posodobi(p.id, v).catch((e) => notify("error", e.message));
                 await onSpremenjeno();
               }}
               onOdstrani={odstrani}
@@ -225,7 +230,7 @@ export function Priloge({
 
       <Modal open={!!zoom} title={zoom?.opis || zoom?.ime || "Slika"} onClose={() => setZoom(null)} sirina="max-w-5xl">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {zoom?.url && <img src={zoom.url} alt={zoom.opis ?? "Slika z gembe"} className="w-full rounded-lg" />}
+        {zoom?.url && <img src={zoom.url} alt={zoom.opis ?? "Slika"} className="w-full rounded-lg" />}
       </Modal>
 
       {tabla && <Tabla naslov={tabla.naslov} ozadje={tabla.ozadje} onClose={() => setTabla(null)} onShrani={shraniSkico} />}
@@ -393,7 +398,7 @@ function PovpTabela({
           {priloge.length === 0 && (
             <tr>
               <td colSpan={6} className="px-3 py-6 text-center text-ink-500">
-                Ni povpraševanj za ta teden.
+                Ni povpraševanj.
               </td>
             </tr>
           )}
