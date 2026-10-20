@@ -24,8 +24,13 @@ export type Postavitev = {
   delovno_mesto_id: number;
   krovni_dn: string;
   datum_zacetka: IsoDate;
+  /** Ročne ure ali zadnje znane ure nalogov (če krovnega ni v uvozu). */
   ure: number;
   opomba: string | null;
+  /** Vključeni nalogi krovnega; null = vsi nalogi krovnega. */
+  nalogi: string[] | null;
+  /** true: ure so vpisane ročno; false: ure = vsota ur vključenih nalogov. */
+  rocne_ure: boolean;
 };
 
 export type ZaposleniDan = { delovno_mesto_id: number; datum: IsoDate; st_zaposlenih: number };
@@ -75,12 +80,12 @@ export async function naloziCelice(datum: IsoDate): Promise<Celica[]> {
 export async function naloziPostavitve(): Promise<Postavitev[]> {
   const { data, error } = await getSupabase()
     .from("fp_plan_postavitve")
-    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba")
+    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, rocne_ure")
     .eq("visible", true)
     .order("datum_zacetka")
     .order("id");
   if (error) throw error;
-  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure) }));
+  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure), nalogi: p.nalogi ?? null, rocne_ure: !!p.rocne_ure }));
 }
 
 export async function naloziZaposlene(od: IsoDate, doo: IsoDate): Promise<ZaposleniDan[]> {
@@ -119,6 +124,8 @@ export async function shraniPlan({
         datum_zacetka: p.datum_zacetka,
         ure: p.ure,
         opomba: p.opomba,
+        nalogi: p.nalogi,
+        rocne_ure: p.rocne_ure,
       })),
     );
     if (error) throw error;
@@ -176,6 +183,50 @@ function najpogostejsi(vrednosti: (string | null)[]): string | null {
   return [...c].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Nalogi krovnega, ki jih zajame postavitev (null = vsi). */
+export function nalogiPostavitve(p: Postavitev, k: Krovni | undefined): NalogIzracun[] {
+  if (!k) return [];
+  if (!p.nalogi) return k.nalogi;
+  const s = new Set(p.nalogi);
+  return k.nalogi.filter((n) => s.has(n.st_naloga));
+}
+
+export const ureNalogov = (nalogi: NalogIzracun[], koda: OddelekKoda) => round2(nalogi.reduce((s, n) => s + n.ure[koda], 0));
+
+/**
+ * Ure, ki jih postavitev porabi: ročne ure ali vsota ur vključenih nalogov iz zadnjega uvoza.
+ * Če krovnega ni v uvozu ali so nalogi izdelani, ostanejo zadnje shranjene ure.
+ */
+export function urePostavitve(p: Postavitev, k: Krovni | undefined, koda: OddelekKoda): number {
+  if (p.rocne_ure || !k) return p.ure;
+  const ure = ureNalogov(nalogiPostavitve(p, k), koda);
+  return ure > 0 ? ure : p.ure;
+}
+
+export type StanjeKrovnega = {
+  /** Nalogi, ki so že v kateri od postavitev. */
+  razporejeni: Set<string>;
+  /** Nalogi, ki še niso v planu. */
+  ostali: NalogIzracun[];
+  /** Nerazporejene ure oddelka. */
+  ostane: number;
+  /** Krovni ima postavitev z ročnimi urami brez izbire nalogov (razporejanje po urah, kot prej). */
+  poUrah: boolean;
+};
+
+/** Kateri nalogi krovnega so že v planu in koliko ur ostane (postavitve istega oddelka). */
+export function stanjeKrovnega(k: Krovni, postavitve: Postavitev[], koda: OddelekKoda): StanjeKrovnega {
+  const svoje = postavitve.filter((p) => p.krovni_dn === k.kljuc);
+  const urne = svoje.filter((p) => !p.nalogi && p.rocne_ure);
+  const celi = svoje.some((p) => !p.nalogi && !p.rocne_ure);
+  const razporejeni = new Set(celi ? k.nalogi.map((n) => n.st_naloga) : svoje.flatMap((p) => p.nalogi ?? []));
+  const ostali = k.nalogi.filter((n) => !razporejeni.has(n.st_naloga));
+  const ureUrnih = urne.reduce((s, p) => s + p.ure, 0);
+  return { razporejeni, ostali, ostane: Math.max(0, round2(ureNalogov(ostali, koda) - ureUrnih)), poUrah: urne.length > 0 };
+}
+
 export const jeDelovniDan = (d: IsoDate) => weekday(d) <= 5;
 
 /**
@@ -230,7 +281,8 @@ export function izvoziPlanXlsx(
     vrstice.map(({ celica, postavitev: p, razpored: r, krovni: k }) => ({
       "Delovno mesto": celica,
       "Krovni DN": p.krovni_dn,
-      "Št. nalogov": k?.nalogi.length ?? "",
+      "Št. nalogov": k ? `${nalogiPostavitve(p, k).length}/${k.nalogi.length}` : "",
+      Nalogi: p.nalogi ? p.nalogi.join(", ") : "vsi",
       Naročnik: k?.narocnik ?? "",
       "Rok izdelave": datum(k?.rok),
       "Plan od": datum(r?.od),
@@ -240,7 +292,7 @@ export function izvoziPlanXlsx(
     })),
     { cellDates: true, dateNF: "d. m. yyyy" },
   );
-  ws["!cols"] = [22, 14, 10, 30, 12, 12, 12, 10, 30].map((wch) => ({ wch }));
+  ws["!cols"] = [22, 14, 10, 30, 30, 12, 12, 12, 10, 30].map((wch) => ({ wch }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Delovni plan");
   XLSX.writeFile(wb, ime);

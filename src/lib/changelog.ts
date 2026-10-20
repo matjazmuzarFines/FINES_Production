@@ -9,6 +9,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "18.01",
+    datum: "20. 10. 2026",
+    spremembe: [
+      "Delovni plan: v postavitvi krovnega naloga (klik na postavitev) lahko z X izključiš posamezne naloge - na diagramu ostane krovni z oznako vključenih nalogov (npr. 2/7), ure se računajo samo iz vključenih nalogov.",
+      "Izključeni nalogi ostanejo v seznamu krovnih (ostane x/y nalogov) - ponovna postavitev istega krovnega zajame samo še nerazporejene naloge. Nalogi, ki so že v planu, so v seznamu označeni s kljukico.",
+      "Ure postavitve se po vsakem uvozu nalogov preračunajo iz vključenih nalogov (izdelano se odšteje); ročni vnos ur ostane kot možnost (Ročno vpisane ure). Excel izvoz plana ima stolpec Nalogi.",
+      "Baza: migracija 017_delovni_plan_nalogi.sql (stolpca nalogi in rocne_ure; obstoječe postavitve ostanejo z ročnimi urami).",
+    ],
+  },
+  {
     verzija: "17.02",
     datum: "19. 10. 2026",
     spremembe: [
