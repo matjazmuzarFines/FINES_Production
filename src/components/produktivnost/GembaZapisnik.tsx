@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, FileDown, LockOpen, Mail, Plus } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, LockOpen, Plus } from "lucide-react";
 import type { GembaPorocilo } from "@/lib/gembaPdf";
 import { addDays, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
 import { IZGUBE, izgubaPoKodi, predlogTeme } from "@/lib/gembaVodic";
@@ -31,6 +31,7 @@ import {
 import { supabaseConfigured } from "@/lib/supabase";
 import { Button, IconButton } from "@/components/ui/Button";
 import { FilterIzbira, FilterPolje, FilterVrstica } from "@/components/ui/Filtri";
+import { Izvoz } from "@/components/ui/Izvoz";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
 import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
@@ -57,43 +58,6 @@ const izGembe = (g: Gemba | null): GembaPolja =>
         kpi_kosi: g.kpi_kosi,
       }
     : PRAZNA_POLJA;
-
-/** Okrogel gumb izvoza; med pripravo se vrti (oranžen = PDF, moder = e-mail v Outlooku). */
-export function IzvozGumb({
-  hint,
-  icon,
-  variant = "primary",
-  disabled,
-  akcija,
-}: {
-  hint: string;
-  icon: typeof FileDown;
-  variant?: "primary" | "sync";
-  disabled?: boolean;
-  akcija: () => Promise<void>;
-}) {
-  const notify = useToast();
-  const [delam, setDelam] = useState(false);
-  return (
-    <IconButton
-      hint={hint}
-      icon={icon}
-      variant={variant}
-      disabled={disabled || delam}
-      delam={delam}
-      onClick={async () => {
-        setDelam(true);
-        try {
-          await akcija();
-        } catch (e) {
-          notify("error", `Ni uspelo: ${(e as Error).message}`, 10000);
-        } finally {
-          setDelam(false);
-        }
-      }}
-    />
-  );
-}
 
 export function GembaZapisnik({ teden }: { teden: IsoDate }) {
   if (!supabaseConfigured) return <ConfigMissing />;
@@ -259,23 +223,28 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
             {obdobjeTedna(teden)} {letoTedna(teden)} · Produktivnost - tedenski sprehod po montaži z vodjo
           </p>
         </div>
-        <FilterPolje label="Izvoz">
-          <div className="flex gap-2">
-            <IzvozGumb
-              hint={spremenjena.length ? "Najprej shrani spremembe zapisnika" : "Prenesi poročilo gembe kot PDF"}
-              icon={FileDown}
-              disabled={!gemba || spremenjena.length > 0}
-              akcija={async () => (await import("@/lib/gembaPdf")).prenesiPdf(porocilo())}
-            />
-            <IzvozGumb
-              hint={spremenjena.length ? "Najprej shrani spremembe zapisnika" : "Pripravi e-mail s PDF poročilom za Outlook"}
-              icon={Mail}
-              variant="sync"
-              disabled={!gemba || spremenjena.length > 0}
-              akcija={async () => (await import("@/lib/gembaPdf")).pripraviEmail(porocilo())}
-            />
-          </div>
-        </FilterPolje>
+        <Izvoz
+          spomin="gemba"
+          formati={[
+            {
+              koda: "pdf",
+              label: "PDF",
+              hint: "Prenesi poročilo gembe kot PDF",
+              disabled: !gemba || spremenjena.length > 0,
+              zakaj: !gemba ? "Najprej shrani zapisnik" : "Najprej shrani spremembe zapisnika",
+              akcija: async () => (await import("@/lib/gembaPdf")).prenesiPdf(porocilo()),
+            },
+            {
+              koda: "eml",
+              label: "E-mail (Outlook)",
+              hint: "Pripravi e-mail s PDF poročilom za Outlook",
+              variant: "sync",
+              disabled: !gemba || spremenjena.length > 0,
+              zakaj: !gemba ? "Najprej shrani zapisnik" : "Najprej shrani spremembe zapisnika",
+              akcija: async () => (await import("@/lib/gembaPdf")).pripraviEmail(porocilo()),
+            },
+          ]}
+        />
         <div className="flex flex-wrap gap-2 self-end">
           <IconButton hint="Prejšnji teden" variant="neutral" icon={ChevronLeft} onClick={() => pojdi(`${KOLEDAR}/${addDays(teden, -7)}`)} />
           <IconButton hint="Naslednji teden" variant="neutral" icon={ChevronRight} onClick={() => pojdi(`${KOLEDAR}/${addDays(teden, 7)}`)} />

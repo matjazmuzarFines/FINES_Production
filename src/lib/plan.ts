@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { addDays, inValidity, weekday, type IsoDate } from "./dates";
+import { addDays, formatDayMonth, inValidity, weekday, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
 import { getSupabase, kosi } from "./supabase";
 import type { NalogIzracun } from "./zasedenost";
@@ -297,3 +297,81 @@ export function izvoziPlanXlsx(
   XLSX.utils.book_append_sheet(wb, ws, "Delovni plan");
   XLSX.writeFile(wb, ime);
 }
+
+// =====================================================================
+// WORKFLOW (PDF / Word) - zaporedje krovnih nalogov po delovnih mestih
+// =====================================================================
+
+export type WorkflowNalog = { st_naloga: string; ident: string; naziv: string | null; kos: number | null };
+
+export type WorkflowKorak = {
+  krovni: string;
+  narocnik: string | null;
+  od: IsoDate;
+  do: IsoDate;
+  ure: number;
+  /** Vseh nalogov krovnega v uvozu; null = krovnega ni v zadnjem uvozu. */
+  vseh: number | null;
+  /** V postavitvi je samo del nalogov krovnega. */
+  delni: boolean;
+  nalogi: WorkflowNalog[];
+  rok: IsoDate | null;
+  poRoku: boolean;
+  brezKapacitete: number;
+  opomba: string | null;
+};
+
+export type WorkflowCelica = { naziv: string; zaposleni: number; koraki: WorkflowKorak[] };
+export type WorkflowPlan = { oddelek: string; od: IsoDate; do: IsoDate; celice: WorkflowCelica[] };
+
+/** Postavitve, ki so v obdobju od-do, po delovnih mestih v vrstnem redu začetka (za PDF / Word workflow). */
+export function pripraviWorkflow(
+  oddelek: string,
+  celice: Celica[],
+  postavitve: Postavitev[],
+  razpored: Map<number, Razpored>,
+  krovniPoKljucu: Map<string, Krovni>,
+  od: IsoDate,
+  doo: IsoDate,
+): WorkflowPlan {
+  return {
+    oddelek,
+    od,
+    do: doo,
+    celice: celice
+      .map((c) => ({
+        naziv: c.naziv,
+        zaposleni: c.privzeto_zaposlenih,
+        koraki: postavitve
+          .filter((p) => p.delovno_mesto_id === c.id)
+          .map((p) => ({ p, r: razpored.get(p.id) }))
+          .filter((x): x is { p: Postavitev; r: Razpored & { od: IsoDate; do: IsoDate } } => !!x.r?.od && !!x.r.do && x.r.od <= doo && x.r.do >= od)
+          .sort((a, b) => a.r.od.localeCompare(b.r.od) || a.r.do.localeCompare(b.r.do))
+          .map(({ p, r }): WorkflowKorak => {
+            const k = krovniPoKljucu.get(p.krovni_dn);
+            const nalogi: WorkflowNalog[] = k
+              ? nalogiPostavitve(p, k).map((n) => ({ st_naloga: n.st_naloga, ident: n.koda_artikla, naziv: n.naziv_artikla, kos: n.preostala }))
+              : (p.nalogi ?? []).map((st) => ({ st_naloga: st, ident: "", naziv: null, kos: null }));
+            return {
+              krovni: p.krovni_dn,
+              narocnik: k?.narocnik ?? null,
+              od: r.od,
+              do: r.do,
+              ure: p.ure,
+              vseh: k ? k.nalogi.length : null,
+              delni: !!k && !!p.nalogi && nalogi.length < k.nalogi.length,
+              nalogi,
+              rok: k?.rok ?? null,
+              poRoku: !!(k?.rok && r.do > k.rok),
+              brezKapacitete: r.nerazporejeno,
+              opomba: p.opomba,
+            };
+          }),
+      }))
+      .filter((c) => c.koraki.length > 0),
+  };
+}
+
+const DAN_KRATKO = ["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"];
+/** "Pon 20. 10." */
+export const danInDatum = (d: IsoDate) => `${DAN_KRATKO[weekday(d) - 1]} ${formatDayMonth(d)}`;

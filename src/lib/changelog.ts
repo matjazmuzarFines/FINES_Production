@@ -9,6 +9,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "19.01",
+    datum: "20. 10. 2026",
+    spremembe: [
+      "Delovni plan: izvoz workflowa v PDF (za tisk in obešanje na celico) - vsako delovno mesto vedno na enem listu (do 3 koraki v vrsti, do 6 na list; več korakov ali nalogov se sorazmerno pomanjša), oštevilčeni koraki (krovni nalog, dan in datum začetka in konca po planu, ure, rok izdelave, naročnik, nalogi s celim nazivom), povezani s puščicami. Cel krovni ima zeleno oznako (VSI NALOGI 4/4), delni oranžno (VKLJUČENI NALOGI 2/6), konec po roku je rdeč.",
+      "Delovni plan: isti workflow tudi v Wordu (.docx) za popravke in dopise. Workflow zajame prikazane tedne.",
+      "Izvoz z izbiro formata: namesto več gumbov za isti izvoz je izbira formata in en gumb Prenesi (Delovni plan: PDF / Word / Excel, Prioritete: Excel / TXT, Auditi in Gemba walk: PDF / e-mail). Zadnji izbran format si brskalnik zapomni.",
+    ],
+  },
+  {
     verzija: "18.01",
     datum: "20. 10. 2026",
     spremembe: [

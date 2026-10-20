@@ -19,11 +19,27 @@ const OZADJE_SLIKE = rgb(0.95, 0.95, 0.96);
 // ---------------------------------------------------------------------------
 // Pomožno
 
-const naloziBajte = async (url: string) => {
+export const naloziBajte = async (url: string) => {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Prenos ni uspel: ${url}`);
   return new Uint8Array(await r.arrayBuffer());
 };
+
+/** Nov PDF s pisavama DejaVu Sans (navadna, krepka) in logotipom (null, če se ne naloži). */
+export async function novDokument(naslov: string) {
+  const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
+  pdf.setTitle(naslov);
+  pdf.setAuthor("FINES d.o.o.");
+  const [navadna, krepka, logo] = await Promise.all([
+    naloziBajte("/fonts/DejaVuSans.ttf").then((b) => pdf.embedFont(b, { subset: true })),
+    naloziBajte("/fonts/DejaVuSans-Bold.ttf").then((b) => pdf.embedFont(b, { subset: true })),
+    naloziBajte("/fines-logo.png")
+      .then((b) => pdf.embedPng(b))
+      .catch(() => null),
+  ]);
+  return { pdf, navadna, krepka, logo };
+}
 
 /** Slika ali skica -> pomanjšan JPG v PDF (bela podlaga). Ob napaki PDF nastane brez slike. */
 export async function vgradiSliko(pdf: PDFDocument, p: Priloga, maxStranica = 1400): Promise<PDFImage | null> {
@@ -90,17 +106,7 @@ export class Pisec {
   }
 
   static async ustvari(naslov: string) {
-    const pdf = await PDFDocument.create();
-    pdf.registerFontkit(fontkit);
-    pdf.setTitle(naslov);
-    pdf.setAuthor("FINES d.o.o.");
-    const [navadna, krepka, logo] = await Promise.all([
-      naloziBajte("/fonts/DejaVuSans.ttf").then((b) => pdf.embedFont(b, { subset: true })),
-      naloziBajte("/fonts/DejaVuSans-Bold.ttf").then((b) => pdf.embedFont(b, { subset: true })),
-      naloziBajte("/fines-logo.png")
-        .then((b) => pdf.embedPng(b))
-        .catch(() => null),
-    ]);
+    const { pdf, navadna, krepka, logo } = await novDokument(naslov);
     return new Pisec(pdf, navadna, krepka, logo);
   }
 

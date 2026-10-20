@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Download,
   Factory,
-  FileText,
   Copy,
   Gauge,
   MessageSquare,
@@ -78,6 +77,7 @@ import {
   type ZasOddelek,
 } from "@/lib/zasedenost";
 import { Button, IconButton } from "@/components/ui/Button";
+import { Izvoz } from "@/components/ui/Izvoz";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
@@ -635,24 +635,26 @@ function PrioriteteInner() {
                   hint="Prikaži tudi polizdelke in rezervne dele"
                 />
               </FilterVrstica>
-              <FilterPolje label="Izvoz" className="ml-auto">
-                <div className="flex gap-2">
-                  {(pogled === "tedni" || (pogled === "nalogi" && poKrovnih)) && (
-                    <Button
-                      hint={pogled === "tedni" ? "Sporočilo za montažo (Teams) kot besedilo" : "Krovni nalogi za montažo kot besedilo"}
-                      variant="primary"
-                      icon={FileText}
-                      disabled={pogled === "tedni" ? prikazane.length === 0 : krovneSkupine.length === 0}
-                      onClick={() => setTxtOdprt(true)}
-                    >
-                      TXT
-                    </Button>
-                  )}
-                  <Button hint={IZVOZ_HINT[pogled]} variant="primary" icon={Download} onClick={izvozi}>
-                    Excel
-                  </Button>
-                </div>
-              </FilterPolje>
+              <Izvoz
+                key={pogled}
+                className="ml-auto"
+                spomin={`prioritete-${pogled}`}
+                formati={[
+                  { koda: "xlsx", label: "Excel (.xlsx)", hint: IZVOZ_HINT[pogled], akcija: izvozi },
+                  ...(pogled === "tedni" || (pogled === "nalogi" && poKrovnih)
+                    ? [
+                        {
+                          koda: "txt",
+                          label: "TXT - sporočilo",
+                          hint: pogled === "tedni" ? "Sporočilo za montažo (Teams) kot besedilo" : "Krovni nalogi za montažo kot besedilo",
+                          disabled: pogled === "tedni" ? prikazane.length === 0 : krovneSkupine.length === 0,
+                          zakaj: "Ni podatkov za izbrane filtre",
+                          akcija: () => setTxtOdprt(true),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             </div>
           </div>
 

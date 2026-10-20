@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Download,
   GripVertical,
   MousePointerClick,
   Plus,
@@ -23,6 +22,7 @@ import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativ
 import { lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import {
   izvoziPlanXlsx,
+  pripraviWorkflow,
   jeDelovniDan,
   naloziCelice,
   naloziPostavitve,
@@ -55,6 +55,7 @@ import {
 } from "@/lib/zasedenost";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Izvoz } from "@/components/ui/Izvoz";
 import { ConfigMissing, Loading } from "@/components/ui/Notice";
 import { SortTh, useRazvrscanje } from "@/components/ui/Tabela";
 import { useToast } from "@/components/ui/Toast";
@@ -430,6 +431,14 @@ function PlanOddelka({
     izvoziPlanXlsx(vrstice, `delovni_plan_${oddelek.naziv.toLowerCase().replace(/\s+/g, "_")}_${zacetek}.xlsx`);
   }
 
+  /** Workflow za PDF / Word: prikazano obdobje, po delovnih mestih. */
+  const workflow = () =>
+    pripraviWorkflow(oddelek.naziv, celice, efektivne, razpored, krovniPoKljucu, dnevi[0], dnevi[dnevi.length - 1]);
+  const vObdobju = efektivne.some((p) => {
+    const r = razpored.get(p.id);
+    return !!r?.od && !!r.do && r.od <= dnevi[dnevi.length - 1] && r.do >= dnevi[0];
+  });
+
   // ---------- povzetek oddelka po dnevih ----------
   const oddelekDan = (d: IsoDate) => {
     let kap = 0;
@@ -475,7 +484,7 @@ function PlanOddelka({
 
         {/* ============ KOLEDAR DELOVNIH MEST ============ */}
         <div className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <IconButton hint="Premakni plan en teden nazaj" variant="neutral" icon={ChevronLeft} onClick={() => onZacetek(addDays(zacetek, -7))} />
             <IconButton hint="Premakni plan en teden naprej" variant="neutral" icon={ChevronRight} onClick={() => onZacetek(addDays(zacetek, 7))} />
             <Button hint="Začni plan s tekočim tednom" variant="neutral" disabled={jeTaTeden} onClick={() => onZacetek(mondayOf(danes))}>
@@ -499,16 +508,42 @@ function PlanOddelka({
                 </button>
               ))}
             </div>
-            <span className="ml-auto text-xs text-ink-500">{formatNum(oddelek.ure_na_dan)} h/dan na osebo</span>
+            <span className="ml-auto self-center text-xs text-ink-500">{formatNum(oddelek.ure_na_dan)} h/dan na osebo</span>
             <IconButton
               hint="Nastavi privzeto število zaposlenih na mestih"
               variant="neutral"
               icon={Settings}
               onClick={() => setNastavitveOdprte(true)}
             />
-            <Button hint="Izvozi delovni plan oddelka v Excel" variant="primary" icon={Download} disabled={lokalne.length === 0} onClick={izvozi}>
-              Izvoz
-            </Button>
+            <Izvoz
+              spomin="delovni-plan"
+              formati={[
+                {
+                  koda: "pdf",
+                  label: "PDF - workflow",
+                  hint: "Workflow po delovnih mestih za prikazane tedne (PDF za tisk)",
+                  disabled: !vObdobju,
+                  zakaj: "V prikazanih tednih ni postavitev",
+                  akcija: async () => (await import("@/lib/planPdf")).prenesiPlanPdf(workflow()),
+                },
+                {
+                  koda: "docx",
+                  label: "Word - workflow",
+                  hint: "Workflow po delovnih mestih za prikazane tedne (Word za urejanje)",
+                  disabled: !vObdobju,
+                  zakaj: "V prikazanih tednih ni postavitev",
+                  akcija: async () => (await import("@/lib/planWord")).prenesiPlanDocx(workflow()),
+                },
+                {
+                  koda: "xlsx",
+                  label: "Excel (.xlsx)",
+                  hint: "Vse postavitve oddelka v Excel",
+                  disabled: lokalne.length === 0,
+                  zakaj: "Plan oddelka je prazen",
+                  akcija: izvozi,
+                },
+              ]}
+            />
           </div>
 
           {izbranKrovni && (

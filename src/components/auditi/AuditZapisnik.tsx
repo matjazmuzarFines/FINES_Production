@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, CheckCircle2, Clock, FileDown, List, Loader2, LockOpen, Mail, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Camera, CheckCircle2, Clock, List, Loader2, LockOpen, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { AuditPorocilo } from "@/lib/auditPdf";
 import { nazivOddelka, oddelekPoKodi, temaPoKodi } from "@/lib/auditSifranti";
 import {
@@ -29,8 +29,8 @@ import type { Priloga } from "@/lib/priloge";
 import { Button } from "@/components/ui/Button";
 import { FilterIzbira, FilterPolje } from "@/components/ui/Filtri";
 import { ErrorText, Loading, WarningText } from "@/components/ui/Notice";
+import { Izvoz, type IzvozFormat } from "@/components/ui/Izvoz";
 import { useToast } from "@/components/ui/Toast";
-import { IzvozGumb } from "@/components/produktivnost/GembaZapisnik";
 import { Priloge } from "@/components/produktivnost/Priloge";
 import { AuditAkcijaOkno, AuditAkcijeTabela, predlogiOdgovornih } from "./AuditAkcije";
 import { AuditVodic } from "./AuditVodic";
@@ -317,6 +317,27 @@ export function AuditZapisnik({ id }: { id: number | null }) {
     odprtePrej,
     priloge,
   });
+  const brezIzvoza = !audit || steviloSprememb > 0;
+  const zakajNe = !audit ? "Najprej shrani audit" : "Najprej shrani spremembe zapisnika";
+  const izvozFormati: IzvozFormat[] = [
+    {
+      koda: "pdf",
+      label: "PDF",
+      hint: "Prenesi poročilo audita kot PDF",
+      disabled: brezIzvoza,
+      zakaj: zakajNe,
+      akcija: async () => (await import("@/lib/auditPdf")).prenesiPdf(porocilo()),
+    },
+    {
+      koda: "eml",
+      label: "E-mail (Outlook)",
+      hint: "Pripravi e-mail s PDF poročilom za Outlook",
+      variant: "sync",
+      disabled: brezIzvoza,
+      zakaj: zakajNe,
+      akcija: async () => (await import("@/lib/auditPdf")).pripraviEmail(porocilo()),
+    },
+  ];
 
   /** Na telefonu je viden samo izbran odsek, od lg naprej vsi. */
   const vidno = (o: Odsek) => (odsek === o ? "" : "max-lg:hidden");
@@ -349,39 +370,9 @@ export function AuditZapisnik({ id }: { id: number | null }) {
             <span className="hidden sm:inline"> · Management - gemba walk vodstva po oddelku</span>
           </p>
         </div>
-        <FilterPolje label="Izvoz" className="max-sm:hidden">
-          <div className="flex gap-2">
-            <IzvozGumb
-              hint={!audit ? "Najprej shrani audit" : steviloSprememb ? "Najprej shrani spremembe zapisnika" : "Prenesi poročilo audita kot PDF"}
-              icon={FileDown}
-              disabled={!audit || steviloSprememb > 0}
-              akcija={async () => (await import("@/lib/auditPdf")).prenesiPdf(porocilo())}
-            />
-            <IzvozGumb
-              hint={!audit ? "Najprej shrani audit" : steviloSprememb ? "Najprej shrani spremembe zapisnika" : "Pripravi e-mail s PDF poročilom za Outlook"}
-              icon={Mail}
-              variant="sync"
-              disabled={!audit || steviloSprememb > 0}
-              akcija={async () => (await import("@/lib/auditPdf")).pripraviEmail(porocilo())}
-            />
-          </div>
-        </FilterPolje>
+        <Izvoz className="max-sm:hidden" spomin="audit" formati={izvozFormati} />
         <div className="flex flex-wrap gap-2 self-end">
-          <div className="flex gap-2 sm:hidden">
-            <IzvozGumb
-              hint={!audit ? "Najprej shrani audit" : steviloSprememb ? "Najprej shrani spremembe zapisnika" : "Prenesi poročilo audita kot PDF"}
-              icon={FileDown}
-              disabled={!audit || steviloSprememb > 0}
-              akcija={async () => (await import("@/lib/auditPdf")).prenesiPdf(porocilo())}
-            />
-            <IzvozGumb
-              hint={!audit ? "Najprej shrani audit" : steviloSprememb ? "Najprej shrani spremembe zapisnika" : "Pripravi e-mail s PDF poročilom za Outlook"}
-              icon={Mail}
-              variant="sync"
-              disabled={!audit || steviloSprememb > 0}
-              akcija={async () => (await import("@/lib/auditPdf")).pripraviEmail(porocilo())}
-            />
-          </div>
+          <Izvoz className="sm:hidden" label={null} kompakten spomin="audit" formati={izvozFormati} />
           <Button hint="Nazaj na seznam auditov" variant="neutral" icon={List} onClick={() => pojdi(SEZNAM)}>
             <span className="hidden sm:inline">Seznam</span>
           </Button>

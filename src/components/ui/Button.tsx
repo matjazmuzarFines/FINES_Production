@@ -12,7 +12,7 @@ export type ButtonVariant =
   | "sync" // modra - funkcija zunaj aplikacije: e-mail, workflow, Power Apps, Teams, sync
   | "neutral"; // bel z obrobo - samo prikaz / navigacija: nazaj, naprej, prekliči, ponastavi filtre
 
-const VARIANTS: Record<ButtonVariant, string> = {
+export const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-fines-500 text-white hover:bg-fines-600 active:bg-fines-700",
   success: "bg-ok-500 text-white hover:bg-ok-600",
   danger: "bg-nok-500 text-white hover:bg-nok-600",
