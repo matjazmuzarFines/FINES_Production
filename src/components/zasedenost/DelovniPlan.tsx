@@ -1180,7 +1180,7 @@ function Povzetek({ label, vrednost, cls = "text-ink-800" }: { label: string; vr
 // MODALI
 // =====================================================================
 
-type NalogStolpec = "nalog" | "artikel" | "kos" | "rok" | "ure";
+type NalogStolpec = "nalog" | "ident" | "artikel" | "kos" | "rok" | "ure";
 
 function UrediPostavitev({
   postavitev,
@@ -1232,6 +1232,7 @@ function UrediPostavitev({
 
   const sort = useRazvrscanje<NalogIzracun, NalogStolpec>({
     nalog: (n) => n.st_naloga,
+    ident: (n) => n.koda_artikla,
     artikel: (n) => n.naziv_artikla ?? n.koda_artikla,
     kos: (n) => n.preostala,
     rok: (n) => n.rok_izdelave,
@@ -1248,7 +1249,7 @@ function UrediPostavitev({
       open
       title={`Krovni ${postavitev.krovni_dn}`}
       onClose={onPreklici}
-      sirina="max-w-2xl"
+      sirina="max-w-3xl"
       noga={
         <div className="flex flex-wrap justify-end gap-2">
           <Button hint="Odstrani krovni nalog iz plana" variant="danger" icon={Trash2} onClick={onOdstrani} className="mr-auto">
@@ -1318,6 +1319,7 @@ function UrediPostavitev({
                 <thead className="fp-thead">
                   <tr>
                     <SortTh sort={sort} kljuc="nalog">Nalog</SortTh>
+                    <SortTh sort={sort} kljuc="ident">Ident</SortTh>
                     <SortTh sort={sort} kljuc="artikel">Artikel</SortTh>
                     <SortTh sort={sort} kljuc="kos" desno>Kos</SortTh>
                     <SortTh sort={sort} kljuc="rok">Rok</SortTh>
@@ -1337,7 +1339,8 @@ function UrediPostavitev({
                         }`}
                       >
                         <td className="px-2 py-1 font-mono">{n.st_naloga}</td>
-                        <td className="max-w-48 truncate px-2 py-1" title={`${n.koda_artikla} · ${n.naziv_artikla ?? ""}`}>
+                        <td className="whitespace-nowrap px-2 py-1 font-mono">{n.koda_artikla}</td>
+                        <td className="max-w-48 truncate px-2 py-1" title={n.naziv_artikla ?? ""}>
                           {n.naziv_artikla ?? n.koda_artikla}
                         </td>
                         <td className="px-2 py-1 text-right tabular-nums">{formatNum(n.preostala)}</td>
