@@ -17,6 +17,14 @@ import {
   Package,
 } from "lucide-react";
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, type IsoDate } from "@/lib/dates";
+import {
+  naloziMaterial,
+  preberiMaterialXlsx,
+  shraniMaterialUvoz,
+  type Material,
+  type MaterialUvoz,
+  type MaterialUvozPregled,
+} from "@/lib/material";
 import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import {
   STATUS,
@@ -147,6 +155,10 @@ type Podatki = {
   odpreme: Odprema[];
   /** Tabele odprem VD300 še niso ustvarjene (SQL 009). */
   niOdpremTabel: boolean;
+  matUvoz: MaterialUvoz | null;
+  material: Map<string, Material>;
+  /** Tabele materiala še niso ustvarjene (SQL 018). */
+  niMaterialTabel: boolean;
 };
 
 async function pridobiPodatke(): Promise<Podatki> {
@@ -173,18 +185,33 @@ async function pridobiPodatke(): Promise<Podatki> {
       return { odpUvoz: null, odpreme: [], niOdpremTabel: true };
     },
   );
+  const mat = await naloziMaterial().then(
+    (x) => ({ matUvoz: x.uvoz, material: x.material, niMaterialTabel: false }),
+    (e: Error) => {
+      if (!niTabel(e.message)) throw e;
+      return { matUvoz: null, material: new Map<string, Material>(), niMaterialTabel: true };
+    },
+  );
   try {
     const [pri, op] = await Promise.all([naloziZadnjiPriUvoz(), naloziOpombe()]);
-    return { ...osnova, ...odp, priUvoz: pri.uvoz, postavke: pri.postavke, opombe: new Map(op.map((o) => [o.kljuc, o])), napakaBaze: null };
+    return {
+      ...osnova,
+      ...odp,
+      ...mat,
+      priUvoz: pri.uvoz,
+      postavke: pri.postavke,
+      opombe: new Map(op.map((o) => [o.kljuc, o])),
+      napakaBaze: null,
+    };
   } catch (e) {
     const m = (e as Error).message;
     if (!niTabel(m)) throw e;
-    return { ...osnova, ...odp, priUvoz: null, postavke: [], opombe: new Map(), napakaBaze: m };
+    return { ...osnova, ...odp, ...mat, priUvoz: null, postavke: [], opombe: new Map(), napakaBaze: m };
   }
 }
 
-/** Napaka, ko tabele prioritet v bazi še niso ustvarjene (SQL 005 ni zagnan). */
-const niTabel = (m: string) => /fp_pri_|does not exist|schema cache/i.test(m);
+/** Napaka, ko tabele v bazi še niso ustvarjene (SQL 005 / 009 / 018 ni zagnan). */
+const niTabel = (m: string) => /fp_pri_|spl_material|does not exist|schema cache/i.test(m);
 
 export function Prioritete() {
   if (!supabaseConfigured) return <ConfigMissing />;
@@ -210,6 +237,9 @@ function PrioriteteInner() {
   const [odpUvoz, setOdpUvoz] = useState<OdpUvoz | null>(null);
   const [odpreme, setOdpreme] = useState<Odprema[]>([]);
   const [niOdpremTabel, setNiOdpremTabel] = useState(false);
+  const [matUvoz, setMatUvoz] = useState<MaterialUvoz | null>(null);
+  const [material, setMaterial] = useState<Map<string, Material>>(new Map());
+  const [niMaterialTabel, setNiMaterialTabel] = useState(false);
 
   // Nastavitve in filtri
   // Stran pokaže Loading, dokler podatki niso naloženi - branje localStorage ob inicializaciji je varno
@@ -246,7 +276,8 @@ function PrioriteteInner() {
   const [vd200Pregled, setVd200Pregled] = useState<(PriUvozPregled & { datoteka: string }) | null>(null);
   const [nalPregled, setNalPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
   const [vd300Pregled, setVd300Pregled] = useState<(OdpUvozPregled & { datoteka: string }) | null>(null);
-  const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | "vd300" | null>(null);
+  const [matPregled, setMatPregled] = useState<(MaterialUvozPregled & { datoteka: string }) | null>(null);
+  const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | "vd300" | "material" | null>(null);
 
   function shraniNastavitve(s: Partial<Shranjeno>) {
     const nove = { tednov, zamikDni, ...s };
@@ -270,6 +301,9 @@ function PrioriteteInner() {
     setOdpUvoz(p.odpUvoz);
     setOdpreme(p.odpreme);
     setNiOdpremTabel(p.niOdpremTabel);
+    setMatUvoz(p.matUvoz);
+    setMaterial(p.material);
+    setNiMaterialTabel(p.niMaterialTabel);
     setNapakaBaze(p.napakaBaze);
     if (p.napakaBaze) return;
     setPriUvoz(p.priUvoz);
@@ -291,8 +325,8 @@ function PrioriteteInner() {
   }, [notify]);
 
   const rezultat = useMemo(
-    () => izracunajPrioritete(postavke, nalogi, { danes, zamikDni, vkljuciNepotrjena, samoIzdelki }, odpreme),
-    [postavke, nalogi, danes, zamikDni, vkljuciNepotrjena, samoIzdelki, odpreme],
+    () => izracunajPrioritete(postavke, nalogi, { danes, zamikDni, vkljuciNepotrjena, samoIzdelki }, odpreme, material),
+    [postavke, nalogi, danes, zamikDni, vkljuciNepotrjena, samoIzdelki, odpreme, material],
   );
 
   // ---- obseg tednov
@@ -363,6 +397,14 @@ function PrioriteteInner() {
     }
   }
 
+  async function izberiMaterial(f: File) {
+    try {
+      setMatPregled({ ...(await preberiMaterialXlsx(f)), datoteka: f.name });
+    } catch (e) {
+      notify("error", (e as Error).message, 10000);
+    }
+  }
+
   async function izberiNaloge(f: File) {
     try {
       setNalPregled({ ...(await preberiNalogeXlsx(f)), datoteka: f.name });
@@ -371,10 +413,14 @@ function PrioriteteInner() {
     }
   }
 
-  async function potrdi(tip: "vd200" | "nalogi" | "vd300") {
+  async function potrdi(tip: "vd200" | "nalogi" | "vd300" | "material") {
     setUvazam(tip);
     try {
-      if (tip === "vd200" && vd200Pregled) {
+      if (tip === "material" && matPregled) {
+        await shraniMaterialUvoz(matPregled.datoteka, matPregled.material);
+        notify("success", `Uvoženih artiklov materiala: ${matPregled.material.length}.`);
+        setMatPregled(null);
+      } else if (tip === "vd200" && vd200Pregled) {
         await shraniPriUvoz(vd200Pregled.datoteka, vd200Pregled.postavke);
         notify("success", `Uvoženih postavk naročil: ${vd200Pregled.postavke.length}.`);
         setVd200Pregled(null);
@@ -416,6 +462,13 @@ function PrioriteteInner() {
   // Opozorilo: nalogi so starejši od izvoza naročil
   const starostNalogov =
     nalUvoz && priUvoz ? (new Date(priUvoz.created_at).getTime() - new Date(nalUvoz.created_at).getTime()) / 86400000 : 0;
+  // Material in naročila morata biti izvožena približno sočasno, sicer se zaloga in naročila ne ujemata
+  const razlikaMaterial =
+    matUvoz && priUvoz ? Math.abs(new Date(priUvoz.created_at).getTime() - new Date(matUvoz.created_at).getTime()) / 86400000 : 0;
+  const brezMateriala = matUvoz ? rezultat.artikli.filter((a) => a.virZaloge === "vd200") : [];
+  // Odpreme morajo biti izvožene istočasno z naročili ali za njimi - sicer danes zaključene odpreme manjkajo
+  const odpremeStarejse =
+    odpUvoz && priUvoz ? (new Date(priUvoz.created_at).getTime() - new Date(odpUvoz.created_at).getTime()) / 3600000 : 0;
 
   const prikazaniNalogi = rezultat.nalogi.filter(
     (n) =>
@@ -457,10 +510,21 @@ function PrioriteteInner() {
         <div className="mr-auto">
           <h2 className="text-xl font-bold text-ink-900">Prioritete odprem</h2>
           <p className="text-sm text-ink-500">
-            Potrjena naročila (VD200) · zaloga in delovni nalogi razdeljeni po datumu odpreme
+            Potrjena naročila (VD200) · zaloga iz izpisa materiala · zaloga in delovni nalogi razdeljeni po datumu odpreme
           </p>
         </div>
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="sm:w-72">
+            <UvozDropzone
+              naslov="Material (.xlsx)"
+              hint={niMaterialTabel ? "Najprej zaženi SQL 018 (tabela materiala)" : "Povleci sem izpis materiala (zaloge) ali klikni"}
+              enota="artiklov"
+              uvoz={matUvoz ? { ...matUvoz, stevilo: matUvoz.st_postavk } : null}
+              nalagam={uvazam === "material"}
+              onemogoceno={niMaterialTabel || uvazam !== null}
+              onFile={izberiMaterial}
+            />
+          </div>
           <div className="sm:w-72">
             <UvozDropzone
               naslov="Izvoz VD200 (.xlsx)"
@@ -475,7 +539,7 @@ function PrioriteteInner() {
           <div className="sm:w-72">
             <UvozDropzone
               naslov="Odpreme VD300 (.xlsx)"
-              hint={niOdpremTabel ? "Najprej zaženi SQL 009 (tabele odprem)" : "Povleci sem izvoz odprem VD300 (dobavnice) ali klikni"}
+              hint={niOdpremTabel ? "Najprej zaženi SQL 009 (tabele odprem)" : "Povleci sem celoten izvoz odprem VD300 ali klikni"}
               enota="postavk"
               uvoz={odpUvoz ? { ...odpUvoz, stevilo: odpUvoz.st_postavk } : null}
               nalagam={uvazam === "vd300"}
@@ -508,6 +572,50 @@ function PrioriteteInner() {
         </div>
       ) : (
         <>
+          {niMaterialTabel ? (
+            <WarningText>
+              Tabela materiala v bazi še ne obstaja. V Supabase SQL editorju zaženi{" "}
+              <code className="rounded bg-white px-1">supabase/migrations/018_spl_material.sql</code> in osveži stran. Do
+              takrat sta zaloga in DN iz izvoza VD200 (prosta zaloga VD200 se ne uporablja).
+            </WarningText>
+          ) : !matUvoz ? (
+            <WarningText>
+              Ni uvoženega izpisa materiala - zaloga in DN sta iz izvoza VD200, rezervacije za delovne naloge niso
+              upoštevane. Uvozi material zgoraj desno.
+            </WarningText>
+          ) : (
+            <>
+              {razlikaMaterial > 1 && (
+                <WarningText>
+                  Material in naročila VD200 sta uvožena {Math.round(razlikaMaterial)} dni narazen - zaloga in naročila
+                  morda nista usklajena. Uvozi oba izvoza istočasno.
+                </WarningText>
+              )}
+              {brezMateriala.length > 0 && (
+                <WarningText>
+                  {brezMateriala.length} artiklov ni v izpisu materiala - zaloga in DN sta iz VD200:{" "}
+                  {brezMateriala
+                    .slice(0, 8)
+                    .map((a) => a.ident)
+                    .join(", ")}
+                  {brezMateriala.length > 8 ? " ..." : ""}
+                </WarningText>
+              )}
+            </>
+          )}
+          {!niOdpremTabel && !odpUvoz && (
+            <WarningText>
+              Ni uvoženih odprem VD300 - oprema, ki je že na dobavnici, se šteje kot potreba (lahko kaže Manjka). Uvozi
+              celoten izvoz odprem zgoraj desno.
+            </WarningText>
+          )}
+          {odpremeStarejse > 1 && (
+            <WarningText>
+              Odpreme VD300 so uvožene {odpremeStarejse >= 48 ? `${Math.round(odpremeStarejse / 24)} dni` : `${Math.round(odpremeStarejse)} h`}{" "}
+              pred naročili - odpreme, zaključene vmes, niso upoštevane (lahko kažejo Manjka). Uvozi odpreme za
+              naročili.
+            </WarningText>
+          )}
           {!nalUvoz && (
             <WarningText>
               Ni uvoženih delovnih nalogov - planirana količina DN je brez rokov (status Nedorečeno). Uvozi naloge
@@ -696,9 +804,11 @@ function PrioriteteInner() {
           )}
 
           <p className="text-xs text-ink-500">
-            Pravila: zaloga matičnega skladišča in nalogi (po roku) se dodelijo naročilom po datumu odpreme. Odprte
-            količine nalogov so usklajene s planirano količino DN iz izvoza. Če je prosta zaloga v ERP negativna,
-            zadnja naročila ostanejo &quot;Manjka&quot;. Rezerva = koliko dni pred odpremo mora biti nalog končan.
+            Pravila: zaloga, planirana količina DN in rezervacije so iz izpisa materiala. Količina, razpisana kot
+            material na delovne naloge (npr. peč za predelavo), se najprej odšteje od zaloge. Preostala zaloga
+            matičnega skladišča in nalogi (po roku) se dodelijo naročilom po datumu odpreme; odprte količine nalogov so
+            usklajene s planirano količino DN. Kar ni pokrito, je &quot;Manjka&quot;. Prosta zaloga = zaloga + DN −
+            rezervirano za DN − naročila. Rezerva = koliko dni pred odpremo mora biti nalog končan.
           </p>
         </>
       )}
@@ -740,16 +850,36 @@ function PrioriteteInner() {
         {vd300Pregled && (
           <UvozPotrditev
             vrstice={[
-              ["Postavk odprem", vd300Pregled.odpreme.length],
+              ["Vrstic v datoteki", vd300Pregled.vseh],
+              ["Izločenih (zaključena naročila, starejša od 30 dni)", vd300Pregled.izlocenih],
+              ["Postavk odprem za uvoz", vd300Pregled.odpreme.length],
               ["Odpremnih dokumentov", new Set(vd300Pregled.odpreme.map((o) => o.stevilka)).size],
               ["Postavk z dobavnico (vzeto z zaloge)", vd300Pregled.odpreme.filter((o) => o.dokument).length],
-              ["Vezanih na naročilo VD200", vd300Pregled.odpreme.filter((o) => o.dokument && o.narocilo).length],
+              ["Zaključenih odprem na še odprtih naročilih", vd300Pregled.odpreme.filter((o) => o.dokument && /zaklju/i.test(o.status ?? "") && !/zaklju/i.test(o.narocilo_status ?? "")).length],
             ]}
-            opomba="Postavke naročil VD200 z dobavnico dobijo status V odpremi in ne porabijo zaloge matičnega skladišča."
+            opomba="Uvozi celoten izvoz odprem (tudi zaključene, npr. od začetka leta) - shranijo se samo odpreme odprtih naročil in zadnjih 30 dni. Postavke naročil VD200 z dobavnico dobijo status V odpremi in ne porabijo zaloge, tudi če je odprema danes zaključena in se naročilo zapre šele ponoči."
             opozorila={vd300Pregled.opozorila}
             uvazam={uvazam !== null}
             onPreklici={() => setVd300Pregled(null)}
             onPotrdi={() => potrdi("vd300")}
+          />
+        )}
+      </Modal>
+      <Modal open={!!matPregled} title={`Uvoz materiala: ${matPregled?.datoteka ?? ""}`} onClose={() => !uvazam && setMatPregled(null)}>
+        {matPregled && (
+          <UvozPotrditev
+            vrstice={[
+              ["Artiklov", matPregled.material.length],
+              ["Izdelkov (100/099/110)", matPregled.material.filter((m) => /^(100|099|110)-/.test(m.ident)).length],
+              ["Z zalogo (matično)", matPregled.material.filter((m) => m.zaloga > 0).length],
+              ["Rezervirano kot material na DN", matPregled.material.filter((m) => m.planirano_proizvodnja > 0).length],
+              ["S planirano količino DN", matPregled.material.filter((m) => m.planirano_dn > 0).length],
+            ]}
+            opomba="Material se shrani v splošno tabelo materiala (velja za vse strani). Zaloga, DN in rezervacije za delovne naloge se v Prioritetah računajo iz tega izpisa."
+            opozorila={matPregled.opozorila}
+            uvazam={uvazam !== null}
+            onPreklici={() => setMatPregled(null)}
+            onPotrdi={() => potrdi("material")}
           />
         )}
       </Modal>
@@ -1016,12 +1146,8 @@ function Pokritje({ deli }: { deli: Del[] }) {
           );
         if (d.vir === "manjka")
           return (
-            <Cip
-              key={i}
-              cls="bg-nok-50 text-nok-600"
-              hint={d.erp ? "Prosta zaloga v ERP je negativna - rezervirano drugje" : "Ni zaloge in ni naloga"}
-            >
-              {k} manjka{d.erp ? " (ERP)" : ""}
+            <Cip key={i} cls="bg-nok-50 text-nok-600" hint="Ni proste zaloge in ni naloga">
+              {k} manjka
             </Cip>
           );
         return (
@@ -1266,6 +1392,7 @@ type ArtikelKljuc =
   | "status"
   | "artikel"
   | "zaloga"
+  | "rezervirano"
   | "dn"
   | "prosta"
   | "naroceno"
@@ -1282,6 +1409,7 @@ const ARTIKEL_VREDNOSTI: Record<ArtikelKljuc, (a: ArtikelPregled) => string | nu
   status: (a) => RANG_STATUSA[a.status],
   artikel: (a) => a.ident,
   zaloga: (a) => a.zaloga,
+  rezervirano: (a) => a.rezervirano_dn,
   dn: (a) => a.planirano_dn,
   prosta: (a) => a.prosta_zaloga,
   naroceno: (a) => a.naroceno,
@@ -1307,15 +1435,18 @@ function PoArtiklih({
   return (
     <div className="fp-card p-3 sm:p-4">
       <TabelaOkvir>
-        <table className="w-full min-w-[1100px] text-sm">
+        <table className="w-full min-w-[1180px] text-sm">
           <thead className="fp-thead">
             <tr>
               <th className="w-8 px-2 py-2" />
               <SortTh sort={sort} kljuc="status">Status</SortTh>
               <SortTh sort={sort} kljuc="artikel">Artikel</SortTh>
               <SortTh sort={sort} kljuc="zaloga" desno hint="Zaloga matičnega skladišča (ostala skladišča)">Zaloga</SortTh>
+              <SortTh sort={sort} kljuc="rezervirano" desno hint="Razpisano kot material na delovne naloge">
+                Za DN
+              </SortTh>
               <SortTh sort={sort} kljuc="dn" desno hint="Planirana količina na delovnih nalogih">DN</SortTh>
-              <SortTh sort={sort} kljuc="prosta" desno hint="Prosta zaloga v ERP">Prosta</SortTh>
+              <SortTh sort={sort} kljuc="prosta" desno hint="Zaloga + DN − za DN − naročila">Prosta</SortTh>
               <SortTh sort={sort} kljuc="naroceno" desno>Naročeno</SortTh>
               <SortTh sort={sort} kljuc="izZaloge" desno>Iz zaloge</SortTh>
               <SortTh sort={sort} kljuc="vOdpremi" desno hint="Kosi z dobavnico v VD300 (niso več na zalogi)">V odpremi</SortTh>
@@ -1343,16 +1474,34 @@ function PoArtiklih({
                     </td>
                     <td className="px-2 py-1.5">
                       <span className="font-mono text-xs text-ink-500">{a.ident}</span> {a.opis}
+                      {a.virZaloge === "vd200" && (
+                        <span title="Artikla ni v izpisu materiala - zaloga in DN iz izvoza VD200">
+                          <Oznaka cls="bg-warn-400 text-ink-900">VD200</Oznaka>
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {formatNum(a.zaloga)}
                       {a.zaloga_ostalo > 0 && <span className="text-ink-400"> ({formatNum(a.zaloga_ostalo)})</span>}
                     </td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-warn-700">
+                      {a.rezervirano_dn ? formatNum(a.rezervirano_dn) : ""}
+                    </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{formatNum(a.planirano_dn)}</td>
-                    <td className={`px-2 py-1.5 text-right tabular-nums ${a.prosta_zaloga < 0 ? "font-bold text-nok-600" : ""}`}>
+                    <td
+                      className={`px-2 py-1.5 text-right tabular-nums ${a.prosta_zaloga < 0 ? "font-bold text-nok-600" : ""}`}
+                      title={a.prosta_erp !== null ? `Prosta zaloga v ERP (z nabavo): ${formatNum(a.prosta_erp)}` : undefined}
+                    >
                       {formatNum(a.prosta_zaloga)}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{formatNum(a.naroceno)}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums">
+                      {razlikaNarocil(a) && (
+                        <span title={`Naročeno v ERP ${formatNum(a.naroceno_erp!)}, v izvozu VD200 ${formatNum(a.naroceno_vd200)} - izvoza nista usklajena`}>
+                          <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-warn-500" aria-hidden />
+                        </span>
+                      )}
+                      {formatNum(a.naroceno)}
+                    </td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-ok-600">{a.izZaloge ? formatNum(a.izZaloge) : ""}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-ok-600">{a.vOdpremi ? formatNum(a.vOdpremi) : ""}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-sync-600">{a.izProizvodnje ? formatNum(a.izProizvodnje) : ""}</td>
@@ -1365,7 +1514,7 @@ function PoArtiklih({
                   {jeOdprt && (
                     <tr className="border-b border-ink-100 bg-ink-50">
                       <td />
-                      <td colSpan={12} className="px-2 py-2">
+                      <td colSpan={13} className="px-2 py-2">
                         <ArtikelPodrobno a={a} postavke={postavke.filter((p) => p.ident === a.ident)} />
                       </td>
                     </tr>
@@ -1375,7 +1524,7 @@ function PoArtiklih({
             })}
             {vrstice.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-2 py-8 text-center text-ink-500">
+                <td colSpan={14} className="px-2 py-8 text-center text-ink-500">
                   Ni artiklov za izbrane filtre.
                 </td>
               </tr>
@@ -1387,13 +1536,30 @@ function PoArtiklih({
   );
 }
 
+/** ERP (material) in izvoz VD200 imata različno količino potrjenih naročil. */
+const razlikaNarocil = (a: ArtikelPregled) => a.naroceno_erp !== null && Math.abs(a.naroceno_erp - a.naroceno_vd200) > 0.001;
+
 function ArtikelPodrobno({ a, postavke }: { a: ArtikelPregled; postavke: PostavkaIzracun[] }) {
   return (
     <div className="flex flex-col gap-2 text-xs">
-      {a.rezerviranoDrugje > 0 && (
+      <p className="text-ink-600">
+        {a.virZaloge === "material" ? "Izpis materiala" : "Izvoz VD200 (artikla ni v izpisu materiala)"}: zaloga{" "}
+        {formatNum(a.zaloga)} + DN {formatNum(a.planirano_dn)}
+        {a.rezervirano_dn > 0 && <> − za DN {formatNum(a.rezervirano_dn)}</>} − naročila {formatNum(a.naroceno - a.vOdpremi)}
+        {a.vOdpremi > 0 && <> (brez {formatNum(a.vOdpremi)} v odpremi)</>} = prosta{" "}
+        <strong className={a.prosta_zaloga < 0 ? "text-nok-600" : ""}>{formatNum(a.prosta_zaloga)}</strong>
+        {a.prosta_erp !== null && <> · prosta zaloga v ERP (z nabavo) {formatNum(a.prosta_erp)}</>}
+      </p>
+      {a.rezervirano_dn > 0 && (
         <p className="text-warn-700">
-          ERP rezervira {formatNum(a.rezerviranoDrugje)} kos izven teh naročil (drugi dokumenti ali vgradnja v druge
-          naloge).
+          {formatNum(a.rezervirano_dn)} kos je razpisanih kot material na delovne naloge (npr. predelava) - ni na
+          voljo za naročila.
+        </p>
+      )}
+      {razlikaNarocil(a) && (
+        <p className="text-warn-700">
+          Naročeno v ERP {formatNum(a.naroceno_erp!)}, v izvozu VD200 {formatNum(a.naroceno_vd200)} - izvoza nista
+          usklajena (uvozi material in naročila istočasno).
         </p>
       )}
       <table>

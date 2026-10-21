@@ -9,6 +9,27 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "20.02",
+    datum: "21. 10. 2026",
+    spremembe: [
+      "Prioritete - odpreme VD300: uvozi se celoten izvoz odprem (tudi zaključene, npr. filter od začetka leta). Aplikacija shrani samo odpreme še odprtih naročil in zadnjih 30 dni.",
+      "Odprema, zaključena danes, ko se naročilo zapre šele ponoči, ne kaže več Manjka - postavka je V odpremi in ne porabi zaloge drugih naročil (npr. 100-325.1000 na naročilu 202600790).",
+      "Opozorilo, če so odpreme uvožene pred naročili ali niso uvožene.",
+    ],
+  },
+  {
+    verzija: "20.01",
+    datum: "21. 10. 2026",
+    spremembe: [
+      "Prioritete: nov uvoz Material (.xlsx) - celoten izpis materiala iz ERP se shrani v splošno tabelo spl_material (en zapis na ident, vsak uvoz jo posodobi) in velja za vse strani.",
+      "Zaloga, planirana količina DN in rezervacije se računajo iz izpisa materiala, ne več iz VD200 (prosta zaloga v VD200 je v ERP napačna - npr. kitkompleti so kazali -47). Za idente, ki jih v materialu ni, ostane zaloga iz VD200 (oznaka VD200).",
+      "Prosto zalogo računa aplikacija sama: zaloga + DN − razpisano kot material na DN − naročila. Pravilo »prosta zaloga ERP < 0 = Manjka« je odstranjeno.",
+      "Nova rezervacija: količina, razpisana kot material na delovne naloge (npr. peč z zaloge za predelavo), se najprej odšteje od zaloge; če zaloga ne zadošča, zmanjša prihod iz naloga. Po artiklih nov stolpec Za DN, pri nalogu Material za DN.",
+      "Po artiklih: v podrobnostih izračun proste zaloge in prosta zaloga ERP; opozorilo, ko se naročeno v ERP in v VD200 razlikuje ali sta izvoza uvožena več kot dan narazen.",
+      "Sync s serverja: dodana datoteka material.xlsx. Baza: migracija 018_spl_material.sql.",
+    ],
+  },
+  {
     verzija: "19.01",
     datum: "20. 10. 2026",
     spremembe: [

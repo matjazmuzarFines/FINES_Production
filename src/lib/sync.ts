@@ -2,6 +2,7 @@
 // Strežnik (/api/sync) prebere datoteke iz mape na serverju, brskalnik jih uvozi z istimi funkcijami
 // kot ročni uvoz (povleci in spusti). Datoteka je sinhronizirana, če je zadnji uvoz v bazi
 // narejen po času izvoza datoteke (lastnost Excela ModifiedDate).
+import { preberiMaterialXlsx, shraniMaterialUvoz } from "./material";
 import { getSupabase, supabaseConfigured } from "./supabase";
 import { SYNC_DATOTEKE, type SyncDatotekaKljuc, type SyncInfo } from "./syncDatoteke";
 import { preberiVd200Xlsx, preberiVd300Xlsx, shraniOdpUvoz, shraniPriUvoz } from "./prioritete";
@@ -21,6 +22,7 @@ const UVOZI: Record<SyncDatotekaKljuc, string> = {
   nalogi: "fp_zas_uvozi",
   narocila: "fp_pri_uvozi",
   odpreme: "fp_pri_odp_uvozi",
+  material: "spl_material_uvozi",
 };
 
 /** Uvoz datoteke v bazo (isto kot ročni uvoz) - vrne opis rezultata. */
@@ -39,6 +41,11 @@ const UVOZ: Record<SyncDatotekaKljuc, (f: File) => Promise<string>> = {
     const { odpreme, opozorila } = await preberiVd300Xlsx(f);
     await shraniOdpUvoz(f.name, odpreme);
     return `${odpreme.length} postavk${opozorila.length ? `, ${opozorila.length} opozoril` : ""}`;
+  },
+  material: async (f) => {
+    const { material, opozorila } = await preberiMaterialXlsx(f);
+    await shraniMaterialUvoz(f.name, material);
+    return `${material.length} artiklov${opozorila.length ? `, ${opozorila.length} opozoril` : ""}`;
   },
 };
 

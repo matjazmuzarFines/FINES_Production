@@ -64,6 +64,8 @@ data/                          izvoz Power Appa + CSV (referenca)
 | `fp_zas_nalogi` | nalogi posameznega uvoza |
 | `fp_zas_tedni` | delovni dnevi po tednih (prazniki) |
 | `fp_zas_kapacitete` | število zaposlenih po oddelku in tednu |
+| `spl_material_uvozi` | uvozi izpisa materiala (aktiven je zadnji) |
+| `spl_material` | material po identu (zaloga, DN, rezervacije za DN, naročeno) - vir zaloge za vse projekte |
 
 Pravila: podatkov ne brišemo (`visible = false`), DELETE politike v bazi ni. Slike v Storage se ob zamenjavi brišejo.
 `izpolnjeno`, `ima_odstopanje`, `cas_zakljucka` in odstopanja izračuna baza (triggerji), zato je logika na enem mestu.
@@ -83,6 +85,7 @@ Pravila: podatkov ne brišemo (`visible = false`), DELETE politike v bazi ni. Sl
    nato `supabase/migrations/009_prioritete_odpreme_vd300.sql` → **Run** (uvoz odprem VD300 za Prioritete).
    nato `supabase/migrations/010_zasedenost_7h.sql` → **Run** (zasedenost: 7 h/dan na osebo namesto 6,5 h).
    nato `supabase/migrations/017_delovni_plan_nalogi.sql` → **Run** (delovni plan: izbrani nalogi krovnega naloga).
+   nato `supabase/migrations/018_spl_material.sql` → **Run** (splošna tabela materiala - vir zaloge za Prioritete).
 6. **Prijava:** Authentication → Users → **Add user** (Auto Confirm) za uporabnika aplikacije;
    Authentication → Sign In / Providers → izklopi **Allow new users to sign up**.
    Ko je aplikacija s prijavo objavljena in deluje, zaženi `supabase/migrations/006_prijava.sql`

@@ -3,13 +3,18 @@ import { addDays, isoWeek, mondayOf, parseAnyDate, toIso, type IsoDate } from ".
 import { ODDELKI_NORMATIVA, prenesiDatoteko, type Normativ, type OddelekKoda } from "./normativi";
 import { parseNum } from "./stevila";
 import { fetchAll, getSupabase, kosi } from "./supabase";
+import type { Material } from "./material";
 import type { Nalog } from "./zasedenost";
 
 // =====================================================================
 // TIPI
 // =====================================================================
 
-/** Postavka naročila iz izvoza VD200. Zaloga / DN so podatki artikla (enaki v vseh vrsticah istega identa). */
+/**
+ * Postavka naročila iz izvoza VD200. Zaloga / DN so podatki artikla (enaki v vseh vrsticah istega identa).
+ * Pri izračunu se zaloga / DN / prosta zaloga nadomestijo s podatki iz materiala (spl_material);
+ * vrednosti VD200 se uporabijo samo za idente, ki jih v izpisu materiala ni.
+ */
 export type Postavka = {
   kljuc: string;
   stevilka: string;
@@ -39,7 +44,7 @@ export type Opomba = { kljuc: string; opomba: string | null; pregledano: boolean
 
 /**
  * Status postavke (od najslabšega):
- * MANJKA      - zaloga + delovni nalogi ne pokrijejo količine (ali je prosta zaloga v ERP negativna)
+ * MANJKA      - prosta zaloga (brez rezervacij za DN) + delovni nalogi ne pokrijejo količine
  * ZAMUJA      - pokrito z nalogom, ki ima rok izdelave po datumu odpreme
  * PREGLEJ     - pokrito s planirano količino DN brez znanega naloga, s predvidenim nalogom ali brez datuma
  * V_DELU      - pokrito z nalogom, ki bo končan pravočasno
@@ -121,7 +126,7 @@ export type Del =
   | { vir: "odprema"; kolicina: number; dokument: string } // dobavnica v VD300 - ni več na zalogi
   | { vir: "nalog"; kolicina: number; nalog: string; krovni: string | null; rok: IsoDate | null; predviden: boolean; drugKupec: string | null }
   | { vir: "dn"; kolicina: number } // planirana količina DN, za katero ni naloga v uvozu nalogov
-  | { vir: "manjka"; kolicina: number; erp: boolean }; // erp = manjka zaradi negativne proste zaloge v ERP
+  | { vir: "manjka"; kolicina: number };
 
 export type PostavkaIzracun = Postavka & {
   status: Status;
@@ -149,6 +154,8 @@ export type NalogPrioriteta = {
   preostala: number; // upoštevana odprta količina (po uskladitvi s planirano količino DN)
   dodelitve: NalogDodelitev[];
   prodano: number;
+  /** Del naloga, ki pokrije rezervacijo artikla kot material na drugih DN (ko zaloga ne zadošča). */
+  rezervirano: number;
   prosto: number;
   prvaPotreba: IsoDate | null; // najzgodnejši datum odpreme, ki čaka na ta nalog
   zamuja: boolean;
@@ -160,17 +167,27 @@ export type ArtikelPregled = {
   ident: string;
   opis: string | null;
   grupa: string;
+  /** Od kod so zaloga in DN: izpis materiala ali (rezervno) izvoz VD200. */
+  virZaloge: "material" | "vd200";
   zaloga: number;
   zaloga_ostalo: number;
   planirano_dn: number;
+  /** Razpisano kot material na delovne naloge (npr. predelava) - ni na voljo za naročila. */
+  rezervirano_dn: number;
+  /** Lasten izračun: zaloga + DN - rezervirano za DN - naročila (brez dela v odpremi). */
   prosta_zaloga: number;
+  /** Prosta zaloga iz izpisa materiala (ERP, vključuje nabavo); null = ni v materialu. */
+  prosta_erp: number | null;
+  /** Naročeno v ERP (potrjena naročila); null = ni v materialu. */
+  naroceno_erp: number | null;
+  /** Potrjene postavke VD200 (za primerjavo z naroceno_erp). */
+  naroceno_vd200: number;
   naroceno: number;
   izZaloge: number;
   /** Kosi z dobavnico v VD300 (niso več na zalogi). */
   vOdpremi: number;
   izProizvodnje: number;
   manjka: number;
-  rezerviranoDrugje: number; // del, ki ga ERP rezervira izven postavk tega izvoza
   zalogaDo: IsoDate | null; // zadnji datum odpreme, ki ga še v celoti pokrije zaloga
   naslednjaIzProizvodnje: IsoDate | null; // kdaj potrebujem prvi kos iz proizvodnje
   nalogi: NalogPrioriteta[];
@@ -363,7 +380,31 @@ export type Odprema = {
   dokument: string | null;
 };
 export type OdpUvoz = { id: number; datoteka: string; st_postavk: number; created_at: string };
-export type OdpUvozPregled = { odpreme: Odprema[]; opozorila: string[] };
+export type OdpUvozPregled = {
+  odpreme: Odprema[];
+  opozorila: string[];
+  /** Vrstic v datoteki (pred izločanjem). */
+  vseh: number;
+  /** Izločene vrstice: zaključena / stornirana naročila, starejša od ODPREME_DNI, stornirane odpreme. */
+  izlocenih: number;
+};
+
+/** Odpreme zaključenih naročil iz zadnjih dni se obdržijo, če je VD200 izvožen pred nočnim zapiranjem naročil. */
+const ODPREME_DNI = 30;
+
+/**
+ * ERP ne more filtrirati izvoza VD300 po statusu naročila, zato je v datoteki tudi vsa zgodovina.
+ * Obdržijo se odpreme, ki so lahko vezane na odprto postavko VD200:
+ * - naročilo še ni zaključeno ali stornirano (vključno z danes zaključenimi odpremami - naročilo se zapre ponoči),
+ * - ali je datum odpreme v zadnjih ODPREME_DNI dneh (če je VD200 izvožen pred nočnim zapiranjem).
+ * Količina v VD200 je vedno celotna količina naročila, zato se štejejo vse dobavnice naročila.
+ */
+function jeRelevantnaOdprema(o: Odprema, meja: IsoDate): boolean {
+  if (!o.narocilo || /storn/i.test(o.status ?? "")) return false;
+  const statusNar = (o.narocilo_status ?? "").toLowerCase();
+  const narociloOdprto = !/zaklju|storn|ni več aktualno|realizirano/.test(statusNar);
+  return narociloOdprto || (!!o.datum_odpreme && o.datum_odpreme >= meja);
+}
 
 const STOLPCI_VD300: Record<string, keyof Odprema> = {
   številka: "stevilka",
@@ -394,14 +435,17 @@ export async function preberiVd300Xlsx(file: File): Promise<OdpUvozPregled> {
     .map(([ime, polje]) => [glava.indexOf(ime), polje] as const)
     .filter(([i]) => i >= 0);
 
+  const meja = addDays(toIso(new Date()), -ODPREME_DNI);
   const odpreme: Odprema[] = [];
+  let vseh = 0;
   for (const r of rows.slice(glavaIdx + 1)) {
     const v: Partial<Record<keyof Odprema, unknown>> = {};
     for (const [i, polje] of indeksi) v[polje] = r[i];
     const stevilka = txt(v.stevilka);
     const ident = txt(v.ident);
     if (!stevilka || !ident) continue;
-    odpreme.push({
+    vseh++;
+    const o: Odprema = {
       stevilka,
       zap: parseNum(v.zap),
       narocilo: txt(v.narocilo),
@@ -413,15 +457,16 @@ export async function preberiVd300Xlsx(file: File): Promise<OdpUvozPregled> {
       opis: txt(v.opis),
       kolicina: parseNum(v.kolicina) ?? 0,
       dokument: txt(v.dokument),
-    });
+    };
+    if (jeRelevantnaOdprema(o, meja)) odpreme.push(o);
   }
-  if (odpreme.length === 0) throw new Error("V datoteki ni najdenih postavk odprem.");
+  if (vseh === 0) throw new Error("V datoteki ni najdenih postavk odprem.");
 
   const opozorila: string[] = [];
   const brezDobavnice = odpreme.filter((o) => !o.dokument && /pripravljena|priprava/i.test(o.status ?? ""));
   for (const o of brezDobavnice)
     opozorila.push(`Odprema ${o.stevilka} (${o.status}): ${o.ident} nima dobavnice - šteje se še na zalogi.`);
-  return { odpreme, opozorila };
+  return { odpreme, opozorila, vseh, izlocenih: vseh - odpreme.length };
 }
 
 /** Shrani nov uvoz odprem. Ko so vse postavke vpisane, ga aktivira (prejšnji postanejo neaktivni). */
@@ -543,6 +588,8 @@ type Vir = {
   upostevano: number; // upoštevana odprta količina naloga
   predviden: boolean;
   dodelitve: NalogDodelitev[];
+  /** Del, ki pokrije rezervacijo artikla kot material na drugih DN (ko zaloga ne zadošča). */
+  rezervirano: number;
 };
 
 /** Prva beseda naziva (za primerjavo kupca na nalogu s kupcem naročila). */
@@ -554,15 +601,6 @@ const kupecKljuc = (s: string | null) =>
     .filter((w) => w.length >= 3 && !["d.o.o", "doo", "llc", "jsc", "sas", "ste", "ooo"].includes(w))[0] ?? "";
 const jeFines = (s: string | null) => !s || s.toLowerCase().startsWith("fines");
 
-/**
- * Za vsak artikel razdeli zalogo in delovne naloge po naročilih (FIFO po datumu odpreme):
- * 1. naročila v odpremi, nato po datumu odpreme (zapadla najprej), nato po številki naročila;
- * 2. najprej zaloga matičnega skladišča, nato nalogi po roku izdelave, nato planirana količina DN brez naloga;
- * 3. odprte količine nalogov se uskladijo s "Planirano količino (DN)" iz izvoza VD200
- *    (če je nalogov več, se odšteje pri najzgodnejših - te so verjetno že izdelane in na zalogi);
- * 4. če je PROSTA ZALOGA v ERP negativna, je del zaloge/DN rezerviran drugje -
- *    toliko kosov pri najkasnejših naročilih ostane "MANJKA" (pravilo iz Excela: prosta < 0 => MANJKA).
- */
 // =====================================================================
 // ZASEDENOST NAROČIL - ure po normativu za del, ki ga je še treba narediti
 // =====================================================================
@@ -602,7 +640,59 @@ export function urePostavk(postavke: PostavkaIzracun[], normativi: Map<string, N
   });
 }
 
-export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast: Nastavitve, odpreme: Odprema[] = []): Rezultat {
+/** Stanje zaloge artikla, iz katerega se računa razdelitev. */
+type StanjeArtikla = {
+  vir: "material" | "vd200";
+  zaloga: number;
+  zaloga_ostalo: number;
+  planirano_dn: number;
+  rezervirano_dn: number;
+  prosta_erp: number | null;
+  naroceno_erp: number | null;
+};
+
+/** Zaloga in DN iz izpisa materiala; za idente, ki jih tam ni, iz izvoza VD200 (brez rezervacij za DN). */
+function stanjeArtikla(a: Postavka, m: Material | undefined): StanjeArtikla {
+  if (m)
+    return {
+      vir: "material",
+      zaloga: m.zaloga,
+      zaloga_ostalo: m.zaloga_ostalo,
+      planirano_dn: m.planirano_dn,
+      rezervirano_dn: Math.max(0, m.planirano_proizvodnja),
+      prosta_erp: m.prosta_zaloga,
+      naroceno_erp: m.naroceno,
+    };
+  return {
+    vir: "vd200",
+    zaloga: a.zaloga,
+    zaloga_ostalo: a.zaloga_ostalo,
+    planirano_dn: a.planirano_dn,
+    rezervirano_dn: 0,
+    prosta_erp: null,
+    naroceno_erp: null,
+  };
+}
+
+/**
+ * Za vsak artikel razdeli zalogo in delovne naloge po naročilih (FIFO po datumu odpreme):
+ * 1. zaloga, planirana količina DN in rezervacije so iz izpisa materiala (spl_material); za idente,
+ *    ki jih tam ni, iz izvoza VD200. Prosta zaloga iz ERP se ne uporablja (v VD200 je napačna) - računamo jo sami;
+ * 2. naročila v odpremi, nato po datumu odpreme (zapadla najprej), nato po številki naročila;
+ * 3. količina, razpisana kot material na delovne naloge (stolpec 7, npr. peč z zaloge za predelavo),
+ *    se najprej vzame iz zaloge; če zaloga ne zadošča, preostanek zmanjša prihod iz proizvodnje (najkasnejši viri);
+ * 4. preostala zaloga matičnega skladišča, nato nalogi po roku izdelave, nato planirana količina DN brez naloga;
+ * 5. odprte količine nalogov se uskladijo s planirano količino DN
+ *    (če je nalogov več, se odšteje pri najzgodnejših - te so verjetno že izdelane in na zalogi);
+ * 6. kar ostane nepokrito, je MANJKA.
+ */
+export function izracunajPrioritete(
+  postavke: Postavka[],
+  nalogi: Nalog[],
+  nast: Nastavitve,
+  odpreme: Odprema[] = [],
+  material: Map<string, Material> = new Map(),
+): Rezultat {
   const vse = postavke.filter((p) => !nast.samoIzdelki || jeIzdelek(p.ident));
   // Dobavnice VD300: ta del postavke ni več na zalogi (status VD200 "V odpremi" se ne upošteva).
   const odpremljeno = odpremljenoPoPostavkah(odpreme);
@@ -629,6 +719,7 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
 
   for (const [ident, xs] of poIdentu) {
     const a = xs[0];
+    const st = stanjeArtikla(a, material.get(ident));
     const potrebe = xs
       .filter((p) => p.kolicina > 0 && (jePotrjeno(p.status) || jeVOdpremi(p.status) || nast.vkljuciNepotrjena))
       .sort(
@@ -638,15 +729,29 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
           (x.zap ?? 0) - (y.zap ?? 0),
       );
     const naroceno = potrebe.reduce((s, p) => s + p.kolicina, 0);
+    // Potrjena naročila VD200 - za primerjavo z "Naročeno" v materialu (ERP)
+    const narocenoVd200 = xs
+      .filter((p) => p.kolicina > 0 && (jePotrjeno(p.status) || jeVOdpremi(p.status)))
+      .reduce((s, p) => s + p.kolicina, 0);
     // Del z dobavnico ni več na zalogi in ga ne pokrivamo iz zaloge / nalogov
     const odpremaKol = (p: Postavka) => odpremaVrstice.get(p.kljuc)?.kolicina ?? 0;
     const zaPokritje = naroceno - potrebe.reduce((s, p) => s + odpremaKol(p), 0);
+    const prosta = st.zaloga + st.planirano_dn - st.rezervirano_dn - zaPokritje;
+    // Postavka s podatki zaloge iz materiala (za prikaz in izvoz)
+    const sStanjem = (p: Postavka): Postavka => ({
+      ...p,
+      zaloga: st.zaloga,
+      zaloga_ostalo: st.zaloga_ostalo,
+      planirano_dn: st.planirano_dn,
+      prosta_zaloga: prosta,
+      prosta_brez_narocil: st.zaloga + st.planirano_dn - st.rezervirano_dn,
+    });
 
     // ---- viri iz proizvodnje
     const odprti = (nalogiPoKodi.get(ident) ?? [])
       .map((n) => ({ n, odprto: n.razpisana_kolicina - n.izdelana_kolicina }))
       .sort((x, y) => (x.n.rok_izdelave ?? "9999").localeCompare(y.n.rok_izdelave ?? "9999") || x.n.st_naloga.localeCompare(y.n.st_naloga));
-    let presezek = odprti.reduce((s, x) => s + x.odprto, 0) - Math.max(0, a.planirano_dn);
+    let presezek = odprti.reduce((s, x) => s + x.odprto, 0) - Math.max(0, st.planirano_dn);
     const viri: Vir[] = [];
     for (const { n, odprto } of odprti) {
       const odbij = Math.min(odprto, Math.max(0, presezek));
@@ -660,16 +765,24 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
         nalog: n,
         predviden: (n.status_naloga ?? "").toLowerCase().includes("predviden"),
         dodelitve: [],
+        rezervirano: 0,
       });
     }
     const nalogiSkupaj = viri.reduce((s, v) => s + v.kolicina, 0);
-    const dnBrezNaloga = Math.max(0, a.planirano_dn - nalogiSkupaj);
-    if (dnBrezNaloga > 0) viri.push({ tip: "dn", kolicina: dnBrezNaloga, upostevano: dnBrezNaloga, predviden: false, dodelitve: [] });
+    const dnBrezNaloga = Math.max(0, st.planirano_dn - nalogiSkupaj);
+    if (dnBrezNaloga > 0)
+      viri.push({ tip: "dn", kolicina: dnBrezNaloga, upostevano: dnBrezNaloga, predviden: false, dodelitve: [], rezervirano: 0 });
 
-    // ---- omejitev ERP (prosta zaloga < 0)
-    const rezerviranoDrugje = Math.max(0, a.zaloga + a.planirano_dn - a.prosta_zaloga - zaPokritje);
-    let pokrijem = a.prosta_zaloga < 0 ? Math.max(0, zaPokritje + a.prosta_zaloga) : Infinity;
-    let zaloga = Math.max(0, a.zaloga);
+    // ---- rezervacija kot material na DN: najprej iz zaloge, preostanek iz najkasnejših virov proizvodnje
+    let zaloga = Math.max(0, st.zaloga - st.rezervirano_dn);
+    let rezervIzProizvodnje = Math.max(0, st.rezervirano_dn - Math.max(0, st.zaloga));
+    for (const v of [...viri].reverse()) {
+      if (rezervIzProizvodnje <= 0) break;
+      const x = Math.min(v.kolicina, rezervIzProizvodnje);
+      v.kolicina -= x;
+      v.rezervirano += x;
+      rezervIzProizvodnje -= x;
+    }
 
     let izZaloge = 0;
     let vOdpremi = 0;
@@ -691,9 +804,8 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
       const potrebnoDo = p.datum_odpreme ? addDays(p.datum_odpreme, -nast.zamikDni) : null;
 
       const vzemi = (k: number) => {
-        const x = Math.min(k, ostane, pokrijem);
+        const x = Math.min(k, ostane);
         ostane -= x;
-        pokrijem -= x;
         return x;
       };
 
@@ -704,7 +816,7 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
         deli.push({ vir: "zaloga", kolicina: z });
       }
       for (const v of viri) {
-        if (ostane <= 0 || pokrijem <= 0) break;
+        if (ostane <= 0) break;
         const x = vzemi(v.kolicina);
         if (x <= 0) continue;
         v.kolicina -= x;
@@ -720,7 +832,7 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
       }
       if (ostane > 0) {
         manjka += ostane;
-        deli.push({ vir: "manjka", kolicina: ostane, erp: a.prosta_zaloga < 0 && pokrijem <= 0 });
+        deli.push({ vir: "manjka", kolicina: ostane });
       }
 
       const status: Status = deli.every((d) => d.vir === "odprema") ? "V_ODPREMI" : statusDelov(deli, potrebnoDo);
@@ -729,19 +841,19 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
       else zalogaPrekinjena = true;
       if (!samoZaloga && !naslednjaIzProizvodnje) naslednjaIzProizvodnje = potrebnoDo;
 
-      izracunane.push(razsiri(p, nast, { status, deli, potrebnoDo, vOdpremi: !!odp }));
+      izracunane.push(razsiri(sStanjem(p), nast, { status, deli, potrebnoDo, vOdpremi: !!odp }));
     }
 
     // Postavke, ki ne štejejo v potrebe (nepotrjene, količina 0) - prikazane brez dodelitve
     for (const p of xs) {
       if (potrebe.includes(p)) continue;
-      izracunane.push(razsiri(p, nast, { status: "PREGLEJ", deli: [], potrebnoDo: null, vOdpremi: false }));
+      izracunane.push(razsiri(sStanjem(p), nast, { status: "PREGLEJ", deli: [], potrebnoDo: null, vOdpremi: false }));
     }
 
     // ---- prioritete nalogov
     const nalogiArtikla: NalogPrioriteta[] = viri
       .filter((v) => v.tip === "nalog" && v.nalog)
-      .map((v) => nalogPrioriteta(v, ident, a.opis, nast.zamikDni, a.prosta_zaloga));
+      .map((v) => nalogPrioriteta(v, ident, a.opis, nast.zamikDni));
     vsiNalogi.push(...nalogiArtikla);
 
     const statusi = izracunane.filter((p) => p.ident === ident && !p.nepotrjeno).map((p) => p.status);
@@ -749,16 +861,20 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
       ident,
       opis: a.opis,
       grupa: grupaIzOpisa(a.opis),
-      zaloga: a.zaloga,
-      zaloga_ostalo: a.zaloga_ostalo,
-      planirano_dn: a.planirano_dn,
-      prosta_zaloga: a.prosta_zaloga,
+      virZaloge: st.vir,
+      zaloga: st.zaloga,
+      zaloga_ostalo: st.zaloga_ostalo,
+      planirano_dn: st.planirano_dn,
+      rezervirano_dn: st.rezervirano_dn,
+      prosta_zaloga: prosta,
+      prosta_erp: st.prosta_erp,
+      naroceno_erp: st.naroceno_erp,
+      naroceno_vd200: narocenoVd200,
       naroceno,
       izZaloge,
       vOdpremi,
       izProizvodnje,
       manjka,
-      rezerviranoDrugje,
       zalogaDo,
       naslednjaIzProizvodnje,
       nalogi: nalogiArtikla,
@@ -776,7 +892,15 @@ export function izracunajPrioritete(postavke: Postavka[], nalogi: Nalog[], nast:
       const odprto = n.razpisana_kolicina - n.izdelana_kolicina;
       vsiNalogi.push(
         nalogPrioriteta(
-          { tip: "nalog", kolicina: odprto, upostevano: odprto, nalog: n, predviden: (n.status_naloga ?? "").toLowerCase().includes("predviden"), dodelitve: [] },
+          {
+            tip: "nalog",
+            kolicina: odprto,
+            upostevano: odprto,
+            nalog: n,
+            predviden: (n.status_naloga ?? "").toLowerCase().includes("predviden"),
+            dodelitve: [],
+            rezervirano: 0,
+          },
           koda,
           n.naziv_artikla,
           nast.zamikDni,
@@ -831,10 +955,10 @@ function razsiri(
   };
 }
 
-function nalogPrioriteta(v: Vir, ident: string, opis: string | null, zamikDni: number, prostaZaloga = 0): NalogPrioriteta {
+function nalogPrioriteta(v: Vir, ident: string, opis: string | null, zamikDni: number): NalogPrioriteta {
   const n = v.nalog!;
   const prodano = v.dodelitve.reduce((s, d) => s + d.kolicina, 0);
-  const prosto = v.upostevano - prodano;
+  const prosto = v.upostevano - prodano - v.rezervirano;
   const datumi = v.dodelitve.map((d) => d.datum).filter((d): d is IsoDate => !!d).sort();
   const prvaPotreba = datumi[0] ?? null;
   const potrebnoDo = prvaPotreba ? addDays(prvaPotreba, -zamikDni) : null;
@@ -855,8 +979,8 @@ function nalogPrioriteta(v: Vir, ident: string, opis: string | null, zamikDni: n
   else if (prosto > 0)
     predlog = `Najprej ${kos(prodano)} (prodano), ${kos(prosto)} ni vezanih - izdelaj po potrebi ali razbij nalog.`;
   else predlog = `V celoti prodano - izdelaj ves nalog do ${fmtDatum(potrebnoDo)}`;
+  if (v.rezervirano > 0) predlog = `${kos(v.rezervirano)} gre kot material na druge DN. ${predlog}`;
   if (v.predviden) predlog = `Nalog je samo predviden. ${predlog}`;
-  if (prostaZaloga < 0) predlog = `Prosta zaloga v ERP je ${fmtKol(prostaZaloga)} - preveri rezervacije. ${predlog}`;
 
   return {
     st_naloga: n.st_naloga,
@@ -869,6 +993,7 @@ function nalogPrioriteta(v: Vir, ident: string, opis: string | null, zamikDni: n
     preostala: v.upostevano,
     dodelitve: v.dodelitve,
     prodano,
+    rezervirano: v.rezervirano,
     prosto,
     prvaPotreba,
     zamuja,
@@ -892,7 +1017,7 @@ export function opisDelov(deli: Del[]): string {
       if (d.vir === "zaloga") return `${k} z zaloge`;
       if (d.vir === "odprema") return `${k} v odpremi (${d.dokument})`;
       if (d.vir === "dn") return `${k} iz DN (ni naloga)`;
-      if (d.vir === "manjka") return `${k} manjka${d.erp ? " (ERP)" : ""}`;
+      if (d.vir === "manjka") return `${k} manjka`;
       return `${k} iz naloga ${d.nalog} (rok ${fmtDatum(d.rok)})`;
     })
     .join(" · ");
@@ -961,11 +1086,12 @@ export function izvoziNalogePrioritetXlsx(nalogi: NalogPrioriteta[], ime: string
       "Prva odprema": xDatum(n.prvaPotreba),
       "Odprta količina": n.preostala,
       Prodano: n.prodano,
+      "Material za DN": n.rezervirano,
       Prosto: n.prosto,
       Predlog: n.predlog,
       Naročila: n.dodelitve.map((d) => `${fmtKol(d.kolicina)}× ${d.partner ?? d.stevilka} (${fmtDatum(d.datum)})`).join("; "),
     })),
-    [14, 10, 10, 16, 40, 12, 12, 10, 9, 9, 70, 80],
+    [14, 10, 10, 16, 40, 12, 12, 10, 9, 10, 9, 70, 80],
     ime,
   );
 }
@@ -984,13 +1110,14 @@ export function izvoziKrovneXlsx(skupine: KrovniSkupina[], ime: string) {
         "Prva odprema": xDatum(n.prvaPotreba),
         "Odprta količina": n.preostala,
         Prodano: n.prodano,
+        "Material za DN": n.rezervirano,
         Prosto: n.prosto,
         Zamuja: n.zamuja ? `Zamuja (rok ${fmtDatum(n.rok)})` : "",
         Predlog: n.predlog,
         Naročila: n.dodelitve.map((d) => `${fmtKol(d.kolicina)}× ${d.partner ?? d.stevilka} (${fmtDatum(d.datum)})`).join("; "),
       })),
     ),
-    [10, 12, 14, 16, 40, 12, 10, 9, 9, 22, 70, 80],
+    [10, 12, 14, 16, 40, 12, 10, 9, 10, 9, 22, 70, 80],
     ime,
   );
 }
@@ -1004,19 +1131,24 @@ export function izvoziArtikleXlsx(artikli: ArtikelPregled[], ime: string) {
       IDENT: a.ident,
       Naziv: a.opis ?? "",
       Grupa: a.grupa,
+      "Vir zaloge": a.virZaloge === "material" ? "Material" : "VD200 (ni v materialu)",
       "Zaloga (MS)": a.zaloga,
       "Zaloga (ostalo)": a.zaloga_ostalo,
+      "Rezervirano za DN": a.rezervirano_dn,
       "Planirano DN": a.planirano_dn,
       "Prosta zaloga": a.prosta_zaloga,
+      "Prosta zaloga ERP": a.prosta_erp ?? "",
       Naročeno: a.naroceno,
+      "Naročeno ERP": a.naroceno_erp ?? "",
       "Iz zaloge": a.izZaloge,
+      "V odpremi": a.vOdpremi,
       "Iz proizvodnje": a.izProizvodnje,
       Manjka: a.manjka,
       "Zaloga zadošča do": xDatum(a.zalogaDo),
       "1. kos iz proizvodnje do": xDatum(a.naslednjaIzProizvodnje),
       Nalogi: a.nalogi.map((n) => `${n.st_naloga} (krovni ${n.krovni_dn ?? "-"}, ${fmtKol(n.preostala)} kos, rok ${fmtDatum(n.rok)})`).join("; "),
     })),
-    [14, 16, 40, 10, 10, 10, 10, 10, 10, 10, 12, 9, 14, 16, 70],
+    [14, 16, 40, 10, 18, 10, 10, 12, 10, 10, 12, 10, 12, 10, 10, 12, 9, 14, 16, 70],
     ime,
   );
 }

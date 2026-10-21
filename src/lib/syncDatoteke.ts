@@ -1,11 +1,12 @@
 // Datoteke, ki jih administrativni sistem odlaga na server (skupno za strežnik in brskalnik).
 
-export type SyncDatotekaKljuc = "nalogi" | "narocila" | "odpreme";
+export type SyncDatotekaKljuc = "nalogi" | "narocila" | "odpreme" | "material";
 
 export const SYNC_DATOTEKE: Record<SyncDatotekaKljuc, { datoteka: string; naslov: string }> = {
   nalogi: { datoteka: "nalogi.xlsx", naslov: "Delovni nalogi" },
   narocila: { datoteka: "narocila.xlsx", naslov: "Naročila VD200" },
   odpreme: { datoteka: "odpreme.xlsx", naslov: "Odpreme VD300" },
+  material: { datoteka: "material.xlsx", naslov: "Material (zaloge)" },
 };
 
 export const jeSyncKljuc = (k: string): k is SyncDatotekaKljuc => k in SYNC_DATOTEKE;
