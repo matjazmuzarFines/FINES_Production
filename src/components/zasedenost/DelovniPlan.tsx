@@ -42,6 +42,8 @@ import {
   type StanjeKrovnega,
   type ZaposleniDan,
 } from "@/lib/plan";
+import { naloziMaterial, type Material } from "@/lib/material";
+import { naloziZadnjiOdpUvoz, naloziZadnjiPriUvoz, odpremePoNalogih } from "@/lib/prioritete";
 import { formatNum, formatUre, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
@@ -213,6 +215,7 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           oddelek={oddelek}
           celice={podatki.celice.filter((c) => c.oddelek_id === oddelek.id)}
           krovni={krovni}
+          nalogi={podatki.nalogi}
           imaUvoz={!!podatki.uvoz}
           postavitve={podatki.postavitve.filter((p) => p.oddelek_id === oddelek.id)}
           zaposleni={podatki.zaposleni}
@@ -236,6 +239,7 @@ function PlanOddelka({
   oddelek,
   celice,
   krovni,
+  nalogi,
   imaUvoz,
   postavitve,
   zaposleni,
@@ -249,6 +253,8 @@ function PlanOddelka({
   oddelek: ZasOddelek;
   celice: Celica[];
   krovni: Krovni[];
+  /** Vsi nalogi zadnjega uvoza (za FIFO dodelitev odprem v workflowu). */
+  nalogi: Nalog[];
   imaUvoz: boolean;
   postavitve: Postavitev[];
   zaposleni: ZaposleniDan[];
@@ -431,9 +437,30 @@ function PlanOddelka({
     izvoziPlanXlsx(vrstice, `delovni_plan_${oddelek.naziv.toLowerCase().replace(/\s+/g, "_")}_${zacetek}.xlsx`);
   }
 
-  /** Workflow za PDF / Word: prikazano obdobje, po delovnih mestih. */
-  const workflow = () =>
-    pripraviWorkflow(oddelek.naziv, celice, efektivne, razpored, krovniPoKljucu, dnevi[0], dnevi[dnevi.length - 1]);
+  /**
+   * Workflow za PDF / Word: prikazano obdobje, po delovnih mestih. Datumi odprem po nalogih:
+   * naročila VD200 razdeljena FIFO na zalogo in naloge (kot na Prioritetah); ob napaki brez odprem.
+   */
+  const workflow = async () => {
+    const odpreme = await Promise.all([
+      naloziZadnjiPriUvoz(),
+      naloziZadnjiOdpUvoz().catch(() => ({ odpreme: [] })),
+      naloziMaterial().catch(() => ({ material: new Map<string, Material>() })),
+    ])
+      .then(([pri, odp, mat]) => odpremePoNalogih(pri.postavke, nalogi, odp.odpreme, mat.material))
+      .catch(() => new Map<string, IsoDate[]>());
+    return pripraviWorkflow({
+      oddelek: oddelek.naziv,
+      celice,
+      postavitve: efektivne,
+      razpored,
+      krovniPoKljucu,
+      dnevi,
+      ureNaDan: oddelek.ure_na_dan,
+      zaposleni: steviloZaposlenih,
+      odpreme,
+    });
+  };
   const vObdobju = efektivne.some((p) => {
     const r = razpored.get(p.id);
     return !!r?.od && !!r.do && r.od <= dnevi[dnevi.length - 1] && r.do >= dnevi[0];
@@ -524,7 +551,7 @@ function PlanOddelka({
                   hint: "Workflow po delovnih mestih za prikazane tedne (PDF za tisk)",
                   disabled: !vObdobju,
                   zakaj: "V prikazanih tednih ni postavitev",
-                  akcija: async () => (await import("@/lib/planPdf")).prenesiPlanPdf(workflow()),
+                  akcija: async () => (await import("@/lib/planPdf")).prenesiPlanPdf(await workflow()),
                 },
                 {
                   koda: "docx",
@@ -532,7 +559,7 @@ function PlanOddelka({
                   hint: "Workflow po delovnih mestih za prikazane tedne (Word za urejanje)",
                   disabled: !vObdobju,
                   zakaj: "V prikazanih tednih ni postavitev",
-                  akcija: async () => (await import("@/lib/planWord")).prenesiPlanDocx(workflow()),
+                  akcija: async () => (await import("@/lib/planWord")).prenesiPlanDocx(await workflow()),
                 },
                 {
                   koda: "xlsx",

@@ -302,7 +302,14 @@ export function izvoziPlanXlsx(
 // WORKFLOW (PDF / Word) - zaporedje krovnih nalogov po delovnih mestih
 // =====================================================================
 
-export type WorkflowNalog = { st_naloga: string; ident: string; naziv: string | null; kos: number | null };
+export type WorkflowNalog = {
+  st_naloga: string;
+  ident: string;
+  naziv: string | null;
+  kos: number | null;
+  /** Datumi odprem naročil, ki jih pokrije nalog (FIFO kot na Prioritetah), naraščajoče. */
+  odpreme: IsoDate[];
+};
 
 export type WorkflowKorak = {
   krovni: string;
@@ -315,33 +322,63 @@ export type WorkflowKorak = {
   /** V postavitvi je samo del nalogov krovnega. */
   delni: boolean;
   nalogi: WorkflowNalog[];
-  rok: IsoDate | null;
-  poRoku: boolean;
+  /** Najzgodnejša odprema med nalogi koraka. */
+  prvaOdprema: IsoDate | null;
+  /** Plan se konča po najzgodnejši odpremi. */
+  poOdpremi: boolean;
   brezKapacitete: number;
   opomba: string | null;
+  /** Planirane osebe po dnevih plana (ure dneva / ure na dan), poravnano z WorkflowPlan.dnevi. */
+  osebe: number[];
 };
 
-export type WorkflowCelica = { naziv: string; zaposleni: number; koraki: WorkflowKorak[] };
-export type WorkflowPlan = { oddelek: string; od: IsoDate; do: IsoDate; celice: WorkflowCelica[] };
+export type WorkflowCelica = {
+  naziv: string;
+  zaposleni: number;
+  /** Zaposleni na celici po dnevih plana, poravnano z WorkflowPlan.dnevi. */
+  zaposleniPoDnevih: number[];
+  koraki: WorkflowKorak[];
+};
+export type WorkflowPlan = { oddelek: string; od: IsoDate; do: IsoDate; dnevi: IsoDate[]; celice: WorkflowCelica[] };
 
-/** Postavitve, ki so v obdobju od-do, po delovnih mestih v vrstnem redu začetka (za PDF / Word workflow). */
-export function pripraviWorkflow(
-  oddelek: string,
-  celice: Celica[],
-  postavitve: Postavitev[],
-  razpored: Map<number, Razpored>,
-  krovniPoKljucu: Map<string, Krovni>,
-  od: IsoDate,
-  doo: IsoDate,
-): WorkflowPlan {
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Postavitve, ki so v prikazanih dnevih, po delovnih mestih v vrstnem redu začetka (za PDF / Word workflow). */
+export function pripraviWorkflow({
+  oddelek,
+  celice,
+  postavitve,
+  razpored,
+  krovniPoKljucu,
+  dnevi,
+  ureNaDan,
+  zaposleni,
+  odpreme,
+}: {
+  oddelek: string;
+  celice: Celica[];
+  postavitve: Postavitev[];
+  razpored: Map<number, Razpored>;
+  krovniPoKljucu: Map<string, Krovni>;
+  /** Prikazani (delovni) dnevi, naraščajoče. */
+  dnevi: IsoDate[];
+  ureNaDan: number;
+  zaposleni: (celicaId: number, datum: IsoDate) => number;
+  /** Datumi odprem po številkah nalogov (FIFO dodelitev naročil). */
+  odpreme: Map<string, IsoDate[]>;
+}): WorkflowPlan {
+  const od = dnevi[0];
+  const doo = dnevi[dnevi.length - 1];
   return {
     oddelek,
     od,
     do: doo,
+    dnevi,
     celice: celice
       .map((c) => ({
         naziv: c.naziv,
         zaposleni: c.privzeto_zaposlenih,
+        zaposleniPoDnevih: dnevi.map((d) => (jeDelovniDan(d) ? zaposleni(c.id, d) : 0)),
         koraki: postavitve
           .filter((p) => p.delovno_mesto_id === c.id)
           .map((p) => ({ p, r: razpored.get(p.id) }))
@@ -350,8 +387,15 @@ export function pripraviWorkflow(
           .map(({ p, r }): WorkflowKorak => {
             const k = krovniPoKljucu.get(p.krovni_dn);
             const nalogi: WorkflowNalog[] = k
-              ? nalogiPostavitve(p, k).map((n) => ({ st_naloga: n.st_naloga, ident: n.koda_artikla, naziv: n.naziv_artikla, kos: n.preostala }))
-              : (p.nalogi ?? []).map((st) => ({ st_naloga: st, ident: "", naziv: null, kos: null }));
+              ? nalogiPostavitve(p, k).map((n) => ({
+                  st_naloga: n.st_naloga,
+                  ident: n.koda_artikla,
+                  naziv: n.naziv_artikla,
+                  kos: n.preostala,
+                  odpreme: odpreme.get(n.st_naloga) ?? [],
+                }))
+              : (p.nalogi ?? []).map((st) => ({ st_naloga: st, ident: "", naziv: null, kos: null, odpreme: odpreme.get(st) ?? [] }));
+            const prvaOdprema = nalogi.flatMap((n) => n.odpreme.slice(0, 1)).sort()[0] ?? null;
             return {
               krovni: p.krovni_dn,
               narocnik: k?.narocnik ?? null,
@@ -361,10 +405,11 @@ export function pripraviWorkflow(
               vseh: k ? k.nalogi.length : null,
               delni: !!k && !!p.nalogi && nalogi.length < k.nalogi.length,
               nalogi,
-              rok: k?.rok ?? null,
-              poRoku: !!(k?.rok && r.do > k.rok),
+              prvaOdprema,
+              poOdpremi: !!prvaOdprema && r.do > prvaOdprema,
               brezKapacitete: r.nerazporejeno,
               opomba: p.opomba,
+              osebe: dnevi.map((d) => (ureNaDan > 0 ? round1((r.dnevi.get(d) ?? 0) / ureNaDan) : 0)),
             };
           }),
       }))
@@ -375,3 +420,18 @@ export function pripraviWorkflow(
 const DAN_KRATKO = ["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"];
 /** "Pon 20. 10." */
 export const danInDatum = (d: IsoDate) => `${DAN_KRATKO[weekday(d) - 1]} ${formatDayMonth(d)}`;
+/** "Pon" */
+export const danKratko = (d: IsoDate) => DAN_KRATKO[weekday(d) - 1];
+/** Barve celic v prerazporeditvi zaposlenih (hex, z belim besedilom; zelena je rezervirana za proste ljudi). */
+export const BARVE_CELIC = ["CA5010", "2563EB", "7C3AED", "0F766E", "DB2777", "4338CA", "B45309", "0E7490", "9F1239", "475569"];
+export const barvaCelice = (i: number) => BARVE_CELIC[i % BARVE_CELIC.length];
+/** Nalogi koraka "(2/5)"; če krovnega ni v uvozu, samo število. */
+export const nalogiKoraka = (k: { nalogi: unknown[]; vseh: number | null }) =>
+  `(${k.vseh === null ? k.nalogi.length : `${k.nalogi.length}/${k.vseh}`})`;
+/** "24.10" */
+export const ddmm = (d: IsoDate) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+/** Datumi odprem "24.10, 31.10" (največ `najvec`, nato "+n"). */
+export function besediloOdprem(datumi: IsoDate[], najvec = 8) {
+  const t = datumi.slice(0, najvec).map(ddmm).join(", ");
+  return datumi.length > najvec ? `${t} +${datumi.length - najvec}` : t;
+}

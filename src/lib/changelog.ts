@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "20.03",
+    datum: "22. 10. 2026",
+    spremembe: [
+      "Delovni plan - PDF / Word workflow: namesto roka izdelave so pri vsakem nalogu datumi odprem naročil, ki jih ta nalog pokrije (npr. 16.11, 25.12). Razdelitev je FIFO, enaka kot na Prioritetah: zaloga pokrije najzgodnejša naročila, nalogi po roku izdelave naslednja; potrjena naročila VD200, odpreme VD300 in material. Na koraku je prva odprema; če se plan konča po njej, je korak označen PO ODPREMI (rdeče).",
+      "Nova 1. stran PRERAZPOREDITEV ZAPOSLENIH: ena tabela za vse celice (navpično ime celice) - za vsak korak (krovni nalog) in dan število oseb (planirane ure ÷ ure na dan), pod celico zaposleni in prosti ljudje brez naloga. Od 2. strani naprej so koraki po celicah (en list na celico).",
+    ],
+  },
+  {
     verzija: "20.02",
     datum: "21. 10. 2026",
     spremembe: [

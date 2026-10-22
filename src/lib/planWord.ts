@@ -1,5 +1,5 @@
 // Delovni plan kot workflow v Wordu (.docx) - ista vsebina kot PDF, da se lahko popravi in dopiše.
-// Za vsako delovno mesto svoja stran, koraki so tabele, med njimi puščica. Modul se naloži šele ob kliku.
+// 1. stran je prerazporeditev zaposlenih (ena tabela za vse celice), nato za vsako delovno mesto svoja stran, koraki so tabele, med njimi puščica. Modul se naloži šele ob kliku.
 import {
   AlignmentType,
   BorderStyle,
@@ -15,13 +15,14 @@ import {
   TableCell,
   TableRow,
   TabStopType,
+  TextDirection,
   TextRun,
   VerticalAlign,
   WidthType,
   type ParagraphChild,
 } from "docx";
 import { formatShort, toIso } from "./dates";
-import { danInDatum, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { imePlana } from "./planPdf";
 import { naloziBajte, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
@@ -58,8 +59,8 @@ const besediloNalogov = (k: WorkflowKorak) =>
   k.vseh === null ? "ni v uvozu" : k.delni ? `${k.nalogi.length}/${k.vseh} nalogov` : `cel krovni · ${k.vseh}`;
 
 function korak(k: WorkflowKorak, st: number): Table {
-  const robBarva = k.poRoku || k.brezKapacitete > 0 ? RDECA : k.delni ? ORANZNA : CRTA;
-  const rob = { style: BorderStyle.SINGLE, size: k.poRoku || k.delni ? 12 : 6, color: robBarva };
+  const robBarva = k.poOdpremi || k.brezKapacitete > 0 ? RDECA : k.delni ? ORANZNA : CRTA;
+  const rob = { style: BorderStyle.SINGLE, size: k.poOdpremi || k.delni ? 12 : 6, color: robBarva };
 
   const levo = new TableCell({
     width: { size: 26, type: WidthType.PERCENTAGE },
@@ -87,12 +88,12 @@ function korak(k: WorkflowKorak, st: number): Table {
         t(danInDatum(k.od), { size: 15, bold: true }),
         t("  →", { size: 12, color: SVETLO_SIVA }),
         new TextRun({ text: "\t" }),
-        t(danInDatum(k.do), { size: 15, bold: true, color: k.poRoku ? RDECA : TEMNA }),
+        t(danInDatum(k.do), { size: 15, bold: true, color: k.poOdpremi ? RDECA : TEMNA }),
       ],
     }),
     p([
-      t(`${formatUre(k.ure)} h${k.rok ? ` · rok izdelave ${formatShort(k.rok)}` : ""}`, { size: 9, color: SIVA }),
-      ...(k.poRoku ? [t("   PO ROKU", { size: 9, bold: true, color: RDECA })] : []),
+      t(`${formatUre(k.ure)} h${k.prvaOdprema ? ` · prva odprema ${ddmm(k.prvaOdprema)}` : ""}`, { size: 9, color: SIVA }),
+      ...(k.poOdpremi ? [t("   PO ODPREMI", { size: 9, bold: true, color: RDECA })] : []),
     ]),
   ];
   if (k.narocnik) desnoVsebina.push(p([t(k.narocnik, { size: 9, bold: true })]));
@@ -127,6 +128,17 @@ function korak(k: WorkflowKorak, st: number): Table {
           ],
         }),
       );
+      if (n.odpreme.length)
+        desnoVsebina.push(
+          new Paragraph({
+            indent: { left: 900 },
+            spacing: { after: 10 },
+            children: [
+              t("ODPREMA  ", { size: 7, bold: true, color: SIVA }),
+              t(besediloOdprem(n.odpreme), { size: 8.5, bold: true, color: n.odpreme[0] < k.do ? RDECA : ORANZNA }),
+            ],
+          }),
+        );
     }
   }
   if (k.opomba) desnoVsebina.push(p([t("Opomba: ", { size: 9, bold: true }), t(k.opomba, { size: 9 })], { before: 80 }));
@@ -150,11 +162,120 @@ function korak(k: WorkflowKorak, st: number): Table {
   });
 }
 
-function celica(c: WorkflowCelica, plan: WorkflowPlan, prva: boolean): (Paragraph | Table)[] {
+const osebeBesedilo = (n: number) => formatNum(Math.round(n * 10) / 10);
+
+/** Prerazporeditev zaposlenih (1. stran): ena tabela za vse celice, levo navpično ime celice (kot v PDF). */
+function prerazporeditev(plan: WorkflowPlan): (Paragraph | Table)[] {
+  const n = plan.dnevi.length;
+  const pasW = 420;
+  const labelW = 2000;
+  const danW = Math.floor((SIRINA - pasW - labelW) / n);
+  const celicaT = (
+    children: ParagraphChild[],
+    o: { w: number; fill?: string; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; columnSpan?: number },
+  ) =>
+    new TableCell({
+      width: { size: o.w, type: WidthType.DXA },
+      columnSpan: o.columnSpan,
+      shading: o.fill ? { type: ShadingType.CLEAR, fill: o.fill, color: "auto" } : undefined,
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: 20, bottom: 20, left: 40, right: 40 },
+      children: [new Paragraph({ alignment: o.align ?? AlignmentType.CENTER, spacing: { after: 0 }, children })],
+    });
+  const vrstica = (pas: TableCell | null, oznaka: ParagraphChild[], vrednosti: { t: string; fill?: string; color?: string }[]) =>
+    new TableRow({
+      cantSplit: true,
+      children: [
+        ...(pas ? [pas] : []),
+        celicaT(oznaka, { w: labelW, align: AlignmentType.LEFT }),
+        ...vrednosti.map((v) => celicaT(v.t ? [t(v.t, { size: 8, bold: true, color: v.color })] : [], { w: danW, fill: v.fill })),
+      ],
+    });
+  const rob = { style: BorderStyle.SINGLE, size: 4, color: "FFFFFF" };
+
+  const vrstice = plan.celice.flatMap((c, ci) => {
+    const barva = barvaCelice(ci);
+    const prosto = c.zaposleniPoDnevih.map((z, i) => Math.max(0, Math.round((z - c.koraki.reduce((s, k) => s + k.osebe[i], 0)) * 10) / 10));
+    const imaProste = prosto.some((x) => x > 0);
+    const pas = new TableCell({
+      width: { size: pasW, type: WidthType.DXA },
+      rowSpan: c.koraki.length + 1 + (imaProste ? 1 : 0),
+      textDirection: TextDirection.BOTTOM_TO_TOP_LEFT_TO_RIGHT,
+      shading: { type: ShadingType.CLEAR, fill: barva, color: "auto" },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: 40, bottom: 40, left: 20, right: 20 },
+      children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [t(c.naziv, { size: 8.5, bold: true, color: "FFFFFF" })] })],
+    });
+    return [
+      ...c.koraki.map((k, j) =>
+        vrstica(
+          j === 0 ? pas : null,
+          [
+            t(`${j + 1}  `, { size: 8, bold: true, color: barva }),
+            t(k.krovni, { size: 8.5, bold: true }),
+            t(`  ${nalogiKoraka(k)}`, { size: 7.5, color: SIVA }),
+          ],
+          k.osebe.map((o) => (o > 0 ? { t: osebeBesedilo(o), fill: barva, color: "FFFFFF" } : { t: "" })),
+        ),
+      ),
+      vrstica(
+        null,
+        [t("Zaposleni na celici", { size: 8, bold: true })],
+        c.zaposleniPoDnevih.map((z) => (z > 0 ? { t: osebeBesedilo(z), fill: TEMNA, color: "FFFFFF" } : { t: "–", color: SIVA })),
+      ),
+      ...(imaProste
+        ? [
+            vrstica(
+              null,
+              [t("Prosto (brez naloga)", { size: 8, bold: true, color: ZELENA })],
+              prosto.map((x) => (x > 0 ? { t: osebeBesedilo(x), fill: "DCF5E4", color: ZELENA } : { t: "" })),
+            ),
+          ]
+        : []),
+    ];
+  });
+
+  const stKorakov = plan.celice.reduce((s, c) => s + c.koraki.length, 0);
+  return [
+    new Paragraph({
+      spacing: { after: 40 },
+      border: { left: { style: BorderStyle.SINGLE, size: 36, color: ORANZNA, space: 8 } },
+      children: [t("PRERAZPOREDITEV ZAPOSLENIH", { size: 20, bold: true })],
+    }),
+    p(
+      [
+        t(
+          `${formatShort(plan.od)} – ${formatShort(plan.do)} · ${plan.celice.length} ${plan.celice.length === 1 ? "celica" : "celic"} · ${stKorakov} krovnih nalogov · število oseb na krovnem nalogu po dnevih, številka = korak na strani celice`,
+          { size: 9, color: SIVA },
+        ),
+      ],
+      { after: 160 },
+    ),
+    new Table({
+      width: { size: pasW + labelW + n * danW, type: WidthType.DXA },
+      columnWidths: [pasW, labelW, ...plan.dnevi.map(() => danW)],
+      borders: { top: rob, bottom: rob, left: rob, right: rob, insideHorizontal: rob, insideVertical: rob },
+      rows: [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            celicaT([], { w: pasW + labelW, columnSpan: 2 }),
+            ...plan.dnevi.map((d) =>
+              celicaT([t(danKratko(d), { size: 6.5, bold: true, color: SIVA }), new TextRun({ break: 1 }), t(ddmm(d), { size: 7.5, bold: true })], { w: danW }),
+            ),
+          ],
+        }),
+        ...vrstice,
+      ],
+    }),
+  ];
+}
+
+function celica(c: WorkflowCelica, plan: WorkflowPlan): (Paragraph | Table)[] {
   const ure = c.koraki.reduce((s, k) => s + k.ure, 0);
   const vsebina: (Paragraph | Table)[] = [
     new Paragraph({
-      pageBreakBefore: !prva,
+      pageBreakBefore: true,
       spacing: { after: 40 },
       border: { left: { style: BorderStyle.SINGLE, size: 36, color: ORANZNA, space: 8 } },
       children: [t(c.naziv, { size: 22, bold: true })],
@@ -222,7 +343,7 @@ export async function ustvariPlanDocx(plan: WorkflowPlan): Promise<Blob> {
         properties: { page: { margin: { top: ROB, bottom: ROB, left: ROB, right: ROB, header: 400, footer: 400 } } },
         headers: { default: glava },
         footers: { default: noga },
-        children: plan.celice.flatMap((c, i) => celica(c, plan, i === 0)),
+        children: [...prerazporeditev(plan), ...plan.celice.flatMap((c) => celica(c, plan))],
       },
     ],
   });

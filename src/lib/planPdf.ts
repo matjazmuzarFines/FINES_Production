@@ -1,10 +1,11 @@
 // Delovni plan kot workflow v PDF: za vsako delovno mesto (celico) en list A4 (ležeče) s koraki (krovni nalogi)
 // v vrstnem redu začetka, povezanimi s puščicami. Za obešanje na celico - velike, berljive oznake.
-// Celica je vedno na enem listu: do 3 koraki v vrsti, do 6 na list; če ne gre, se kartice sorazmerno pomanjšajo.
+// 1. stran je prerazporeditev zaposlenih: ena tabela za vse celice - koliko oseb dela na katerem krovnem nalogu
+// po dnevih (planirane ure / ure na dan). Celica je vedno na enem listu: do 3 koraki v vrsti, do 6 na list; če ne gre, se kartice sorazmerno pomanjšajo.
 // Modul se naloži šele ob kliku (dinamičen import).
-import { rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
+import { degrees, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import { formatShort, toIso } from "./dates";
-import { danInDatum, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { A4, asciiIme, novDokument, prelomi, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
 
@@ -23,6 +24,7 @@ const NAJMANJ = 0.5; // najmanjše pomanjšanje kartic
 const ORANZNA = rgb(202 / 255, 80 / 255, 16 / 255);
 const SVETLO_ORANZNA = rgb(253 / 255, 238 / 255, 228 / 255);
 const ZELENA = rgb(22 / 255, 128 / 255, 61 / 255);
+const SVETLO_ZELENA = rgb(220 / 255, 245 / 255, 228 / 255);
 const TEMNA = rgb(0.17, 0.17, 0.18);
 const BESEDILO = rgb(0.11, 0.11, 0.12);
 const SIVA = rgb(0.42, 0.42, 0.45);
@@ -98,16 +100,19 @@ function korak(stran: PDFPage | null, f: Pisave, k: WorkflowKorak, st: number, x
     (k.narocnik ? 12 * s : 0) +
     (k.brezKapacitete > 0 ? 12 * s : 0) +
     (nalogi.length || vec
-      ? 9 * s + 13 * s + nalogi.reduce((sum, _, i) => sum + 12 * s + nazivi[i].length * m.vrsticaNaziva + 2 * s, 0) + (vec ? 11 * s : 0)
+      ? 9 * s +
+        13 * s +
+        nalogi.reduce((sum, n, i) => sum + 12 * s + (nazivi[i].length + (n.odpreme.length ? 1 : 0)) * m.vrsticaNaziva + 2 * s, 0) +
+        (vec ? 11 * s : 0)
       : 0) +
     (opomba.length ? 6 * s + opomba.length * 10 * s + 2 * s : 0) +
     8 * s;
   if (!stran) return visina;
 
   // okvir in temna pasica
-  const robBarva = k.poRoku || k.brezKapacitete > 0 ? RDECA : k.delni ? ORANZNA : CRTA;
+  const robBarva = k.poOdpremi || k.brezKapacitete > 0 ? RDECA : k.delni ? ORANZNA : CRTA;
   const r = 9 * s;
-  zaobljen(stran, x, yZgoraj, KORAK_W, visina, r, { color: BELA, borderColor: robBarva, borderWidth: k.poRoku || k.delni ? 2 : 1 });
+  zaobljen(stran, x, yZgoraj, KORAK_W, visina, r, { color: BELA, borderColor: robBarva, borderWidth: k.poOdpremi || k.delni ? 2 : 1 });
   zaobljen(stran, x, yZgoraj, KORAK_W, m.pasica, r, { color: TEMNA });
   stran.drawRectangle({ x, y: yZgoraj - m.pasica, width: KORAK_W, height: r, color: TEMNA });
 
@@ -134,20 +139,20 @@ function korak(stran: PDFPage | null, f: Pisave, k: WorkflowKorak, st: number, x
   const x2 = x + KORAK_W / 2 + 6 * s;
   stran.drawText("ZAČETEK", { x: x + m.pad, y, size: 6.5 * s, font: f.krepka, color: SIVA });
   stran.drawText("KONEC", { x: x2, y, size: 6.5 * s, font: f.krepka, color: SIVA });
-  if (k.poRoku) {
-    const t = "PO ROKU";
+  if (k.poOdpremi) {
+    const t = "PO ODPREMI";
     const v = 7 * s;
     znacka(stran, t, x + KORAK_W - m.pad - sirinaZnacke(t, v, f.krepka), y, v, f.krepka, RDECA, BELA);
   }
   y -= 17 * s;
   stran.drawText(danInDatum(k.od), { x: x + m.pad, y, size: 14 * s, font: f.krepka, color: BESEDILO });
-  stran.drawText(danInDatum(k.do), { x: x2, y, size: 14 * s, font: f.krepka, color: k.poRoku ? RDECA : BESEDILO });
+  stran.drawText(danInDatum(k.do), { x: x2, y, size: 14 * s, font: f.krepka, color: k.poOdpremi ? RDECA : BESEDILO });
   stran.drawText("→", { x: x2 - 15 * s, y: y + 1 * s, size: 11 * s, font: f.krepka, color: SVETLO_SIVA });
 
-  // ure in rok izdelave
+  // ure in prva odprema
   y -= 13 * s;
-  const info = `${formatUre(k.ure)} h${k.rok ? ` · rok izdelave ${formatShort(k.rok)}` : ""}`;
-  stran.drawText(info, { x: x + m.pad, y, size: 8.5 * s, font: f.navadna, color: k.poRoku ? RDECA : SIVA });
+  const info = `${formatUre(k.ure)} h${k.prvaOdprema ? ` · prva odprema ${ddmm(k.prvaOdprema)}` : ""}`;
+  stran.drawText(info, { x: x + m.pad, y, size: 8.5 * s, font: f.navadna, color: k.poOdpremi ? RDECA : SIVA });
   if (k.narocnik) {
     y -= 12 * s;
     stran.drawText(skrajsaj(k.narocnik, f.krepka, 8.5 * s, sirinaBesedila), { x: x + m.pad, y, size: 8.5 * s, font: f.krepka, color: BESEDILO });
@@ -183,6 +188,19 @@ function korak(stran: PDFPage | null, f: Pisave, k: WorkflowKorak, st: number, x
         y -= m.vrsticaNaziva;
         stran.drawText(v, { x: x + m.pad + 8 * s, y, size: m.naziv, font: f.navadna, color: BESEDILO });
       }
+      if (n.odpreme.length) {
+        y -= m.vrsticaNaziva;
+        const oznaka = "ODPREMA";
+        const ow = f.krepka.widthOfTextAtSize(oznaka, 6.5 * s) + 5 * s;
+        stran.drawText(oznaka, { x: x + m.pad + 8 * s, y: y + 0.5 * s, size: 6.5 * s, font: f.krepka, color: SIVA });
+        stran.drawText(skrajsaj(besediloOdprem(n.odpreme, 6), f.krepka, m.naziv, sirinaBesedila - 8 * s - ow), {
+          x: x + m.pad + 8 * s + ow,
+          y,
+          size: m.naziv,
+          font: f.krepka,
+          color: n.odpreme[0] < k.do ? RDECA : ORANZNA,
+        });
+      }
       y -= 2 * s;
     });
     if (vec) {
@@ -211,7 +229,7 @@ function puscica(stran: PDFPage, x1: number, y1: number, x2: number, y2: number,
   stran.drawSvgPath(pot, { x: x2, y: y2, color: ORANZNA });
 }
 
-function glavaStrani(stran: PDFPage, f: Pisave, logo: PDFImage | null, plan: WorkflowPlan, c: WorkflowCelica) {
+function glava(stran: PDFPage, f: Pisave, logo: PDFImage | null, plan: WorkflowPlan, naslov: string, povzetek: string) {
   const vrh = STRAN[1] - ROB;
   if (logo) {
     const s = logo.scaleToFit(78, 20);
@@ -223,18 +241,179 @@ function glavaStrani(stran: PDFPage, f: Pisave, logo: PDFImage | null, plan: Wor
   desno(`natisnjeno ${formatShort(toIso(new Date()))}`, vrh - 19, 7, f.navadna, SIVA);
   stran.drawRectangle({ x: ROB, y: vrh - 25, width: SIRINA, height: 1.5, color: ORANZNA });
 
-  // delovno mesto
   const y = vrh - 45;
   stran.drawRectangle({ x: ROB, y: y - 3, width: 4, height: 18, color: ORANZNA });
-  stran.drawText(c.naziv, { x: ROB + 11, y, size: 16, font: f.krepka, color: BESEDILO });
-  const ure = c.koraki.reduce((s, k) => s + k.ure, 0);
-  const povzetek = `${c.koraki.length} ${c.koraki.length === 1 ? "krovni nalog" : "krovnih nalogov"} · ${formatUre(ure)} h · privzeto ${formatNum(c.zaposleni)} oseb`;
+  stran.drawText(naslov, { x: ROB + 11, y, size: 16, font: f.krepka, color: BESEDILO });
   desno(povzetek, y + 2, 9, f.navadna, SIVA);
 }
 
-/** Največja velikost kartic, pri kateri gre cela celica na en list. */
-function razporeditev(f: Pisave, koraki: WorkflowKorak[]) {
-  const razpolozljivo = VRH_VSEBINE - DNO;
+function glavaCelice(stran: PDFPage, f: Pisave, logo: PDFImage | null, plan: WorkflowPlan, c: WorkflowCelica) {
+  const ure = c.koraki.reduce((s, k) => s + k.ure, 0);
+  glava(
+    stran,
+    f,
+    logo,
+    plan,
+    c.naziv,
+    `${c.koraki.length} ${c.koraki.length === 1 ? "krovni nalog" : "krovnih nalogov"} · ${formatUre(ure)} h · privzeto ${formatNum(c.zaposleni)} oseb`,
+  );
+}
+
+// =====================================================================
+// PRERAZPOREDITEV ZAPOSLENIH (1. stran): ena tabela za vse celice -
+// vrstica na korak, stolpec na dan, v celici število oseb; levo navpično ime celice.
+// =====================================================================
+const LJ_PAD = 10;
+const LJ_PAS = 24; // navpični pas z imenom celice
+const LJ_LABEL = 165; // stolpec s krovnimi nalogi
+const LJ_GLAVA = 24; // vrstica z dnevi
+const LJ_MAX_DAN = 62;
+const LJ_MAX_VRSTICA = 16;
+const LJ_MIN_VRSTICA = 10;
+const LJ_RAZMIK_SKUPIN = 5;
+
+const osebeBesedilo = (n: number) => formatNum(Math.round(n * 10) / 10);
+/** Prosti ljudje po dnevih: zaposleni na celici - planirane osebe. */
+const prosti = (c: WorkflowCelica) =>
+  c.zaposleniPoDnevih.map((z, i) => Math.max(0, Math.round((z - c.koraki.reduce((s, k) => s + k.osebe[i], 0)) * 10) / 10));
+/** Vrstice celice v tabeli: koraki, zaposleni in (če so) prosti. */
+const vrsticCelice = (c: WorkflowCelica) => c.koraki.length + 1 + (prosti(c).some((p) => p > 0) ? 1 : 0);
+
+/** Navpično ime celice: ena vrstica, če gre; sicer dve (prelom pri presledku blizu sredine). */
+function imeCelice(f: Pisave, naziv: string, visinaVrstic: number) {
+  const sirina = (t: string, v: number) => f.krepka.widthOfTextAtSize(t, v);
+  if (sirina(naziv, 7) + 10 <= visinaVrstic || !naziv.includes(" ")) {
+    let velikost = 9;
+    while (velikost > 7 && sirina(naziv, velikost) + 10 > visinaVrstic) velikost -= 0.25;
+    return { vrstice: [naziv], velikost, visina: Math.max(visinaVrstic, sirina(naziv, velikost) + 10) };
+  }
+  const besede = naziv.split(" ");
+  let najboljsa: string[] = [naziv];
+  let najmanj = Infinity;
+  for (let i = 1; i < besede.length; i++) {
+    const v = [besede.slice(0, i).join(" "), besede.slice(i).join(" ")];
+    const w = Math.max(...v.map((x) => sirina(x, 7)));
+    if (w < najmanj) [najmanj, najboljsa] = [w, v];
+  }
+  return { vrstice: najboljsa, velikost: 7, visina: Math.max(visinaVrstic, najmanj + 10) };
+}
+/** Višina skupine celice v tabeli (vrstice ali, če je ime daljše, ime). */
+const visinaSkupine = (f: Pisave, c: WorkflowCelica, h: number) => imeCelice(f, c.naziv, vrsticCelice(c) * h).visina;
+
+/** Celice razdeli na strani (celica se ne deli) in določi višino vrstice, da gre vse na čim manj strani. */
+function straniLjudi(f: Pisave, celice: WorkflowCelica[]) {
+  const razpolozljivo = VRH_VSEBINE - DNO - 2 * LJ_PAD - LJ_GLAVA;
+  const potrebno = (cs: WorkflowCelica[], h: number) => cs.reduce((s, c) => s + visinaSkupine(f, c, h), 0) + (cs.length - 1) * LJ_RAZMIK_SKUPIN;
+  const vse = celice.reduce((s, c) => s + vrsticCelice(c), 0);
+  const h = Math.max(LJ_MIN_VRSTICA, Math.min(LJ_MAX_VRSTICA, (razpolozljivo - (celice.length - 1) * LJ_RAZMIK_SKUPIN) / vse));
+  const strani: WorkflowCelica[][] = [[]];
+  for (const c of celice) {
+    const zadnja = strani[strani.length - 1];
+    if (zadnja.length && potrebno([...zadnja, c], h) > razpolozljivo) strani.push([c]);
+    else zadnja.push(c);
+  }
+  return { h, strani };
+}
+
+/** Nariše tabelo prerazporeditve za podane celice čez celo stran. */
+function tabelaLjudi(stran: PDFPage, f: Pisave, plan: WorkflowPlan, celice: WorkflowCelica[], h: number) {
+  const n = plan.dnevi.length;
+  const xL = ROB + LJ_PAD;
+  const dw = Math.min(LJ_MAX_DAN, (SIRINA - 2 * LJ_PAD - LJ_PAS - LJ_LABEL) / n);
+  const xDan = (i: number) => xL + LJ_PAS + LJ_LABEL + i * dw;
+  const sirinaMreze = LJ_PAS + LJ_LABEL + n * dw;
+  const visinaMreze = celice.reduce((s, c) => s + visinaSkupine(f, c, h), 0) + (celice.length - 1) * LJ_RAZMIK_SKUPIN;
+  const yVrh = VRH_VSEBINE;
+  const visina = 2 * LJ_PAD + LJ_GLAVA + visinaMreze;
+  zaobljen(stran, ROB, yVrh, SIRINA, visina, 8, { color: BELA, borderColor: CRTA, borderWidth: 1 });
+  const pisava = Math.min(7.5, h * 0.52);
+
+  // glava dni
+  const vrhMreze = yVrh - LJ_PAD;
+  const dnoMreze = vrhMreze - LJ_GLAVA - visinaMreze;
+  stran.drawText("ŠT. OSEB NA KROVNEM NALOGU PO DNEVIH", { x: xL, y: vrhMreze - 15, size: 7, font: f.krepka, color: SIVA });
+  plan.dnevi.forEach((d, i) => {
+    const sredina = xDan(i) + dw / 2;
+    const dan = danKratko(d);
+    const datum = ddmm(d);
+    stran.drawText(dan, { x: sredina - f.krepka.widthOfTextAtSize(dan, 6.5) / 2, y: vrhMreze - 9, size: 6.5, font: f.krepka, color: SIVA });
+    stran.drawText(datum, { x: sredina - f.krepka.widthOfTextAtSize(datum, 7.5) / 2, y: vrhMreze - 19, size: 7.5, font: f.krepka, color: BESEDILO });
+    if (i > 0 && dan === "Pon")
+      stran.drawLine({ start: { x: xDan(i), y: vrhMreze }, end: { x: xDan(i), y: dnoMreze }, thickness: 0.8, color: SVETLO_SIVA });
+  });
+
+  /** Ploščica s številom oseb v vrstici z zgornjim robom yV. */
+  const ploscica = (i: number, yV: number, t: string, ozadje: RGB, barva: RGB) => {
+    zaobljen(stran, xDan(i) + 1.5, yV - 1.2, dw - 3, h - 2.4, 3, { color: ozadje });
+    stran.drawText(t, { x: xDan(i) + dw / 2 - f.krepka.widthOfTextAtSize(t, pisava) / 2, y: yV - h / 2 - pisava * 0.36, size: pisava, font: f.krepka, color: barva });
+  };
+  const oznaka = (yV: number, t: string, barva: RGB) =>
+    stran.drawText(t, { x: xL + LJ_PAS + 6, y: yV - h / 2 - pisava * 0.36, size: Math.min(7, pisava), font: f.krepka, color: barva });
+
+  let y = vrhMreze - LJ_GLAVA;
+  celice.forEach((c, ci) => {
+    if (ci > 0) {
+      y -= LJ_RAZMIK_SKUPIN;
+      stran.drawRectangle({ x: xL, y: y + LJ_RAZMIK_SKUPIN / 2, width: sirinaMreze, height: 0.8, color: CRTA });
+    }
+    const ime = imeCelice(f, c.naziv, vrsticCelice(c) * h);
+    const hex = barvaCelice(plan.celice.indexOf(c));
+    const barva = rgb(parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255);
+
+    // navpično ime celice (od spodaj navzgor)
+    zaobljen(stran, xL, y - 0.8, LJ_PAS - 4, ime.visina - 1.6, 4, { color: barva });
+    const sredinaPasu = xL + (LJ_PAS - 4) / 2;
+    ime.vrstice.forEach((v, i) => {
+      const t = skrajsaj(v, f.krepka, ime.velikost, ime.visina - 8);
+      const odmik = (i - (ime.vrstice.length - 1) / 2) * ime.velikost * 1.1; // 1. vrstica levo
+      stran.drawText(t, {
+        x: sredinaPasu + odmik + ime.velikost * 0.36,
+        y: y - ime.visina + (ime.visina - f.krepka.widthOfTextAtSize(t, ime.velikost)) / 2,
+        size: ime.velikost,
+        font: f.krepka,
+        color: BELA,
+        rotate: degrees(90),
+      });
+    });
+
+    // koraki (številka kot na kartici celice)
+    c.koraki.forEach((k, j) => {
+      const yV = y - j * h;
+      if (j % 2 === 1) stran.drawRectangle({ x: xL + LJ_PAS, y: yV - h, width: sirinaMreze - LJ_PAS, height: h, color: OZADJE });
+      const cy = yV - h / 2;
+      const r = Math.min(5.5, h * 0.36);
+      const xk = xL + LJ_PAS + 6;
+      stran.drawCircle({ x: xk + r, y: cy, size: r, color: barva });
+      const st = String(j + 1);
+      stran.drawText(st, { x: xk + r - f.krepka.widthOfTextAtSize(st, r * 1.2) / 2, y: cy - r * 0.42, size: r * 1.2, font: f.krepka, color: BELA });
+      const kw = f.krepka.widthOfTextAtSize(k.krovni, pisava + 0.5);
+      stran.drawText(k.krovni, { x: xk + 2 * r + 5, y: cy - pisava * 0.36, size: pisava + 0.5, font: f.krepka, color: BESEDILO });
+      stran.drawText(nalogiKoraka(k), { x: xk + 2 * r + 9 + kw, y: cy - pisava * 0.36, size: pisava - 0.5, font: f.navadna, color: SIVA });
+      k.osebe.forEach((o, i) => {
+        if (o > 0) ploscica(i, yV, osebeBesedilo(o), barva, BELA);
+      });
+    });
+
+    // zaposleni na celici in prosti
+    let yV = y - c.koraki.length * h;
+    stran.drawRectangle({ x: xL + LJ_PAS, y: yV - 0.4, width: sirinaMreze - LJ_PAS, height: 0.8, color: SVETLO_SIVA });
+    oznaka(yV, "ZAPOSLENI NA CELICI", BESEDILO);
+    c.zaposleniPoDnevih.forEach((z, i) => ploscica(i, yV, z > 0 ? osebeBesedilo(z) : "–", z > 0 ? TEMNA : OZADJE, z > 0 ? BELA : SIVA));
+    const prosto = prosti(c);
+    if (prosto.some((p) => p > 0)) {
+      yV -= h;
+      oznaka(yV, "PROSTO (brez naloga)", ZELENA);
+      prosto.forEach((p, i) => {
+        if (p > 0) ploscica(i, yV, osebeBesedilo(p), SVETLO_ZELENA, ZELENA);
+      });
+    }
+    y -= ime.visina;
+  });
+}
+
+/** Največja velikost kartic, pri kateri gre cela celica na en list (pod vrhom vrh). */
+function razporeditev(f: Pisave, koraki: WorkflowKorak[], vrh: number) {
+  const razpolozljivo = vrh - DNO;
   for (let s = 1; ; s = Math.round((s - 0.02) * 100) / 100) {
     const vrste: number[] = [];
     for (let i = 0; i < koraki.length; i += STOLPCEV) {
@@ -250,13 +429,30 @@ export async function ustvariPlanPdf(plan: WorkflowPlan): Promise<Blob> {
   const { pdf, navadna, krepka, logo } = await novDokument(`Delovni plan ${plan.oddelek}`);
   const f = { navadna, krepka };
 
-  for (const c of plan.celice) {
+  const novaStran = () => {
     const stran = pdf.addPage(STRAN);
     stran.drawRectangle({ x: 0, y: 0, width: STRAN[0], height: STRAN[1], color: OZADJE });
-    glavaStrani(stran, f, logo, plan, c);
-    const { s, vrste } = razporeditev(f, c.koraki);
-    const sredinaPasice = (19 * s);
-    let y = VRH_VSEBINE;
+    return stran;
+  };
+
+  // 1. stran: prerazporeditev zaposlenih (če ne gre na en list, se nadaljuje)
+  const { h, strani: skupine } = straniLjudi(f, plan.celice);
+  const stKorakov = plan.celice.reduce((s, c) => s + c.koraki.length, 0);
+  skupine.forEach((celice, i) => {
+    const stran = novaStran();
+    const povzetek = `${plan.celice.length} ${plan.celice.length === 1 ? "celica" : "celic"} · ${stKorakov} krovnih nalogov · številka = korak na listu celice`;
+    glava(stran, f, logo, plan, `PRERAZPOREDITEV ZAPOSLENIH${i > 0 ? " (nadaljevanje)" : ""}`, povzetek);
+    tabelaLjudi(stran, f, plan, celice, h);
+  });
+
+  // od 2. strani: koraki po celicah
+  for (const c of plan.celice) {
+    const stran = novaStran();
+    glavaCelice(stran, f, logo, plan, c);
+    const vrh = VRH_VSEBINE;
+    const { s, vrste } = razporeditev(f, c.koraki, vrh);
+    const sredinaPasice = 19 * s;
+    let y = vrh;
     let prejsnja: { x: number; dno: number } | null = null; // zadnji korak prejšnje vrste (za povezavo)
 
     vrste.forEach((visinaVrste, v) => {

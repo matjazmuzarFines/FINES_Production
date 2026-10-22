@@ -1025,6 +1025,29 @@ export function opisDelov(deli: Del[]): string {
 
 export const danesIso = () => toIso(new Date());
 
+/**
+ * Datumi odprem po delovnih nalogih (za delovni plan): ista FIFO razdelitev kot na strani Prioritete -
+ * zaloga pokrije najzgodnejša naročila, nalogi po roku izdelave naslednja. Nalog dobi samo datume naročil,
+ * ki jih pokrije (brez nepotrjenih naročil, vsi identi).
+ */
+export function odpremePoNalogih(
+  postavke: Postavka[],
+  nalogi: Nalog[],
+  odpreme: Odprema[],
+  material: Map<string, Material>,
+): Map<string, IsoDate[]> {
+  const r = izracunajPrioritete(
+    postavke,
+    nalogi,
+    { danes: danesIso(), zamikDni: 0, vkljuciNepotrjena: false, samoIzdelki: false },
+    odpreme,
+    material,
+  );
+  return new Map(
+    r.nalogi.map((n) => [n.st_naloga, [...new Set(n.dodelitve.flatMap((d) => (d.datum ? [d.datum] : [])))].sort()]),
+  );
+}
+
 // =====================================================================
 // IZVOZ
 // =====================================================================
