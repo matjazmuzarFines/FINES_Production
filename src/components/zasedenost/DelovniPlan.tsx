@@ -86,6 +86,7 @@ const MIN_DAN = 78; // px - najmanjša širina dneva
 const VISINA_PASU = 38; // px - en pas postavitev
 const TEDNI_IZBIRA = [1, 2, 4] as const;
 const KONTROLA_KLJUC = "fp-delovni-plan-kontrola"; // panel Kontrola plana odprt (brskalnik)
+const PRAZEN_MATERIAL = new Map<string, Material>();
 
 type Vlecenje = { tip: "krovni"; kljuc: string } | { tip: "postavitev"; id: number };
 type FilterKrovnih = "nerazporejeni" | "z_urami" | "vsi";
@@ -319,6 +320,7 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           kontrola={kontrola}
           prioritete={kontrola ? prioritete : null}
           priUvoz={pri?.uvoz ?? null}
+          material={pri?.material ?? PRAZEN_MATERIAL}
           zamikDni={zamikDni}
         />
       )}
@@ -347,6 +349,7 @@ function PlanOddelka({
   kontrola,
   prioritete,
   priUvoz,
+  material,
   zamikDni,
 }: {
   oddelek: ZasOddelek;
@@ -368,6 +371,8 @@ function PlanOddelka({
   /** Postavke prioritet; null = še se nalagajo. */
   prioritete: PostavkaIzracun[] | null;
   priUvoz: PriUvoz | null;
+  /** Izpis materiala (za stanje artikla v kontroli). */
+  material: Map<string, Material>;
   zamikDni: number;
 }) {
   const notify = useToast();
@@ -890,6 +895,9 @@ function PlanOddelka({
           <KontrolaPlana
             vrstice={vrsticeKontrole}
             uvoz={priUvoz}
+            postavke={prioritete ?? []}
+            material={material}
+            nalogi={[...nalogiPoSt.values()]}
             zamikDni={zamikDni}
             oddelek={oddelek.naziv}
             oznacen={izbranKrovni ?? oznacen}

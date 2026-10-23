@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { IconButton } from "./Button";
 
@@ -35,7 +36,7 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  const okno = (
     <div
       className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={onClose}
@@ -56,4 +57,6 @@ export function Modal({
       </div>
     </div>
   );
+  // Okno se izriše v <body>: znotraj sticky / transform elementov (npr. panel ob planu) bi ga prekrili sosednji elementi
+  return typeof document === "undefined" ? okno : createPortal(okno, document.body);
 }

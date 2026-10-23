@@ -9,6 +9,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "23.03",
+    datum: "23. 10. 2026",
+    spremembe: [
+      "Kontrola plana: klik na »manjka« ali »DN brez naloga« odpre stanje artikla - zaloga matično, ostala zaloga, naročeno skupaj, planirano DN in prosta zaloga iz izpisa materiala (opozorilo, če se naročeno v ERP razlikuje od VD200).",
+      "Popravek: okna (popup) se vedno prikažejo pred stranjo s temnim ozadjem - okno, odprto iz panela kontrole, je bilo prej prosojno in pod planom.",
+      "Pod tem tabela vseh naročil artikla (odprema, naročilo in kupčevo naročilo, kupec z lokacijo in državo, status, kosi, pokritje: zaloga / nalog / DN / v odpremi / manjka) in delovni nalogi artikla iz uvoza (razpisano, izdelano, odprto, rok). Opozorilo, če ima ERP več kosov na DN, kot je odprtih nalogov v uvozu.",
+    ],
+  },
+  {
     verzija: "23.02",
     datum: "23. 10. 2026",
     spremembe: [
