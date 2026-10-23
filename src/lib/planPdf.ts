@@ -5,7 +5,7 @@
 // Modul se naloži šele ob kliku (dinamičen import).
 import { degrees, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import { formatShort, toIso } from "./dates";
-import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { A4, asciiIme, novDokument, prelomi, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
 
@@ -125,11 +125,11 @@ function korak(stran: PDFPage | null, f: Pisave, k: WorkflowKorak, st: number, x
 
   // krovni nalog
   const kx = x + m.pad + 29 * s;
-  stran.drawText("KROVNI NALOG", { x: kx, y: yZgoraj - 12 * s, size: 6 * s, font: f.krepka, color: SVETLO_SIVA });
+  stran.drawText(k.prosta ? "DODATNO DELO" : "KROVNI NALOG", { x: kx, y: yZgoraj - 12 * s, size: 6 * s, font: f.krepka, color: SVETLO_SIVA });
   stran.drawText(skrajsaj(k.krovni, f.krepka, 18 * s, KORAK_W - 130 * s), { x: kx, y: yZgoraj - 30 * s, size: 18 * s, font: f.krepka, color: BELA });
 
   // cel / delni krovni (značka desno v pasici)
-  const nt = k.vseh === null ? "ni v uvozu" : k.delni ? `${k.nalogi.length}/${k.vseh} nalogov` : `cel krovni · ${k.vseh}`;
+  const nt = oznakaKoraka(k);
   const nv = 8.5 * s;
   const nw = sirinaZnacke(nt, nv, f.krepka);
   znacka(stran, nt, x + KORAK_W - m.pad - nw, sy - nv * 0.35, nv, f.krepka, k.delni ? ORANZNA : k.vseh === null ? SIVA : ZELENA, BELA);

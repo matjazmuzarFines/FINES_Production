@@ -66,7 +66,7 @@ import { SaveBar } from "@/components/rutina/SaveBar";
 const DAN_IME = ["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"];
 const SIRINA_IMENA = 170; // px - stolpec z imenom delovnega mesta
 const MIN_DAN = 78; // px - najmanjša širina dneva
-const VISINA_PASU = 30; // px - en pas postavitev
+const VISINA_PASU = 38; // px - en pas postavitev
 const TEDNI_IZBIRA = [1, 2, 4] as const;
 
 type Vlecenje = { tip: "krovni"; kljuc: string } | { tip: "postavitev"; id: number };
@@ -280,6 +280,7 @@ function PlanOddelka({
   const [nadDnem, setNadDnem] = useState<string | null>(null);
   const [urejamId, setUrejamId] = useState<number | null>(null);
   const [nastavitveOdprte, setNastavitveOdprte] = useState(false);
+  const [novaNalogaCelica, setNovaNalogaCelica] = useState<number | null>(null); // mesto Dodatno delo za novo prosto nalogo
 
   const vlecenje = useRef<Vlecenje | null>(null);
   const naslednjiId = useRef(-1);
@@ -294,6 +295,7 @@ function PlanOddelka({
       p.id > 0 &&
       !!o &&
       (o.delovno_mesto_id !== p.delovno_mesto_id ||
+        o.krovni_dn !== p.krovni_dn ||
         o.datum_zacetka !== p.datum_zacetka ||
         o.ure !== p.ure ||
         (o.opomba ?? "") !== (p.opomba ?? "") ||
@@ -325,10 +327,15 @@ function PlanOddelka({
 
   // ---------- krovni ----------
   const krovniPoKljucu = useMemo(() => new Map(krovni.map((k) => [k.kljuc, k])), [krovni]);
+  /** Krovni postavitve; prosta naloga (Dodatno delo) nima krovnega. */
+  const krovniZa = useCallback(
+    (p: Postavitev) => (p.prosta ? undefined : krovniPoKljucu.get(p.krovni_dn)),
+    [krovniPoKljucu],
+  );
   // Ure postavitev: ročne ali vsota ur vključenih nalogov iz zadnjega uvoza
   const zUrami = useCallback(
-    (p: Postavitev) => ({ ...p, ure: urePostavitve(p, krovniPoKljucu.get(p.krovni_dn), oddelek.koda) }),
-    [krovniPoKljucu, oddelek.koda],
+    (p: Postavitev) => ({ ...p, ure: urePostavitve(p, krovniZa(p), oddelek.koda) }),
+    [krovniZa, oddelek.koda],
   );
   const efektivne = useMemo(() => lokalne.map(zUrami), [lokalne, zUrami]);
   const stanja = useMemo(
@@ -359,7 +366,7 @@ function PlanOddelka({
       return;
     }
     // Prva postavitev zajame ves krovni; naslednje samo še nerazporejene naloge (po urah, če je krovni razporejen ročno)
-    const prva = !lokalne.some((p) => p.krovni_dn === kljuc);
+    const prva = !lokalne.some((p) => !p.prosta && p.krovni_dn === kljuc);
     const izbira: Pick<Postavitev, "nalogi" | "rocne_ure" | "ure"> = prva
       ? { nalogi: null, rocne_ure: false, ure: k.ure }
       : st.poUrah
@@ -368,9 +375,16 @@ function PlanOddelka({
     const id = naslednjiId.current--;
     setLokalne((l) => [
       ...l,
-      { id, oddelek_id: oddelek.id, delovno_mesto_id: celicaId, krovni_dn: kljuc, datum_zacetka: datum, opomba: null, ...izbira },
+      { id, oddelek_id: oddelek.id, delovno_mesto_id: celicaId, krovni_dn: kljuc, datum_zacetka: datum, opomba: null, prosta: false, ...izbira },
     ]);
     setIzbranKrovni(null);
+  }
+
+  /** Prosta naloga (ni iz uvoza) na mestu Dodatno delo, npr. pakiranje elektronik. */
+  function dodajProsto(p: Pick<Postavitev, "delovno_mesto_id" | "krovni_dn" | "datum_zacetka" | "ure" | "opomba">) {
+    const id = naslednjiId.current--;
+    setLokalne((l) => [...l, { id, oddelek_id: oddelek.id, nalogi: null, rocne_ure: true, prosta: true, ...p }]);
+    setNovaNalogaCelica(null);
   }
 
   function premakni(id: number, celicaId: number, datum: IsoDate) {
@@ -426,7 +440,7 @@ function PlanOddelka({
         celica: celicaPoId.get(p.delovno_mesto_id),
         postavitev: p,
         razpored: razpored.get(p.id),
-        krovni: krovniPoKljucu.get(p.krovni_dn),
+        krovni: krovniZa(p),
       }))
       .sort(
         (a, b) =>
@@ -466,11 +480,12 @@ function PlanOddelka({
     return !!r?.od && !!r.do && r.od <= dnevi[dnevi.length - 1] && r.do >= dnevi[0];
   });
 
-  // ---------- povzetek oddelka po dnevih ----------
+  // ---------- povzetek oddelka po dnevih (brez mest Dodatno delo) ----------
   const oddelekDan = (d: IsoDate) => {
     let kap = 0;
     let plan = 0;
     for (const c of celice) {
+      if (c.dodatno_delo) continue;
       kap += kapaciteta(c.id, d);
       plan += zasedeno.get(`${c.id}|${d}`) ?? 0;
     }
@@ -483,7 +498,7 @@ function PlanOddelka({
   const urejana = urejamId !== null ? lokalne.find((p) => p.id === urejamId) ?? null : null;
   /** Nalogi krovnega, ki so v drugih postavitvah (v urejani postavitvi jih ni mogoče vključiti). */
   const drugjeRazporejeni = (p: Postavitev) => {
-    const k = krovniPoKljucu.get(p.krovni_dn);
+    const k = krovniZa(p);
     return k ? stanjeKrovnega(k, lokalne.filter((x) => x.id !== p.id), oddelek.koda).razporejeni : new Set<string>();
   };
   const stolpci = `${SIRINA_IMENA}px repeat(${dnevi.length}, minmax(${MIN_DAN}px, 1fr))`;
@@ -589,7 +604,7 @@ function PlanOddelka({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <div style={{ minWidth: minSirina }} className="flex flex-col gap-1">
+              <div style={{ minWidth: minSirina }} className="flex flex-col gap-2.5">
                 {/* ---------- glava dni ---------- */}
                 <div className="grid gap-x-0" style={{ gridTemplateColumns: stolpci }}>
                   <div className="flex items-end px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -617,14 +632,16 @@ function PlanOddelka({
 
                 {/* ---------- oddelek skupaj ---------- */}
                 <div className="grid rounded-lg bg-ink-800 text-white" style={{ gridTemplateColumns: stolpci }}>
-                  <div className="px-2 py-1.5 text-sm font-bold">{oddelek.naziv} skupaj</div>
+                  <div className="px-2 py-2 text-sm font-bold" title="Skupaj vsa delovna mesta oddelka brez dodatnega dela">
+                    {oddelek.naziv} skupaj
+                  </div>
                   {dnevi.map((d, i) => {
                     const { kap, plan } = oddelekDan(d);
                     const ob = obremenitev(plan, kap);
                     return (
                       <div
                         key={d}
-                        className={`px-1 py-1.5 text-center text-[11px] tabular-nums ${i % 5 === 0 ? "border-l-2 border-ink-600" : ""}`}
+                        className={`px-1 py-2 text-center text-xs tabular-nums ${i % 5 === 0 ? "border-l-2 border-ink-600" : ""}`}
                         title={`${oddelek.naziv}, ${formatShort(d)}: planirano ${formatUre(plan)} h od ${formatUre(kap)} h`}
                       >
                         <div>
@@ -665,6 +682,7 @@ function PlanOddelka({
                     onZacniVlecenje={(e, id) => zacniVlecenje(e, { tip: "postavitev", id })}
                     onKoncajVlecenje={koncajVlecenje}
                     onUredi={setUrejamId}
+                    onNovaNaloga={c.dodatno_delo ? () => setNovaNalogaCelica(c.id) : undefined}
                   />
                 ))}
               </div>
@@ -679,7 +697,11 @@ function PlanOddelka({
               <span className="inline-block h-2.5 w-5 rounded-sm bg-fines-500 ring-2 ring-nok-500" />
               konec plana po roku izdelave
             </span>
-            <span>Kapaciteta = zaposleni × ure na dan · 0 zaposlenih = celica ta dan ne dela</span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-5 rounded-sm bg-ink-600" />
+              dodatno delo (ni iz uvoza)
+            </span>
+            <span>Kapaciteta = zaposleni × ure na dan · 0 zaposlenih = celica ta dan ne dela · Dodatno delo ni v seštevku oddelka</span>
           </div>
         </div>
       </div>
@@ -702,7 +724,7 @@ function PlanOddelka({
           key={urejana.id}
           postavitev={urejana}
           razpored={razpored.get(urejana.id)}
-          krovni={krovniPoKljucu.get(urejana.krovni_dn)}
+          krovni={krovniZa(urejana)}
           celice={celice}
           koda={oddelek.koda}
           drugje={drugjeRazporejeni(urejana)}
@@ -715,6 +737,16 @@ function PlanOddelka({
               setUrejamId(null);
             }}
           onPreklici={() => setUrejamId(null)}
+        />
+      )}
+
+      {novaNalogaCelica !== null && (
+        <NovaNaloga
+          celicaId={novaNalogaCelica}
+          celice={celice}
+          zacetek={dnevi.includes(danes) ? danes : dnevi[0]}
+          onDodaj={dodajProsto}
+          onPreklici={() => setNovaNalogaCelica(null)}
         />
       )}
 
@@ -761,6 +793,7 @@ function CelicaVrstica({
   onZacniVlecenje,
   onKoncajVlecenje,
   onUredi,
+  onNovaNaloga,
 }: {
   celica: Celica;
   dnevi: IsoDate[];
@@ -785,6 +818,8 @@ function CelicaVrstica({
   onZacniVlecenje: (e: DragEvent, id: number) => void;
   onKoncajVlecenje: () => void;
   onUredi: (id: number) => void;
+  /** Samo na mestu Dodatno delo: dodaj prosto nalogo. */
+  onNovaNaloga?: () => void;
 }) {
   const prvi = dnevi[0];
   const zadnji = dnevi[dnevi.length - 1];
@@ -818,8 +853,12 @@ function CelicaVrstica({
       style={{ gridTemplateColumns: stolpci, gridTemplateRows: `auto repeat(${stPasov}, ${VISINA_PASU}px) auto` }}
     >
       {/* ime + povzetek */}
-      <div className="flex flex-col justify-center gap-0.5 border-r border-ink-200 px-2 py-2" style={{ gridColumn: 1, gridRow: vrsticaVse }}>
+      <div
+        className={`flex flex-col justify-center gap-1 rounded-l-lg border-r border-ink-200 px-2.5 py-3 ${celica.dodatno_delo ? "bg-ink-50" : ""}`}
+        style={{ gridColumn: 1, gridRow: vrsticaVse }}
+      >
         <div className="text-sm font-bold leading-tight text-ink-800">{celica.naziv}</div>
+        {celica.dodatno_delo && <div className="text-[11px] italic text-ink-500">izven redne proizvodnje</div>}
         <div className="text-[11px] text-ink-500">privzeto {formatNum(celica.privzeto_zaposlenih)} oseb</div>
         <div className={`text-[11px] font-bold tabular-nums ${obSkupaj.txt}`} title="Obremenitev v prikazanem obdobju">
           {formatUre(vsotaPlan)}/{formatUre(vsotaKap)} h · {vsotaKap > 0 ? fmtPct(obSkupaj.pct) : "–"}
@@ -828,6 +867,16 @@ function CelicaVrstica({
           <div className="flex items-center gap-1 text-[11px] font-semibold text-nok-600" title="Postavitve brez dovolj kapacitete v obzorju">
             <AlertTriangle className="h-3 w-3" aria-hidden /> ni kapacitete
           </div>
+        )}
+        {onNovaNaloga && (
+          <button
+            type="button"
+            title="Dodaj nalogo izven redne proizvodnje (npr. pakiranje)"
+            onClick={onNovaNaloga}
+            className="mt-1 flex h-8 items-center justify-center gap-1 self-start rounded-lg bg-ok-500 px-2.5 text-xs font-bold text-white transition-colors hover:bg-ok-600"
+          >
+            <Plus className="h-4 w-4" aria-hidden /> Naloga
+          </button>
         )}
       </div>
 
@@ -869,7 +918,7 @@ function CelicaVrstica({
         <div
           key={`z-${d}`}
           style={{ gridColumn: i + 2, gridRow: 1 }}
-          className={`relative z-10 flex items-center justify-center gap-1 px-1 py-1 ${vlecem ? "pointer-events-none" : ""}`}
+          className={`relative z-10 flex items-center justify-center gap-1 px-1 pb-1 pt-2 ${vlecem ? "pointer-events-none" : ""}`}
         >
           <ZaposleniInput
             key={`${celica.id}-${d}-${inputVerzija}`}
@@ -884,20 +933,21 @@ function CelicaVrstica({
 
       {/* postavitve */}
       {vidne.map(({ p, r, zac, kon, pas, odrezanZac, odrezanKon }) => {
-        const k = krovniPoKljucu.get(p.krovni_dn);
+        const k = p.prosta ? undefined : krovniPoKljucu.get(p.krovni_dn);
         const poRoku = !!(k?.rok && r.do && r.do > k.rok);
-        const jePoudarjen = poudarjen === p.krovni_dn;
+        const jePoudarjen = !p.prosta && poudarjen === p.krovni_dn;
         // Delni krovni: koliko nalogov od vseh je v postavitvi
         const delni = k && p.nalogi ? `${nalogiPostavitve(p, k).length}/${k.nalogi.length}` : null;
         const opis = [
-          `Krovni ${p.krovni_dn}`,
-          !k ? "ni v zadnjem uvozu" : delni ? `${delni} nalogov (${p.nalogi!.join(", ")})` : `${k.nalogi.length} nalogov`,
+          p.prosta ? `Dodatno delo: ${p.krovni_dn}` : `Krovni ${p.krovni_dn}`,
+          p.prosta ? null : !k ? "ni v zadnjem uvozu" : delni ? `${delni} nalogov (${p.nalogi!.join(", ")})` : `${k.nalogi.length} nalogov`,
           p.rocne_ure ? "ročne ure" : null,
           `${formatUre(p.ure)} h`,
           `plan ${formatShort(r.od!)} – ${formatShort(r.do!)}`,
           k?.rok ? `rok ${formatShort(k.rok)}` : null,
           poRoku ? "KONEC PO ROKU!" : null,
           r.nerazporejeno > 0 ? `${formatUre(r.nerazporejeno)} h brez kapacitete` : null,
+          p.opomba,
           "Klik: uredi · povleci: premakni",
         ]
           .filter(Boolean)
@@ -915,15 +965,15 @@ function CelicaVrstica({
               onUredi(p.id);
             }}
             style={{ gridColumn: `${zac + 2} / ${kon + 3}`, gridRow: pas + 2 }}
-            className={`relative z-10 mx-0.5 my-0.5 flex min-w-0 cursor-grab items-center gap-1 overflow-hidden px-2 text-left text-xs font-semibold text-white shadow-sm active:cursor-grabbing ${
+            className={`relative z-10 mx-1 my-1 flex min-w-0 cursor-grab items-center gap-1.5 overflow-hidden px-2 text-left text-[13px] font-semibold text-white shadow-sm active:cursor-grabbing ${
               odrezanZac ? "rounded-l-none" : "rounded-l-md"
             } ${odrezanKon ? "rounded-r-none" : "rounded-r-md"} ${
-              !k ? "bg-ink-400" : jePoudarjen ? "bg-ink-800" : "bg-fines-500 hover:bg-fines-600"
+              p.prosta ? "bg-ink-600 hover:bg-ink-700" : !k ? "bg-ink-400" : jePoudarjen ? "bg-ink-800" : "bg-fines-500 hover:bg-fines-600"
             } ${poRoku || r.nerazporejeno > 0 ? "ring-2 ring-inset ring-nok-500" : ""} ${vlecem ? "pointer-events-none opacity-60" : ""}`}
           >
             {odrezanZac && <ChevronLeft className="h-3 w-3 shrink-0" aria-hidden />}
             {(poRoku || r.nerazporejeno > 0) && <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />}
-            <span className="truncate font-mono">{p.krovni_dn}</span>
+            <span className={`truncate ${p.prosta ? "" : "font-mono"}`}>{p.krovni_dn}</span>
             {delni && <span className="shrink-0 rounded bg-white/25 px-1 font-normal">{delni}</span>}
             <span className="shrink-0 font-normal opacity-90">{formatUre(p.ure)} h</span>
             {odrezanKon && <ChevronRight className="ml-auto h-3 w-3 shrink-0" aria-hidden />}
@@ -940,20 +990,20 @@ function CelicaVrstica({
           <div
             key={`o-${d}`}
             style={{ gridColumn: i + 2, gridRow: stPasov + 2 }}
-            className={`pointer-events-none relative z-10 px-1.5 pb-1.5 pt-0.5`}
+            className={`pointer-events-none relative z-10 px-1.5 pb-2 pt-1`}
             title={`${formatUre(plan)} h od ${formatUre(kap)} h`}
           >
             {kap > 0 ? (
               <>
-                <div className="h-1.5 overflow-hidden rounded-full bg-ink-100">
+                <div className="h-2 overflow-hidden rounded-full bg-ink-100">
                   <div className={`h-full ${ob.cls}`} style={{ width: `${Math.min(100, ob.pct)}%` }} />
                 </div>
-                <div className={`text-right text-[10px] font-bold tabular-nums ${plan > 0 ? ob.txt : "text-ink-400"}`}>
+                <div className={`text-right text-[11px] font-bold tabular-nums ${plan > 0 ? ob.txt : "text-ink-400"}`}>
                   {fmtPct(ob.pct)}
                 </div>
               </>
             ) : (
-              <div className="text-center text-[10px] text-ink-400">ne dela</div>
+              <div className="text-center text-[11px] text-ink-400">ne dela</div>
             )}
           </div>
         );
@@ -992,7 +1042,7 @@ function ZaposleniInput({
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
-      className={`h-7 w-10 rounded-md border px-1 text-center text-xs font-semibold tabular-nums focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 ${
+      className={`h-8 w-11 rounded-md border px-1 text-center text-sm font-semibold tabular-nums focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 ${
         spremenjeno ? "border-warn-400 bg-warn-50" : value === 0 ? "border-ink-200 bg-ink-50 text-ink-400" : "border-ink-200 bg-white"
       }`}
     />
@@ -1272,6 +1322,8 @@ function UrediPostavitev({
   const [rocne, setRocne] = useState(postavitev.rocne_ure);
   const [ure, setUre] = useState(formatVnos(postavitev.ure));
   const [opomba, setOpomba] = useState(postavitev.opomba ?? "");
+  const [naziv, setNaziv] = useState(postavitev.krovni_dn);
+  const prosta = postavitev.prosta;
 
   const vsi = krovni?.nalogi ?? [];
   const vkljucen = (st: string) => (nalogi ? nalogi.includes(st) : !drugje.has(st));
@@ -1302,19 +1354,20 @@ function UrediPostavitev({
   });
 
   const ureNum = parseNum(ure);
-  const veljavno = !!datum && (rocne ? ureNum !== null && ureNum > 0 : !krovni || ureIzNalogov > 0);
+  const veljavno =
+    !!datum && (!prosta || !!naziv.trim()) && (rocne ? ureNum !== null && ureNum > 0 : !krovni || ureIzNalogov > 0);
   const polje =
     "h-10 w-full rounded-lg border border-ink-200 px-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 disabled:bg-ink-50 disabled:text-ink-500";
 
   return (
     <Modal
       open
-      title={`Krovni ${postavitev.krovni_dn}`}
+      title={prosta ? `Dodatno delo: ${postavitev.krovni_dn}` : `Krovni ${postavitev.krovni_dn}`}
       onClose={onPreklici}
       sirina="max-w-3xl"
       noga={
         <div className="flex flex-wrap justify-end gap-2">
-          <Button hint="Odstrani krovni nalog iz plana" variant="danger" icon={Trash2} onClick={onOdstrani} className="mr-auto">
+          <Button hint={prosta ? "Odstrani nalogo iz plana" : "Odstrani krovni nalog iz plana"} variant="danger" icon={Trash2} onClick={onOdstrani} className="mr-auto">
             Odstrani
           </Button>
           <Button hint="Zapri brez sprememb" variant="neutral" onClick={onPreklici}>
@@ -1327,6 +1380,7 @@ function UrediPostavitev({
             onClick={() =>
               onPotrdi({
                 ...postavitev,
+                krovni_dn: prosta ? naziv.trim() : postavitev.krovni_dn,
                 delovno_mesto_id: celicaId,
                 datum_zacetka: datum,
                 nalogi,
@@ -1342,12 +1396,23 @@ function UrediPostavitev({
       }
     >
       <div className="flex flex-col gap-3 text-sm">
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <Povzetek label="nalogov v planu" vrednost={krovni ? `${izbrani.length}/${vsi.length}` : "–"} />
+        {prosta && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-ink-600">Naloga</span>
+            <input
+              value={naziv}
+              onChange={(e) => setNaziv(e.target.value)}
+              title="Kratek opis dela, npr. pakiranje elektronik"
+              className={`${polje} ${naziv.trim() ? "" : "border-nok-500"}`}
+            />
+          </label>
+        )}
+        <div className={`grid gap-2 text-center ${prosta ? "grid-cols-1" : "grid-cols-3"}`}>
+          {!prosta && <Povzetek label="nalogov v planu" vrednost={krovni ? `${izbrani.length}/${vsi.length}` : "–"} />}
           <Povzetek label="ure oddelka" vrednost={`${formatUre(rocne ? (ureNum ?? 0) : krovni ? ureIzNalogov : postavitev.ure)} h`} />
-          <Povzetek label="rok izdelave" vrednost={krovni?.rok ? formatShort(krovni.rok) : "–"} />
+          {!prosta && <Povzetek label="rok izdelave" vrednost={krovni?.rok ? formatShort(krovni.rok) : "–"} />}
         </div>
-        {!krovni && (
+        {!krovni && !prosta && (
           <p className="rounded-lg bg-warn-50 px-3 py-2 text-warn-700">Krovni nalog ni v zadnjem uvozu (morda je že zaključen).</p>
         )}
         {razpored?.od && (
@@ -1468,28 +1533,135 @@ function UrediPostavitev({
             />
           </label>
         </div>
-        <label
-          title="Vklopljeno: ure vpišeš sam; izklopljeno: ure se računajo iz vključenih nalogov"
-          className={`inline-flex h-10 cursor-pointer select-none items-center gap-2 self-start rounded-lg border px-3 text-sm transition-colors ${
-            rocne ? "border-fines-500 bg-fines-50 text-ink-900" : "border-ink-200 bg-white text-ink-700 hover:border-ink-400 hover:bg-ink-100"
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={rocne}
-            onChange={(e) => {
-              setRocne(e.target.checked);
-              if (e.target.checked && krovni) setUre(formatVnos(ureIzNalogov > 0 ? ureIzNalogov : postavitev.ure));
-            }}
-            className="h-4 w-4 accent-fines-500"
-          />
-          Ročno vpisane ure
-        </label>
+        {!prosta && (
+          <label
+            title="Vklopljeno: ure vpišeš sam; izklopljeno: ure se računajo iz vključenih nalogov"
+            className={`inline-flex h-10 cursor-pointer select-none items-center gap-2 self-start rounded-lg border px-3 text-sm transition-colors ${
+              rocne ? "border-fines-500 bg-fines-50 text-ink-900" : "border-ink-200 bg-white text-ink-700 hover:border-ink-400 hover:bg-ink-100"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={rocne}
+              onChange={(e) => {
+                setRocne(e.target.checked);
+                if (e.target.checked && krovni) setUre(formatVnos(ureIzNalogov > 0 ? ureIzNalogov : postavitev.ure));
+              }}
+              className="h-4 w-4 accent-fines-500"
+            />
+            Ročno vpisane ure
+          </label>
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-xs font-semibold text-ink-600">Opomba</span>
           <input value={opomba} onChange={(e) => setOpomba(e.target.value)} title="Opomba k postavitvi" className={polje} />
         </label>
         <p className="text-xs text-ink-500">Spremembe se zapišejo v bazo z gumbom Shrani plan.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function NovaNaloga({
+  celicaId,
+  celice,
+  zacetek,
+  onDodaj,
+  onPreklici,
+}: {
+  celicaId: number;
+  celice: Celica[];
+  zacetek: IsoDate;
+  onDodaj: (p: Pick<Postavitev, "delovno_mesto_id" | "krovni_dn" | "datum_zacetka" | "ure" | "opomba">) => void;
+  onPreklici: () => void;
+}) {
+  const [celica, setCelica] = useState(celicaId);
+  const [naziv, setNaziv] = useState("");
+  const [datum, setDatum] = useState(zacetek);
+  const [ure, setUre] = useState("");
+  const [opomba, setOpomba] = useState("");
+
+  const ureNum = parseNum(ure);
+  const veljavno = !!naziv.trim() && !!datum && ureNum !== null && ureNum > 0;
+  const polje =
+    "h-10 w-full rounded-lg border border-ink-200 px-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100";
+
+  return (
+    <Modal
+      open
+      title="Nova naloga - dodatno delo"
+      onClose={onPreklici}
+      noga={
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button hint="Zapri brez dodajanja" variant="neutral" onClick={onPreklici}>
+            Prekliči
+          </Button>
+          <Button
+            hint="Dodaj nalogo v plan"
+            variant="success"
+            icon={Plus}
+            disabled={!veljavno}
+            onClick={() =>
+              onDodaj({
+                delovno_mesto_id: celica,
+                krovni_dn: naziv.trim(),
+                datum_zacetka: datum,
+                ure: round2(ureNum ?? 0),
+                opomba: opomba.trim() || null,
+              })
+            }
+          >
+            Dodaj
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="text-ink-600">
+          Delo izven redne proizvodnje (npr. pakiranje elektronik, povezovalni kompleti). Ne šteje v seštevek oddelka.
+        </p>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-ink-600">Naloga</span>
+          <input
+            autoFocus
+            value={naziv}
+            onChange={(e) => setNaziv(e.target.value)}
+            placeholder="npr. Pakiranje elektronik"
+            title="Kratek opis dela, npr. pakiranje elektronik"
+            className={polje}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-ink-600">Delovno mesto</span>
+          <select value={celica} onChange={(e) => setCelica(Number(e.target.value))} title="Izberi delovno mesto naloge" className={polje}>
+            {celice.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.naziv}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-ink-600">Začetek</span>
+            <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} title="Dan začetka dela" className={polje} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-ink-600">Delovne ure</span>
+            <input
+              value={ure}
+              inputMode="decimal"
+              onChange={(e) => setUre(e.target.value)}
+              title="Ocena delovnih ur za nalogo"
+              className={`${polje} text-right`}
+            />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-ink-600">Opomba</span>
+          <input value={opomba} onChange={(e) => setOpomba(e.target.value)} title="Opomba k nalogi" className={polje} />
+        </label>
+        <p className="text-xs text-ink-500">Naloga se zapiše v bazo z gumbom Shrani plan.</p>
       </div>
     </Modal>
   );

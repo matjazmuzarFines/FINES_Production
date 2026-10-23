@@ -22,7 +22,7 @@ import {
   type ParagraphChild,
 } from "docx";
 import { formatShort, toIso } from "./dates";
-import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { imePlana } from "./planPdf";
 import { naloziBajte, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
@@ -55,9 +55,6 @@ function velikostPng(b: Uint8Array) {
   return { w: v.getUint32(16), h: v.getUint32(20) };
 }
 
-const besediloNalogov = (k: WorkflowKorak) =>
-  k.vseh === null ? "ni v uvozu" : k.delni ? `${k.nalogi.length}/${k.vseh} nalogov` : `cel krovni · ${k.vseh}`;
-
 function korak(k: WorkflowKorak, st: number): Table {
   const robBarva = k.poOdpremi || k.brezKapacitete > 0 ? RDECA : k.delni ? ORANZNA : CRTA;
   const rob = { style: BorderStyle.SINGLE, size: k.poOdpremi || k.delni ? 12 : 6, color: robBarva };
@@ -69,9 +66,9 @@ function korak(k: WorkflowKorak, st: number): Table {
     margins: { top: 120, bottom: 120, left: 160, right: 120 },
     children: [
       p([t(`KORAK ${st}`, { size: 8, bold: true, color: ORANZNA })], { after: 20 }),
-      p([t("KROVNI NALOG", { size: 7, bold: true, color: SVETLO_SIVA })], { after: 0 }),
+      p([t(k.prosta ? "DODATNO DELO" : "KROVNI NALOG", { size: 7, bold: true, color: SVETLO_SIVA })], { after: 0 }),
       p([t(k.krovni, { size: 24, bold: true, color: "FFFFFF" })], { after: 40 }),
-      p([t(besediloNalogov(k), { size: 10, bold: true, color: k.delni ? ORANZNA : k.vseh === null ? SVETLO_SIVA : ZELENA_SVETLA })], { after: 0 }),
+      p([t(oznakaKoraka(k), { size: 10, bold: true, color: k.delni ? ORANZNA : k.vseh === null ? SVETLO_SIVA : ZELENA_SVETLA })], { after: 0 }),
     ],
   });
 

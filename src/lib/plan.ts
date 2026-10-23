@@ -15,6 +15,8 @@ export type Celica = {
   oddelek_id: number;
   vrstni_red: number;
   privzeto_zaposlenih: number;
+  /** Mesto "Dodatno delo": delo izven redne proizvodnje, ne šteje v "oddelek skupaj". */
+  dodatno_delo: boolean;
 };
 
 /** Krovni nalog na delovnem mestu od izbranega dne. Novi (neshranjeni) imajo id < 0. */
@@ -31,6 +33,8 @@ export type Postavitev = {
   nalogi: string[] | null;
   /** true: ure so vpisane ročno; false: ure = vsota ur vključenih nalogov. */
   rocne_ure: boolean;
+  /** Prosta naloga (ni iz uvoza): krovni_dn = naziv naloge, ure so ročne. */
+  prosta: boolean;
 };
 
 export type ZaposleniDan = { delovno_mesto_id: number; datum: IsoDate; st_zaposlenih: number };
@@ -62,7 +66,7 @@ const OBZORJE_DNI = 400;
 export async function naloziCelice(datum: IsoDate): Promise<Celica[]> {
   const { data, error } = await getSupabase()
     .from("fp_delovna_mesta")
-    .select("id, naziv, oddelek_id, vrstni_red, privzeto_zaposlenih, velja_od, velja_do")
+    .select("id, naziv, oddelek_id, vrstni_red, privzeto_zaposlenih, velja_od, velja_do, dodatno_delo")
     .eq("visible", true)
     .order("vrstni_red");
   if (error) throw error;
@@ -74,18 +78,19 @@ export async function naloziCelice(datum: IsoDate): Promise<Celica[]> {
       oddelek_id: d.oddelek_id,
       vrstni_red: d.vrstni_red,
       privzeto_zaposlenih: Number(d.privzeto_zaposlenih ?? 1),
+      dodatno_delo: !!d.dodatno_delo,
     }));
 }
 
 export async function naloziPostavitve(): Promise<Postavitev[]> {
   const { data, error } = await getSupabase()
     .from("fp_plan_postavitve")
-    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, rocne_ure")
+    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, rocne_ure, prosta")
     .eq("visible", true)
     .order("datum_zacetka")
     .order("id");
   if (error) throw error;
-  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure), nalogi: p.nalogi ?? null, rocne_ure: !!p.rocne_ure }));
+  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure), nalogi: p.nalogi ?? null, rocne_ure: !!p.rocne_ure, prosta: !!p.prosta }));
 }
 
 export async function naloziZaposlene(od: IsoDate, doo: IsoDate): Promise<ZaposleniDan[]> {
@@ -126,6 +131,7 @@ export async function shraniPlan({
         opomba: p.opomba,
         nalogi: p.nalogi,
         rocne_ure: p.rocne_ure,
+        prosta: p.prosta,
       })),
     );
     if (error) throw error;
@@ -218,7 +224,7 @@ export type StanjeKrovnega = {
 
 /** Kateri nalogi krovnega so že v planu in koliko ur ostane (postavitve istega oddelka). */
 export function stanjeKrovnega(k: Krovni, postavitve: Postavitev[], koda: OddelekKoda): StanjeKrovnega {
-  const svoje = postavitve.filter((p) => p.krovni_dn === k.kljuc);
+  const svoje = postavitve.filter((p) => !p.prosta && p.krovni_dn === k.kljuc);
   const urne = svoje.filter((p) => !p.nalogi && p.rocne_ure);
   const celi = svoje.some((p) => !p.nalogi && !p.rocne_ure);
   const razporejeni = new Set(celi ? k.nalogi.map((n) => n.st_naloga) : svoje.flatMap((p) => p.nalogi ?? []));
@@ -321,6 +327,8 @@ export type WorkflowKorak = {
   vseh: number | null;
   /** V postavitvi je samo del nalogov krovnega. */
   delni: boolean;
+  /** Prosta naloga na mestu Dodatno delo (ni iz uvoza). */
+  prosta: boolean;
   nalogi: WorkflowNalog[];
   /** Najzgodnejša odprema med nalogi koraka. */
   prvaOdprema: IsoDate | null;
@@ -385,7 +393,7 @@ export function pripraviWorkflow({
           .filter((x): x is { p: Postavitev; r: Razpored & { od: IsoDate; do: IsoDate } } => !!x.r?.od && !!x.r.do && x.r.od <= doo && x.r.do >= od)
           .sort((a, b) => a.r.od.localeCompare(b.r.od) || a.r.do.localeCompare(b.r.do))
           .map(({ p, r }): WorkflowKorak => {
-            const k = krovniPoKljucu.get(p.krovni_dn);
+            const k = p.prosta ? undefined : krovniPoKljucu.get(p.krovni_dn);
             const nalogi: WorkflowNalog[] = k
               ? nalogiPostavitve(p, k).map((n) => ({
                   st_naloga: n.st_naloga,
@@ -404,6 +412,7 @@ export function pripraviWorkflow({
               ure: p.ure,
               vseh: k ? k.nalogi.length : null,
               delni: !!k && !!p.nalogi && nalogi.length < k.nalogi.length,
+              prosta: p.prosta,
               nalogi,
               prvaOdprema,
               poOdpremi: !!prvaOdprema && r.do > prvaOdprema,
@@ -425,9 +434,12 @@ export const danKratko = (d: IsoDate) => DAN_KRATKO[weekday(d) - 1];
 /** Barve celic v prerazporeditvi zaposlenih (hex, z belim besedilom; zelena je rezervirana za proste ljudi). */
 export const BARVE_CELIC = ["CA5010", "2563EB", "7C3AED", "0F766E", "DB2777", "4338CA", "B45309", "0E7490", "9F1239", "475569"];
 export const barvaCelice = (i: number) => BARVE_CELIC[i % BARVE_CELIC.length];
-/** Nalogi koraka "(2/5)"; če krovnega ni v uvozu, samo število. */
-export const nalogiKoraka = (k: { nalogi: unknown[]; vseh: number | null }) =>
-  `(${k.vseh === null ? k.nalogi.length : `${k.nalogi.length}/${k.vseh}`})`;
+/** Nalogi koraka "(2/5)"; če krovnega ni v uvozu, samo število; prosta naloga brez. */
+export const nalogiKoraka = (k: { nalogi: unknown[]; vseh: number | null; prosta: boolean }) =>
+  k.prosta ? "" : `(${k.vseh === null ? k.nalogi.length : `${k.nalogi.length}/${k.vseh}`})`;
+/** Značka koraka: dodatno delo / ni v uvozu / delni / cel krovni. */
+export const oznakaKoraka = (k: WorkflowKorak) =>
+  k.prosta ? "dodatno delo" : k.vseh === null ? "ni v uvozu" : k.delni ? `${k.nalogi.length}/${k.vseh} nalogov` : `cel krovni · ${k.vseh}`;
 /** "24.10" */
 export const ddmm = (d: IsoDate) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 /** Datumi odprem "24.10, 31.10" (največ `najvec`, nato "+n"). */

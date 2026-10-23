@@ -9,6 +9,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "21.01",
+    datum: "23. 10. 2026",
+    spremembe: [
+      "Delovni plan: vsak oddelek (Proizvodnja, Montaža, Elektro montaža, Testiranje) ima novo delovno mesto Dodatno delo za delo izven redne proizvodnje (pakiranje elektronik, povezovalni kompleti ...). Ni v dnevni rutini in ne šteje v seštevek oddelka.",
+      "Na Dodatno delo lahko povlečeš krovne naloge ali z gumbom + Naloga dodaš prosto nalogo (naziv, ure, začetek, opomba). Proste naloge so temno sive, v PDF / Word workflowu označene kot dodatno delo.",
+      "Delovni plan: višje celice in postavitve, večje polje za zaposlene in več razmaka med delovnimi mesti.",
+      "Baza: migracija 019_delovni_plan_dodatno_delo.sql.",
+    ],
+  },
+  {
     verzija: "20.03",
     datum: "22. 10. 2026",
     spremembe: [
