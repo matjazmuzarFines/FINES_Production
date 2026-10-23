@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { addDays, formatDayMonth, inValidity, weekday, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
+import { formatNum } from "./stevila";
 import { getSupabase, kosi } from "./supabase";
 import type { NalogIzracun } from "./zasedenost";
 
@@ -19,6 +20,9 @@ export type Celica = {
   dodatno_delo: boolean;
 };
 
+/** Planirani kosi naloga v postavitvi: kos = planirano, od = preostala količina ob vpisu (za odštevanje izdelanih). */
+export type KosNaloga = { kos: number; od: number };
+
 /** Krovni nalog na delovnem mestu od izbranega dne. Novi (neshranjeni) imajo id < 0. */
 export type Postavitev = {
   id: number;
@@ -31,6 +35,8 @@ export type Postavitev = {
   opomba: string | null;
   /** Vključeni nalogi krovnega; null = vsi nalogi krovnega. */
   nalogi: string[] | null;
+  /** Planirani kosi po nalogih; null / nalog brez vpisa = vsi preostali kosi. */
+  kosi: Record<string, KosNaloga> | null;
   /** true: ure so vpisane ročno; false: ure = vsota ur vključenih nalogov. */
   rocne_ure: boolean;
   /** Prosta naloga (ni iz uvoza): krovni_dn = naziv naloge, ure so ročne. */
@@ -85,12 +91,12 @@ export async function naloziCelice(datum: IsoDate): Promise<Celica[]> {
 export async function naloziPostavitve(): Promise<Postavitev[]> {
   const { data, error } = await getSupabase()
     .from("fp_plan_postavitve")
-    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, rocne_ure, prosta")
+    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, kosi, rocne_ure, prosta")
     .eq("visible", true)
     .order("datum_zacetka")
     .order("id");
   if (error) throw error;
-  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure), nalogi: p.nalogi ?? null, rocne_ure: !!p.rocne_ure, prosta: !!p.prosta }));
+  return (data ?? []).map((p) => ({ ...p, ure: Number(p.ure), nalogi: p.nalogi ?? null, kosi: p.kosi ?? null, rocne_ure: !!p.rocne_ure, prosta: !!p.prosta }));
 }
 
 export async function naloziZaposlene(od: IsoDate, doo: IsoDate): Promise<ZaposleniDan[]> {
@@ -130,6 +136,7 @@ export async function shraniPlan({
         ure: p.ure,
         opomba: p.opomba,
         nalogi: p.nalogi,
+        kosi: p.kosi,
         rocne_ure: p.rocne_ure,
         prosta: p.prosta,
       })),
@@ -199,38 +206,90 @@ export function nalogiPostavitve(p: Postavitev, k: Krovni | undefined): NalogIzr
   return k.nalogi.filter((n) => s.has(n.st_naloga));
 }
 
-export const ureNalogov = (nalogi: NalogIzracun[], koda: OddelekKoda) => round2(nalogi.reduce((s, n) => s + n.ure[koda], 0));
+/** Ure oddelka za en kos naloga. */
+export const urePoKosu = (n: NalogIzracun, koda: OddelekKoda) => (n.preostala > 0 ? n.ure[koda] / n.preostala : 0);
+
+/** Vsota ur nalogov; s `kos` samo za planirane kose (sicer vsi preostali). */
+export const ureNalogov = (nalogi: NalogIzracun[], koda: OddelekKoda, kos?: (st: string) => number) =>
+  round2(nalogi.reduce((s, n) => s + (kos ? urePoKosu(n, koda) * kos(n.st_naloga) : n.ure[koda]), 0));
 
 /**
- * Ure, ki jih postavitev porabi: ročne ure ali vsota ur vključenih nalogov iz zadnjega uvoza.
+ * Ure, ki jih postavitev porabi: ročne ure ali vsota ur planiranih kosov vključenih nalogov iz zadnjega uvoza.
  * Če krovnega ni v uvozu ali so nalogi izdelani, ostanejo zadnje shranjene ure.
  */
-export function urePostavitve(p: Postavitev, k: Krovni | undefined, koda: OddelekKoda): number {
+export function urePostavitve(p: Postavitev, k: Krovni | undefined, koda: OddelekKoda, kosi?: Map<string, number>): number {
   if (p.rocne_ure || !k) return p.ure;
-  const ure = ureNalogov(nalogiPostavitve(p, k), koda);
+  const ure = ureNalogov(nalogiPostavitve(p, k), koda, kosi && ((st) => kosi.get(st) ?? 0));
   return ure > 0 ? ure : p.ure;
 }
 
+const vrstniRed = (p: Postavitev) => (p.id < 0 ? Number.MAX_SAFE_INTEGER + p.id : p.id);
+/** Zgodnejši začetek prej, nato starejše postavitve. */
+const poZacetku = (a: Postavitev, b: Postavitev) => a.datum_zacetka.localeCompare(b.datum_zacetka) || vrstniRed(a) - vrstniRed(b);
+
+/**
+ * Planirani kosi nalogov po postavitvah krovnega (postavitev id -> nalog -> kos).
+ * Izdelani kosi (od ob vpisu - preostala zdaj) se odštejejo od najzgodnejših postavitev naloga;
+ * nalog brez vpisanih kosov dobi preostale kose, ki jih ne pokrijejo druge postavitve.
+ * Postavitve po urah (ročne ure brez izbire nalogov) niso zajete.
+ */
+export function kosiKrovnega(k: Krovni, postavitve: Postavitev[]): Map<number, Map<string, number>> {
+  const svoje = postavitve
+    .filter((p) => !p.prosta && p.krovni_dn === k.kljuc && !(p.rocne_ure && !p.nalogi))
+    .sort(poZacetku);
+  const out = new Map(svoje.map((p) => [p.id, new Map<string, number>()]));
+  for (const n of k.nalogi) {
+    const st = n.st_naloga;
+    const vsebujejo = svoje.filter((p) => !p.nalogi || p.nalogi.includes(st));
+    const delne = vsebujejo.filter((p) => p.kosi?.[st]);
+    let izdelano = Math.max(0, Math.max(0, ...delne.map((p) => p.kosi![st].od)) - n.preostala);
+    let prosto = n.preostala;
+    for (const p of delne) {
+      const plan = p.kosi![st].kos;
+      const odstej = Math.min(plan, izdelano);
+      izdelano -= odstej;
+      const kos = Math.min(plan - odstej, prosto);
+      prosto -= kos;
+      out.get(p.id)!.set(st, kos);
+    }
+    for (const p of vsebujejo) {
+      if (p.kosi?.[st]) continue;
+      out.get(p.id)!.set(st, prosto);
+      prosto = 0;
+    }
+  }
+  return out;
+}
+
 export type StanjeKrovnega = {
-  /** Nalogi, ki so že v kateri od postavitev. */
+  /** Nalogi, ki so v celoti (vsi kosi) v postavitvah. */
   razporejeni: Set<string>;
-  /** Nalogi, ki še niso v planu. */
+  /** Nalogi, ki še niso (ali niso v celoti) v planu. */
   ostali: NalogIzracun[];
+  /** Planirani kosi po nalogih (vse postavitve). */
+  planKosi: Map<string, number>;
+  /** Nerazporejeni kosi po nalogih. */
+  prostiKosi: Map<string, number>;
   /** Nerazporejene ure oddelka. */
   ostane: number;
   /** Krovni ima postavitev z ročnimi urami brez izbire nalogov (razporejanje po urah, kot prej). */
   poUrah: boolean;
 };
 
-/** Kateri nalogi krovnega so že v planu in koliko ur ostane (postavitve istega oddelka). */
+/** Kateri nalogi (in kosi) krovnega so že v planu in koliko ur ostane (postavitve istega oddelka). */
 export function stanjeKrovnega(k: Krovni, postavitve: Postavitev[], koda: OddelekKoda): StanjeKrovnega {
-  const svoje = postavitve.filter((p) => !p.prosta && p.krovni_dn === k.kljuc);
-  const urne = svoje.filter((p) => !p.nalogi && p.rocne_ure);
-  const celi = svoje.some((p) => !p.nalogi && !p.rocne_ure);
-  const razporejeni = new Set(celi ? k.nalogi.map((n) => n.st_naloga) : svoje.flatMap((p) => p.nalogi ?? []));
+  const urne = postavitve.filter((p) => !p.prosta && p.krovni_dn === k.kljuc && !p.nalogi && p.rocne_ure);
+  const planKosi = new Map<string, number>();
+  for (const m of kosiKrovnega(k, postavitve).values())
+    for (const [st, kos] of m) planKosi.set(st, (planKosi.get(st) ?? 0) + kos);
+  const prostiKosi = new Map(k.nalogi.map((n) => [n.st_naloga, Math.max(0, n.preostala - (planKosi.get(n.st_naloga) ?? 0))]));
+  const razporejeni = new Set(
+    k.nalogi.filter((n) => planKosi.has(n.st_naloga) && prostiKosi.get(n.st_naloga)! <= 0).map((n) => n.st_naloga),
+  );
   const ostali = k.nalogi.filter((n) => !razporejeni.has(n.st_naloga));
   const ureUrnih = urne.reduce((s, p) => s + p.ure, 0);
-  return { razporejeni, ostali, ostane: Math.max(0, round2(ureNalogov(ostali, koda) - ureUrnih)), poUrah: urne.length > 0 };
+  const ureOstalih = ureNalogov(ostali, koda, (st) => prostiKosi.get(st) ?? 0);
+  return { razporejeni, ostali, planKosi, prostiKosi, ostane: Math.max(0, round2(ureOstalih - ureUrnih)), poUrah: urne.length > 0 };
 }
 
 export const jeDelovniDan = (d: IsoDate) => weekday(d) <= 5;
@@ -246,10 +305,7 @@ export function razporedi(
 ): { razpored: Map<number, Razpored>; zasedeno: Map<string, number> } {
   const zasedeno = new Map<string, number>(); // `${celica}|${datum}` -> ure
   const razpored = new Map<number, Razpored>();
-  const vrstni = (p: Postavitev) => (p.id < 0 ? Number.MAX_SAFE_INTEGER + p.id : p.id);
-  const urejene = [...postavitve].sort(
-    (a, b) => a.datum_zacetka.localeCompare(b.datum_zacetka) || vrstni(a) - vrstni(b),
-  );
+  const urejene = [...postavitve].sort(poZacetku);
   for (const p of urejene) {
     const dnevi = new Map<IsoDate, number>();
     let ostanek = p.ure;
@@ -279,16 +335,16 @@ export function razporedi(
 // =====================================================================
 
 export function izvoziPlanXlsx(
-  vrstice: { celica: string; postavitev: Postavitev; razpored?: Razpored; krovni?: Krovni }[],
+  vrstice: { celica: string; postavitev: Postavitev; razpored?: Razpored; krovni?: Krovni; kosi?: Map<string, number> }[],
   ime: string,
 ) {
   const datum = (d: IsoDate | null | undefined) => (d ? new Date(`${d}T00:00:00`) : "");
   const ws = XLSX.utils.json_to_sheet(
-    vrstice.map(({ celica, postavitev: p, razpored: r, krovni: k }) => ({
+    vrstice.map(({ celica, postavitev: p, razpored: r, krovni: k, kosi }) => ({
       "Delovno mesto": celica,
       "Krovni DN": p.krovni_dn,
       "Št. nalogov": k ? `${nalogiPostavitve(p, k).length}/${k.nalogi.length}` : "",
-      Nalogi: p.nalogi ? p.nalogi.join(", ") : "vsi",
+      Nalogi: p.nalogi ? p.nalogi.map((st) => (p.kosi?.[st] ? `${st} (${kosi?.get(st) ?? p.kosi[st].kos} kos)` : st)).join(", ") : "vsi",
       Naročnik: k?.narocnik ?? "",
       "Rok izdelave": datum(k?.rok),
       "Plan od": datum(r?.od),
@@ -312,7 +368,10 @@ export type WorkflowNalog = {
   st_naloga: string;
   ident: string;
   naziv: string | null;
+  /** Planirani kosi v postavitvi. */
   kos: number | null;
+  /** Vsi preostali kosi naloga (večje od kos = delni nalog). */
+  kosVseh: number | null;
   /** Datumi odprem naročil, ki jih pokrije nalog (FIFO kot na Prioritetah), naraščajoče. */
   odpreme: IsoDate[];
 };
@@ -358,6 +417,7 @@ export function pripraviWorkflow({
   postavitve,
   razpored,
   krovniPoKljucu,
+  kosiPostavitev,
   dnevi,
   ureNaDan,
   zaposleni,
@@ -368,6 +428,8 @@ export function pripraviWorkflow({
   postavitve: Postavitev[];
   razpored: Map<number, Razpored>;
   krovniPoKljucu: Map<string, Krovni>;
+  /** Planirani kosi nalogov po postavitvah (kosiKrovnega). */
+  kosiPostavitev: Map<number, Map<string, number>>;
   /** Prikazani (delovni) dnevi, naraščajoče. */
   dnevi: IsoDate[];
   ureNaDan: number;
@@ -394,15 +456,17 @@ export function pripraviWorkflow({
           .sort((a, b) => a.r.od.localeCompare(b.r.od) || a.r.do.localeCompare(b.r.do))
           .map(({ p, r }): WorkflowKorak => {
             const k = p.prosta ? undefined : krovniPoKljucu.get(p.krovni_dn);
+            const kosi = kosiPostavitev.get(p.id);
             const nalogi: WorkflowNalog[] = k
               ? nalogiPostavitve(p, k).map((n) => ({
                   st_naloga: n.st_naloga,
                   ident: n.koda_artikla,
                   naziv: n.naziv_artikla,
-                  kos: n.preostala,
+                  kos: kosi?.get(n.st_naloga) ?? n.preostala,
+                  kosVseh: n.preostala,
                   odpreme: odpreme.get(n.st_naloga) ?? [],
                 }))
-              : (p.nalogi ?? []).map((st) => ({ st_naloga: st, ident: "", naziv: null, kos: null, odpreme: odpreme.get(st) ?? [] }));
+              : (p.nalogi ?? []).map((st) => ({ st_naloga: st, ident: "", naziv: null, kos: null, kosVseh: null, odpreme: odpreme.get(st) ?? [] }));
             const prvaOdprema = nalogi.flatMap((n) => n.odpreme.slice(0, 1)).sort()[0] ?? null;
             return {
               krovni: p.krovni_dn,
@@ -411,7 +475,7 @@ export function pripraviWorkflow({
               do: r.do,
               ure: p.ure,
               vseh: k ? k.nalogi.length : null,
-              delni: !!k && !!p.nalogi && nalogi.length < k.nalogi.length,
+              delni: !!k && ((!!p.nalogi && nalogi.length < k.nalogi.length) || nalogi.some((n) => (n.kos ?? 0) < (n.kosVseh ?? 0))),
               prosta: p.prosta,
               nalogi,
               prvaOdprema,
@@ -440,6 +504,9 @@ export const nalogiKoraka = (k: { nalogi: unknown[]; vseh: number | null; prosta
 /** Značka koraka: dodatno delo / ni v uvozu / delni / cel krovni. */
 export const oznakaKoraka = (k: WorkflowKorak) =>
   k.prosta ? "dodatno delo" : k.vseh === null ? "ni v uvozu" : k.delni ? `${k.nalogi.length}/${k.vseh} nalogov` : `cel krovni · ${k.vseh}`;
+/** "40 kos" ali "40/100 kos", če je planiran samo del kosov naloga. */
+export const besediloKosov = (n: { kos: number | null; kosVseh: number | null }) =>
+  n.kos === null ? "" : n.kosVseh !== null && n.kos < n.kosVseh ? `${formatNum(n.kos)}/${formatNum(n.kosVseh)} kos` : `${formatNum(n.kos)} kos`;
 /** "24.10" */
 export const ddmm = (d: IsoDate) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 /** Datumi odprem "24.10, 31.10" (največ `najvec`, nato "+n"). */

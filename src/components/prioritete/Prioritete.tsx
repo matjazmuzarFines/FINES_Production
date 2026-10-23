@@ -31,6 +31,9 @@ import {
   STATUSI,
   danesIso,
   izracunajPrioritete,
+  NASTAVITVE_PRIORITET,
+  preberiNastavitvePrioritet,
+  type NastavitvePrioritet,
   izvoziArtikleXlsx,
   izvoziKrovneXlsx,
   izvoziNalogePrioritetXlsx,
@@ -125,19 +128,6 @@ type IzborZas = { tip: "teden"; teden: IsoDate } | { tip: "zapadlo" } | { tip: "
 type NormativFilter = "vsi" | "brez" | "z";
 
 const TEDNI_IZBIRA = [1, 2, 3, 4, 5, 6, 8, 12, 0]; // 0 = vsi
-const NASTAVITVE_KLJUC = "fp-prioritete-nastavitve";
-
-type Shranjeno = { tednov: number; zamikDni: number };
-
-function preberiShranjeno(): Shranjeno {
-  const privzeto = { tednov: 5, zamikDni: 0 };
-  try {
-    const s = JSON.parse(localStorage.getItem(NASTAVITVE_KLJUC) ?? "null");
-    return s ? { ...privzeto, ...s } : privzeto;
-  } catch {
-    return privzeto;
-  }
-}
 
 type Podatki = {
   nalUvoz: Uvoz | null;
@@ -243,8 +233,8 @@ function PrioriteteInner() {
 
   // Nastavitve in filtri
   // Stran pokaže Loading, dokler podatki niso naloženi - branje localStorage ob inicializaciji je varno
-  const [tednov, setTednov] = useState(() => preberiShranjeno().tednov);
-  const [zamikDni, setZamikDni] = useState(() => preberiShranjeno().zamikDni);
+  const [tednov, setTednov] = useState(() => preberiNastavitvePrioritet().tednov);
+  const [zamikDni, setZamikDni] = useState(() => preberiNastavitvePrioritet().zamikDni);
   const [vkljuciNepotrjena, setVkljuciNepotrjena] = useState(false);
   const [samoIzdelki, setSamoIzdelki] = useState(true);
   const [statusi, setStatusi] = useState<Status[]>(["MANJKA", "ZAMUJA", "PREGLEJ", "V_DELU"]);
@@ -279,12 +269,12 @@ function PrioriteteInner() {
   const [matPregled, setMatPregled] = useState<(MaterialUvozPregled & { datoteka: string }) | null>(null);
   const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | "vd300" | "material" | null>(null);
 
-  function shraniNastavitve(s: Partial<Shranjeno>) {
+  function shraniNastavitve(s: Partial<NastavitvePrioritet>) {
     const nove = { tednov, zamikDni, ...s };
     setTednov(nove.tednov);
     setZamikDni(nove.zamikDni);
     try {
-      localStorage.setItem(NASTAVITVE_KLJUC, JSON.stringify(nove));
+      localStorage.setItem(NASTAVITVE_PRIORITET, JSON.stringify(nove));
     } catch {
       // brskalnik ne dovoli shranjevanja - nastavitev velja do osvežitve
     }

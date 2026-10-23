@@ -9,6 +9,35 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "23.02",
+    datum: "23. 10. 2026",
+    spremembe: [
+      "Kontrola plana: ločeno »manjka« (rdeče, ni zaloge ne naloga) in »DN brez naloga« (oranžno, kose pokrije planirana količina DN v ERP, naloga pa ni v uvozu nalogov - npr. zaključen). Postavka samo z DN brez naloga ni več med odprtimi (enako kot na Prioritetah).",
+    ],
+  },
+  {
+    verzija: "23.01",
+    datum: "23. 10. 2026",
+    spremembe: [
+      "Delovni plan: nov gumb Kontrola plana (desno ob oddelkih). Odpre desni panel z naročili po prioritetah, seznam krovnih nalogov se skrije. Brskalnik si zapomni, ali je panel odprt.",
+      "Lista je ista kot na Prioritetah (ista FIFO razdelitev, potrjena naročila, samo izdelki, zamik dni iz nastavitev Prioritet), prikazane so samo postavke, ki morajo skozi proizvodnjo: kljukica, odprema, ident in naziv, kosi, krovni.",
+      "Kljukica se postavi sama, ko so nalogi postavke na planu oddelka z dovolj kosi (zelena, vrstica prečrtana in siva); oranžna = samo del kosov (npr. 40/60), rdeč X = postavka nima delovnega naloga, – = nalog v tem oddelku nima dela. Osveži se ob vsaki spremembi plana.",
+      "Pod datumom odpreme je konec plana; rdeč, če se plan konča po roku. Filter Odprti / Vsi in iskanje.",
+      "Klik na krovni: če še ni na planu, se izbere za postavitev s klikom na dan; sicer se njegove postavitve poudarijo na planu.",
+    ],
+  },
+  {
+    verzija: "22.01",
+    datum: "23. 10. 2026",
+    spremembe: [
+      "Delovni plan - urejanje krovnega: nov stolpec Plan kos - pri vsakem nalogu vpišeš, koliko kosov delamo v tej postavitvi (npr. 40 od 100). Ure postavitve se izračunajo samo za planirane kose.",
+      "Preostali kosi ostanejo nerazporejeni: krovni ostane na seznamu z urami preostalih kosov in ga lahko znova povlečeš na plan (nova postavitev vzame samo še preostale kose). Tako en nalog razdeliš na več dni, tednov ali celic.",
+      "Ob novem uvozu se izdelani kosi odštejejo od najzgodnejše postavitve naloga.",
+      "Delni kosi so označeni: na seznamu krovnih (npr. 40/100 kos), na postavitvi z * in v hover tekstu, v PDF / Word workflowu (40/100 kos) in v Excel izvozu.",
+      "Baza: migracija 020_delovni_plan_kosi.sql.",
+    ],
+  },
+  {
     verzija: "21.01",
     datum: "23. 10. 2026",
     spremembe: [

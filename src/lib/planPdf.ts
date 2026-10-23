@@ -5,7 +5,7 @@
 // Modul se naloži šele ob kliku (dinamičen import).
 import { degrees, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import { formatShort, toIso } from "./dates";
-import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloKosov, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { A4, asciiIme, novDokument, prelomi, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
 
@@ -172,7 +172,7 @@ function korak(stran: PDFPage | null, f: Pisave, k: WorkflowKorak, st: number, x
     stran.drawText(naslov, { x: x + m.pad, y: y + 2 * s, size: 9.5 * s, font: f.krepka, color: k.delni ? ORANZNA : k.vseh === null ? SIVA : ZELENA });
     nalogi.forEach((n, i) => {
       y -= 12 * s;
-      const kos = n.kos === null ? "" : `${formatNum(n.kos)} kos`;
+      const kos = besediloKosov(n);
       const kw = f.krepka.widthOfTextAtSize(kos, 8.5 * s);
       stran.drawText(n.st_naloga, { x: x + m.pad, y, size: 8.5 * s, font: f.krepka, color: BESEDILO });
       const sw = f.krepka.widthOfTextAtSize(n.st_naloga, 8.5 * s);

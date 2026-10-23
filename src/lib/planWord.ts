@@ -22,7 +22,7 @@ import {
   type ParagraphChild,
 } from "docx";
 import { formatShort, toIso } from "./dates";
-import { barvaCelice, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import { barvaCelice, besediloKosov, besediloOdprem, danInDatum, danKratko, ddmm, nalogiKoraka, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
 import { imePlana } from "./planPdf";
 import { naloziBajte, prenesiDatoteko } from "./porociloPdf";
 import { formatNum, formatUre } from "./stevila";
@@ -121,7 +121,7 @@ function korak(k: WorkflowKorak, st: number): Table {
             new TextRun({ text: "\t" }),
             t([n.ident, n.naziv].filter(Boolean).join(" "), { size: 8.5, color: SIVA }),
             new TextRun({ text: "\t" }),
-            t(n.kos === null ? "" : `${formatNum(n.kos)} kos`, { size: 9, bold: true }),
+            t(besediloKosov(n), { size: 9, bold: true }),
           ],
         }),
       );

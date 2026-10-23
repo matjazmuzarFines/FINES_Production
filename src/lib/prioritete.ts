@@ -1025,6 +1025,20 @@ export function opisDelov(deli: Del[]): string {
 
 export const danesIso = () => toIso(new Date());
 
+/** Nastavitve strani Prioritete v brskalniku (veljajo tudi za kontrolo delovnega plana). */
+export const NASTAVITVE_PRIORITET = "fp-prioritete-nastavitve";
+export type NastavitvePrioritet = { tednov: number; zamikDni: number };
+
+export function preberiNastavitvePrioritet(): NastavitvePrioritet {
+  const privzeto = { tednov: 5, zamikDni: 0 };
+  try {
+    const s = JSON.parse(localStorage.getItem(NASTAVITVE_PRIORITET) ?? "null");
+    return s ? { ...privzeto, ...s } : privzeto;
+  } catch {
+    return privzeto;
+  }
+}
+
 /**
  * Datumi odprem po delovnih nalogih (za delovni plan): ista FIFO razdelitev kot na strani Prioritete -
  * zaloga pokrije najzgodnejša naročila, nalogi po roku izdelave naslednja. Nalog dobi samo datume naročil,
