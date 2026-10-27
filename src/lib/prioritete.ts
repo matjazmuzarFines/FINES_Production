@@ -378,7 +378,31 @@ export type Odprema = {
   opis: string | null;
   kolicina: number;
   dokument: string | null;
+  // Za pakiranje (SQL 021) - v starejših uvozih null
+  lokacija: string | null;
+  drzava: string | null;
+  kupcevo_narocilo: string | null;
+  /** Skupina postavk na dokumentu (stolpec "Oddelek", npr. "5-PLADENJSKI PEKARSKI KOMPLET"). */
+  oddelek: string | null;
+  em: string | null;
+  opis_dokumenta: string | null;
+  interne_opombe: string | null;
+  zaznamek: string | null;
+  /** Zaloga matično skladišče ob izvozu VD300 (če ni izpisa materiala). */
+  zaloga: number | null;
 };
+/** Polja za pakiranje - brez njih (SQL 021 ni zagnan) se odpreme shranijo in berejo brez teh stolpcev. */
+const POLJA_PAKIRANJA = [
+  "lokacija",
+  "drzava",
+  "kupcevo_narocilo",
+  "oddelek",
+  "em",
+  "opis_dokumenta",
+  "interne_opombe",
+  "zaznamek",
+  "zaloga",
+] as const satisfies readonly (keyof Odprema)[];
 export type OdpUvoz = { id: number; datoteka: string; st_postavk: number; created_at: string };
 export type OdpUvozPregled = {
   odpreme: Odprema[];
@@ -400,7 +424,9 @@ const ODPREME_DNI = 30;
  * Količina v VD200 je vedno celotna količina naročila, zato se štejejo vse dobavnice naročila.
  */
 function jeRelevantnaOdprema(o: Odprema, meja: IsoDate): boolean {
-  if (!o.narocilo || /storn/i.test(o.status ?? "")) return false;
+  if (/storn/i.test(o.status ?? "")) return false;
+  // Odprema brez naročila VD200 (npr. reklamacija) - samo za pakiranje, dokler ni zaključena
+  if (!o.narocilo) return !/zaklju/i.test(o.status ?? "");
   const statusNar = (o.narocilo_status ?? "").toLowerCase();
   const narociloOdprto = !/zaklju|storn|ni več aktualno|realizirano/.test(statusNar);
   return narociloOdprto || (!!o.datum_odpreme && o.datum_odpreme >= meja);
@@ -418,6 +444,15 @@ const STOLPCI_VD300: Record<string, keyof Odprema> = {
   "kratki opis": "opis",
   količina: "kolicina",
   "dokument (skl/vt/številka)": "dokument",
+  lokacija: "lokacija",
+  država: "drzava",
+  "kupčevo naročilo - številka": "kupcevo_narocilo",
+  oddelek: "oddelek",
+  em: "em",
+  "opis dokumenta": "opis_dokumenta",
+  "interne opombe": "interne_opombe",
+  "zaznamek / komentar": "zaznamek",
+  "zaloga (matično skladišče)": "zaloga",
 };
 
 export async function preberiVd300Xlsx(file: File): Promise<OdpUvozPregled> {
@@ -457,6 +492,15 @@ export async function preberiVd300Xlsx(file: File): Promise<OdpUvozPregled> {
       opis: txt(v.opis),
       kolicina: parseNum(v.kolicina) ?? 0,
       dokument: txt(v.dokument),
+      lokacija: txt(v.lokacija),
+      drzava: txt(v.drzava),
+      kupcevo_narocilo: txt(v.kupcevo_narocilo),
+      oddelek: txt(v.oddelek),
+      em: txt(v.em),
+      opis_dokumenta: txt(v.opis_dokumenta),
+      interne_opombe: txt(v.interne_opombe),
+      zaznamek: txt(v.zaznamek),
+      zaloga: parseNum(v.zaloga),
     };
     if (jeRelevantnaOdprema(o, meja)) odpreme.push(o);
   }
@@ -479,15 +523,33 @@ export async function shraniOdpUvoz(datoteka: string, odpreme: Odprema[]) {
     .single();
   if (error) throw error;
 
+  let brezPakiranja = false;
   for (const kos of kosi(odpreme)) {
-    const { error: e } = await sb.from("fp_pri_odpreme").insert(kos.map((o) => ({ ...o, uvoz_id: uvoz.id })));
+    const vrstice = kos.map((o) => ({ ...(brezPakiranja ? brezPoljPakiranja(o) : o), uvoz_id: uvoz.id }));
+    let { error: e } = await sb.from("fp_pri_odpreme").insert(vrstice);
+    // SQL 021 še ni zagnan: shrani brez stolpcev za pakiranje (Prioritete delujejo naprej)
+    if (e && !brezPakiranja && niStolpcaPakiranja(e.message)) {
+      brezPakiranja = true;
+      ({ error: e } = await sb.from("fp_pri_odpreme").insert(kos.map((o) => ({ ...brezPoljPakiranja(o), uvoz_id: uvoz.id }))));
+    }
     if (e) throw new Error(`Odpreme niso bile v celoti shranjene (uvoz ni aktiviran): ${e.message}`);
   }
   const { error: e2 } = await sb.from("fp_pri_odp_uvozi").update({ aktiven: true }).eq("id", uvoz.id);
   if (e2) throw e2;
 }
 
-export async function naloziZadnjiOdpUvoz(): Promise<{ uvoz: OdpUvoz | null; odpreme: Odprema[] }> {
+const niStolpcaPakiranja = (m: string) => POLJA_PAKIRANJA.some((p) => m.includes(`'${p}'`) || m.includes(`.${p}`)) || /column/i.test(m);
+
+function brezPoljPakiranja(o: Odprema) {
+  const kopija: Partial<Odprema> = { ...o };
+  for (const p of POLJA_PAKIRANJA) delete kopija[p];
+  return kopija;
+}
+
+const POLJA_ODPREME = "stevilka, zap, narocilo, narocilo_status, status, partner, datum_odpreme, ident, opis, kolicina, dokument";
+
+/** `pakiranje` = true: uvoz ima polja za pakiranje (SQL 021 je zagnan). */
+export async function naloziZadnjiOdpUvoz(): Promise<{ uvoz: OdpUvoz | null; odpreme: Odprema[]; pakiranje: boolean }> {
   const sb = getSupabase();
   const { data: uvoz, error } = await sb
     .from("fp_pri_odp_uvozi")
@@ -498,18 +560,35 @@ export async function naloziZadnjiOdpUvoz(): Promise<{ uvoz: OdpUvoz | null; odp
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!uvoz) return { uvoz: null, odpreme: [] };
+  if (!uvoz) return { uvoz: null, odpreme: [], pakiranje: true };
 
-  const odpreme = await fetchAll<Odprema>((from, to) =>
-    sb
-      .from("fp_pri_odpreme")
-      .select("stevilka, zap, narocilo, narocilo_status, status, partner, datum_odpreme, ident, opis, kolicina, dokument")
-      .eq("uvoz_id", uvoz.id)
-      .eq("visible", true)
-      .order("id")
-      .range(from, to),
-  );
-  return { uvoz, odpreme: odpreme.map((o) => ({ ...o, kolicina: Number(o.kolicina ?? 0) })) };
+  const beri = (polja: string) =>
+    fetchAll<Odprema>((from, to) =>
+      // Seznam stolpcev je sestavljen, zato Supabase ne pozna tipa vrstic
+      sb.from("fp_pri_odpreme").select(polja).eq("uvoz_id", uvoz.id).eq("visible", true).order("id").range(from, to) as unknown as PromiseLike<{
+        data: Odprema[] | null;
+        error: { message: string } | null;
+      }>,
+    );
+  let pakiranje = true;
+  let odpreme: Odprema[];
+  try {
+    odpreme = await beri(`${POLJA_ODPREME}, ${POLJA_PAKIRANJA.join(", ")}`);
+  } catch (e) {
+    if (!niStolpcaPakiranja((e as Error).message)) throw e;
+    pakiranje = false;
+    odpreme = await beri(POLJA_ODPREME);
+  }
+  return {
+    uvoz,
+    pakiranje,
+    odpreme: odpreme.map((o) => ({
+      ...o,
+      ...Object.fromEntries(POLJA_PAKIRANJA.map((p) => [p, o[p] ?? null])),
+      kolicina: Number(o.kolicina ?? 0),
+      zaloga: o.zaloga === null || o.zaloga === undefined ? null : Number(o.zaloga),
+    })),
+  };
 }
 
 /** Količina z dobavnico po naročilu VD200 in identu: "naročilo|ident" -> kosov. */

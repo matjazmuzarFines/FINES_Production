@@ -9,6 +9,55 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "24.05",
+    datum: "26. 10. 2026",
+    spremembe: [
+      "Pakiranje: nov stolpec Printano na koncu tabele odprem. Ko prenesete PDF navodil, se pri vsaki natisnjeni odpremi shrani barva lista in pokaže kvadratek te barve; dokler odprema ni natisnjena, je prazno. Hover pokaže čas tiska, prvi tisk in kdo je natisnil; stolpec se razvršča po času tiska.",
+      "Ob ponovnem tisku se barva posodobi na zadnjo natisnjeno. Status odpreme se ne spreminja.",
+      "Baza: migracija 022_pakiranje_printano.sql.",
+    ],
+  },
+  {
+    verzija: "24.04",
+    datum: "26. 10. 2026",
+    spremembe: [
+      "Pakiranje PDF: tabela se nikoli ne prelomi na dva lista. Če checklista ne gre na 1 list, se pisava tabele manjša po 0,5 px (od 12 px do najmanj 11 px). Če tudi tako ne gre ali je palet več kot 4, ostane osnovna velikost in tabela, ki ne gre več na list, gre cela na naslednji list.",
+    ],
+  },
+  {
+    verzija: "24.03",
+    datum: "26. 10. 2026",
+    spremembe: [
+      "Pakiranje - izbira barve: pri vsaki odpremi v oknu PDF je majhen kvadratek z barvo; klik odpre izbiro samo izbranih barv (brez besedila).",
+      "Privzeto 1 list z lokacijo na odpremo.",
+      "Nova logika »1 na paleto (peč)«: vsaka peč je na svoji paleti, checklista ima za vsako paleto svojo manjšo tabelo (Paleta 1 / 2 in peč). Postavke kompleta s pečjo gredo na palete tega kompleta, ostale (vozički, pladnji ...) se enakomerno razdelijo med vse palete (npr. 30 pladnjev na 2 paleti = 15 + 15).",
+      "PDF poenostavljen za proizvodnjo: podatki odpreme (kupec, odpremni nalog ...) so manjši, število peči in postavk je majhno desno nad tabelo, glavna je tabela artiklov s kvadratki.",
+    ],
+  },
+  {
+    verzija: "24.02",
+    datum: "26. 10. 2026",
+    spremembe: [
+      "Pakiranje: popravljene glave tabel (odpreme in postavke odpreme) - niso več pod prvo vrstico.",
+      "Lokacija na PDF je vedno iz stolpca Lokacija v VD300 (ne več kupec); če lokacije ni, piše »Lokacija ni vpisana«. V tabeli sta kupec in lokacija vsak v svojem stolpcu.",
+      "Barve: privzeto na izbiro Bela in Fluo rumena (selektor barv ostane). Barvo lista izbereš za vsako odpremo posebej v oknu PDF (spustni seznam z barvo), ni več samodejnega menjavanja; stolpec barve v tabeli je odstranjen.",
+      "Privzeto 1 list z lokacijo na paleto (peč).",
+      "Checklista: vrstice navpično poravnane (kvadratek in besedilo na sredini vrstice), odstranjeni stolpec Na peč, navodilo o paleti na peč in polja za podpis; pod tabelo je polje Opomba (2-3 vrstice) za ročni zapis po tisku.",
+    ],
+  },
+  {
+    verzija: "24.01",
+    datum: "26. 10. 2026",
+    spremembe: [
+      "Proizvodnja: nov razdelek Orodja s prvim orodjem Pakiranje - pregled odprtih odprem VD300 (brez zaključenih in storniranih) za vodjo pakiranja.",
+      "Tabela odprem: odprema, datum, kupec, lokacija, status, število peči (= palet), postavke in stanje zaloge (zaloga iz izpisa materiala, razdeljena po datumu odpreme). Klik na vrstico jo označi, puščica pokaže postavke po skupinah (kompleti) z vrsto artikla in zalogo.",
+      "Filtri: iskanje (odprema, kupec, lokacija, artikel), kupec, datum odpreme, s pečmi / brez peči, zaloga manjka / na zalogi in kartice statusov odpreme.",
+      "PDF navodila za pakiranje za označene odpreme: za vsako odpremo checklista s kvadratki za kljukanje (postavke po skupinah, količina na peč, opozorilo, če artikla ni na zalogi, storitve posebej, podpis pakiral / kontroliral) in A4 list z veliko lokacijo na fluorescentnem ozadju za paleto. Barvo izbereš (več barv se menja po odpremah), list je lahko 1 na odpremo ali 1 na peč (Paleta 1/2).",
+      "Povzetek za skladišče (TXT): izbereš, kaj naj skladišče nabere (peči, nape, podstavki, vozički, pladnji, mehčalci ...), samo kar je na zalogi (kar manjka, je posebej), seštevek ali po odpremah; Kopiraj za Teams ali Prenesi .txt.",
+      "Uvoz odprem VD300 shrani še lokacijo dostave, skupine postavk (stolpec Oddelek), državo, kupčevo naročilo in opombe; shranijo se tudi odprte odpreme brez naročila VD200. Baza: migracija 021_odpreme_pakiranje.sql (nato odpreme uvozi znova).",
+    ],
+  },
+  {
     verzija: "23.03",
     datum: "23. 10. 2026",
     spremembe: [

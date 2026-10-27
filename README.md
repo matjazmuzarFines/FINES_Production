@@ -17,6 +17,7 @@ src/
     proizvodnja/zasedenost     zasedenost po delovnih tednih (uvoz nalogov)
     proizvodnja/normativi      urejevalnik normativov (CSV uvoz/izvoz)
     proizvodnja/prioritete     (v izdelavi)
+    proizvodnja/orodja/pakiranje  navodila za pakiranje odprem VD300 (PDF checklista + list z lokacijo), povzetek za skladišče
     skladisce/rutina           rutina skladišča
   components/
     AppShell.tsx               glava, leva navigacija, noga, "i" popup
