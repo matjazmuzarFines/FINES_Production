@@ -84,11 +84,13 @@ const krovniDn = (x: unknown) => {
 export type UvozPregled = { nalogi: Nalog[]; opozorila: string[] };
 
 export async function preberiNalogeXlsx(file: File): Promise<UvozPregled> {
-  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  // Brez cellDates: datumske celice (nova oblika izvoza) ostanejo Excel serijske številke, ki jih
+  // parseAnyDate pretvori brez časovnega zamika; stara oblika ima datume kot besedilo ("15. 10. 2026").
+  const wb = XLSX.read(await file.arrayBuffer());
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null });
 
-  // Glava je lahko v 1. ali 2. vrstici (izvoz ima nad glavo naslove skupin)
+  // Glava je v eni od prvih vrstic (stara oblika: 2. vrstica, nova oblika: 3. vrstica pod naslovom "DELOVNI NALOGI")
   const glavaIdx = rows.slice(0, 15).findIndex((r) => r.some((c) => norm(c) === "koda artikla"));
   if (glavaIdx < 0) throw new Error('V datoteki ni stolpca "Koda artikla". Ali je to izvoz delovnih nalogov?');
   const glava = rows[glavaIdx].map(norm);

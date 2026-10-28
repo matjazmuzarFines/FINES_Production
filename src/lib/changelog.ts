@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "24.06",
+    datum: "28. 10. 2026",
+    spremembe: [
+      "Uvoz delovnih nalogov podpira novo obliko izvoza iz ERP (naslov »DELOVNI NALOGI«, glava v 3. vrstici, datumi kot pravi Excel datumi). Datumi se berejo brez časovnega zamika; stara oblika se še vedno pravilno prebere.",
+    ],
+  },
+  {
     verzija: "24.05",
     datum: "26. 10. 2026",
     spremembe: [
