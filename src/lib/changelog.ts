@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.08",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Doizdaja - celozaslonski prikaz: nov modri gumb Osveži v glavi - podatki se znova naložijo v ozadju, prikaz ostane čez cel zaslon.",
+      "Sync na enem zavihku ali oknu (npr. aplikacija na prvem monitorju) takoj osveži tudi ostala odprta okna istega brskalnika (npr. zaslon v skladišču na drugem monitorju) - brez klika in brez izhoda iz celozaslonskega prikaza. Samodejna osvežitev vsaki 2 minuti ostane.",
+    ],
+  },
+  {
     verzija: "26.07",
     datum: "29. 10. 2026",
     spremembe: [

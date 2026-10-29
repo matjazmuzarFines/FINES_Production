@@ -13,6 +13,7 @@ import {
   ListChecks,
   Loader2,
   Maximize2,
+  RefreshCw,
   Send,
   Truck,
   X,
@@ -736,7 +737,11 @@ function DoizdajaInner() {
 
       {/* ============ CELOZASLONSKI PRIKAZ (SKLADIŠČE) ============ */}
       {zaslon && (
-        <Zaslon onZapri={() => zapriZaslon(setZaslon)} info={info}>
+        <Zaslon
+          onZapri={() => zapriZaslon(setZaslon)}
+          onOsvezi={() => nalozi().catch((e) => notify("error", `Napaka pri osveževanju: ${(e as Error).message}`, 10000))}
+          info={info}
+        >
           <Kanban stolpci={prikazaniStolpci} nazivKrovnega={nazivKrovnega} velik />
         </Zaslon>
       )}
@@ -1487,8 +1492,28 @@ function MaterialNaloga({
 // CELOZASLONSKI PRIKAZ
 // =====================================================================
 
-function Zaslon({ onZapri, info, children }: { onZapri: () => void; info: ReactNode; children: ReactNode }) {
+function Zaslon({
+  onZapri,
+  onOsvezi,
+  info,
+  children,
+}: {
+  onZapri: () => void;
+  /** Znova naloži podatke iz baze - prikaz ostane čez cel zaslon. */
+  onOsvezi: () => Promise<unknown>;
+  info: ReactNode;
+  children: ReactNode;
+}) {
   const [ura, setUra] = useState(() => new Date());
+  const [osvezujem, setOsvezujem] = useState(false);
+  async function osvezi() {
+    setOsvezujem(true);
+    try {
+      await onOsvezi();
+    } finally {
+      setOsvezujem(false);
+    }
+  }
   useEffect(() => {
     const t = setInterval(() => setUra(new Date()), 30 * 1000);
     const onKey = (e: KeyboardEvent) => {
@@ -1516,6 +1541,16 @@ function Zaslon({ onZapri, info, children }: { onZapri: () => void; info: ReactN
               minute: "2-digit",
             })}
           </span>
+          <Button
+            hint="Znova naloži podatke, prikaz ostane čez zaslon"
+            variant="sync"
+            icon={osvezujem ? Loader2 : RefreshCw}
+            disabled={osvezujem}
+            onClick={osvezi}
+            className={osvezujem ? "[&>svg]:animate-spin" : ""}
+          >
+            Osveži
+          </Button>
           <Button hint="Zapri celozaslonski prikaz" variant="neutral" icon={X} onClick={onZapri}>
             Zapri
           </Button>

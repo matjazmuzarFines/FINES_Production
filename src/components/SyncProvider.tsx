@@ -138,6 +138,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [samodejno, setSamodejnoStanje] = useState(preberiSamodejno);
   const delam = useRef(false);
 
+  // Drugi zavihki / okna istega brskalnika (npr. zaslon v skladišču na drugem monitorju) izvejo za uvoz takoj
+  const kanal = useRef<BroadcastChannel | null>(null);
+  const poUvozu = useCallback(() => {
+    setVerzija((v) => v + 1);
+    kanal.current?.postMessage("uvoz");
+  }, []);
+
   const preveri = useCallback(async (vprasaj = false) => {
     const [u, iz, m] = await Promise.all([zadnjiUvozi(), uvozeniIzvozi(), stanjeMape()]);
     setUvozi(u);
@@ -248,7 +255,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       } finally {
         delam.current = false;
         await preveri().catch(() => {});
-        if (uvozenih) setVerzija((v) => v + 1);
+        if (uvozenih) poUvozu();
       }
       if (glasno) {
         const deli = [
@@ -261,7 +268,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         notify(napak ? "error" : "success", `${besedilo}${dodatek}`, napak || dodatek ? 10000 : 5000);
       }
     },
-    [notify, preveri, uvozi1],
+    [notify, preveri, uvozi1, poUvozu],
   );
 
   /** Sync iz povezane mape (Edge, Chrome). `vprasaj` = ob kliku (brskalnik lahko vpraša za dovoljenje). */
@@ -334,7 +341,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       try {
         const izid = await uvozi1(k, f, false);
         if (izid === "uvozeno") {
-          setVerzija((v) => v + 1);
+          poUvozu();
           notify("success", `Uvoženo: ${SYNC_DATOTEKE[k].naslov}.`);
         } else if (typeof izid === "object")
           notify("warning", `${SYNC_DATOTEKE[k].naslov} ravnokar uvaža ${izid.zaklenil} - poskusi čez minuto.`, 8000);
@@ -344,7 +351,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         await preveri().catch(() => {});
       }
     },
-    [notify, preveri, uvozi1],
+    [notify, preveri, uvozi1, poUvozu],
   );
 
   const poveziMapo = useCallback(async () => {
@@ -367,6 +374,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       // brez shrambe velja do osvežitve
     }
   }, []);
+
+  // Uvoz v drugem zavihku / oknu: strani tukaj znova naložijo podatke, stanje synca se osveži
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const k = new BroadcastChannel("fines-sync");
+    k.onmessage = () => {
+      setVerzija((v) => v + 1);
+      preveri().catch(() => {});
+    };
+    kanal.current = k;
+    return () => {
+      k.close();
+      kanal.current = null;
+    };
+  }, [preveri]);
 
   // Preverjanje ob prihodu in vsakih 5 minut; samodejni sync samo z že danim dovoljenjem (brez vprašanja)
   useEffect(() => {
