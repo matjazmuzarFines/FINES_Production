@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.07",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Delovni plan: desno zgoraj je zdaj pregled virov podatkov kot na ostalih straneh (krogec stanja in čas uvoza nalogov; z odprto Kontrolo plana še naročila, odpreme in material). Klik odpre stran Podatki.",
+      "Po syncu se Delovni plan sam osveži; če imaš neshranjene spremembe plana, se ne osveži (spremembe ostanejo), pokaže pa obvestilo, da so na voljo novi podatki.",
+    ],
+  },
+  {
     verzija: "26.06",
     datum: "29. 10. 2026",
     spremembe: [

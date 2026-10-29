@@ -9,6 +9,9 @@ export function nastaviNeshranjeno(v: boolean) {
   neshranjeno = v;
 }
 
+/** Ali ima stran neshranjene spremembe (brez vprašanja uporabniku). */
+export const imaNeshranjeno = () => neshranjeno;
+
 /** true = lahko zapustimo stran (ni sprememb ali je uporabnik potrdil). */
 export function lahkoZapustim(): boolean {
   if (!neshranjeno) return true;

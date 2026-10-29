@@ -16,12 +16,13 @@ import {
   Search,
   Settings,
   Trash2,
-  Upload,
   X,
 } from "lucide-react";
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
 import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
-import { lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
+import { imaNeshranjeno, lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
+import { PodatkiVir } from "@/components/PodatkiVir";
+import { usePoSyncu } from "@/components/SyncProvider";
 import {
   izvoziPlanXlsx,
   pripraviWorkflow,
@@ -223,6 +224,16 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
     setVerzija((v) => v + 1);
   }
 
+  // Po syncu podatkov iz ERP: nalogi (in podatki kontrole plana) se znova naložijo - razen ob neshranjenih spremembah
+  usePoSyncu(() => {
+    if (imaNeshranjeno()) {
+      notify("info", "Uvoženi so novi podatki iz ERP - shrani spremembe plana in osveži stran, da jih vidiš.", 10000);
+      return;
+    }
+    setPri(null);
+    osvezi().catch((e) => notify("error", `Napaka pri nalaganju delovnega plana: ${(e as Error).message}`, 10000));
+  });
+
   async function osveziCelice() {
     const celice = await naloziCelice(toIso(new Date()));
     setPodatki((p) => (p ? { ...p, celice } : p));
@@ -241,24 +252,8 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
             Krovne naloge povleci na delovno mesto in dan · trajanje se izračuna iz delovnih ur in števila zaposlenih
           </p>
         </div>
-        <Link
-          href="/proizvodnja/zasedenost"
-          title="Uvoz nalogov je na Pregledu zasedenosti"
-          onClick={(e) => {
-            if (!lahkoZapustim()) e.preventDefault();
-          }}
-          className="flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs text-ink-600 hover:border-fines-500"
-        >
-          <Upload className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
-          {podatki.uvoz ? (
-            <span>
-              <strong className="text-ink-800">{podatki.uvoz.st_nalogov} nalogov</strong> · uvoz{" "}
-              {formatShort(toIso(new Date(podatki.uvoz.created_at)))}
-            </span>
-          ) : (
-            <span>Ni uvoza nalogov</span>
-          )}
-        </Link>
+        {/* Kontrola plana uporablja še naročila, odpreme in material (kot Prioritete) */}
+        <PodatkiVir kljuci={kontrola ? ["nalogi", "narocila", "odpreme", "material"] : ["nalogi"]} />
       </div>
 
       {/* ============ ODDELKI ============ */}
@@ -1416,9 +1411,9 @@ function KrovniSeznam({
       <div className="-mx-1 flex max-h-[60vh] min-h-0 flex-col gap-2 overflow-y-auto px-1 pb-1 xl:max-h-none xl:flex-1">
         {!imaUvoz && (
           <p className="p-4 text-center text-sm text-ink-500">
-            Ni uvoženih nalogov. Uvozi jih na{" "}
-            <Link href="/proizvodnja/zasedenost" title="Odpri pregled zasedenosti" className="font-semibold text-fines-500 hover:underline">
-              Pregledu zasedenosti
+            Ni uvoženih nalogov. Uvozi jih z gumbom Sync v glavi ali na strani{" "}
+            <Link href="/podatki" title="Odpri sync podatkov iz ERP" className="font-semibold text-fines-500 hover:underline">
+              Podatki
             </Link>
             .
           </p>

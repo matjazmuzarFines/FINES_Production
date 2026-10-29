@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { lahkoZapustim } from "@/lib/neshranjeno";
 import type { SyncDatotekaKljuc } from "@/lib/syncDatoteke";
 import { useSync } from "./SyncProvider";
 import { OPIS_STANJA_DATOTEKE, PikaStanja, casSync } from "./SyncGlava";
@@ -16,6 +17,9 @@ export function PodatkiVir({ kljuci }: { kljuci: SyncDatotekaKljuc[] }) {
     <Link
       href="/podatki"
       title="Odpri sync podatkov iz ERP"
+      onClick={(e) => {
+        if (!lahkoZapustim()) e.preventDefault();
+      }}
       className="fp-card flex w-full flex-col gap-1 px-3 py-2 text-xs transition-colors hover:border-ink-400 hover:bg-ink-50 sm:w-72"
     >
       <span className="font-semibold text-ink-600">Podatki iz ERP · uvoženo</span>
