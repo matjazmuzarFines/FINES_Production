@@ -9,6 +9,90 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.05",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Doizdaja - obvestilo v Teams: na vsakem materialu je kljukica za obvestilo, gumba Izberi vse / Odznači vse in modri gumb Obvesti v Teams. Okno pokaže predogled (material, nalogi s krovnim, količina, rok) in pošlje sporočilo v chat Skladišče obveščanje.",
+      "Sporočilo sestavi aplikacija (Teams kartica): za vsak material okvir v barvi dni čakanja (zelena / rumena / rdeča), količina za izdajo, prevzeto, zaloga, nalogi z rokom in gumb Odpri Doizdajo. Več kot 8 materialov gre v več kartic.",
+      "Po pošiljanju se pri materialu pokaže »Obveščeno 29. 10. 10:15« (s pošiljateljem v hover tekstu) in število novih nalogov, ki še niso bili v obvestilu - isti material se ne pošilja po nepotrebnem dvakrat.",
+      "Pošiljanje gre prek strežnika aplikacije (naslov webhooka je skrit, samo za prijavljene). Baza: migracija 026_doizdaja_obvestilo.sql.",
+    ],
+  },
+  {
+    verzija: "26.04",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Sync: zaklep v bazi - isto datoteko lahko naenkrat uvaža samo en uporabnik. Če dva kliknete Sync hkrati, drugi dobi obvestilo »ravnokar uvaža …« in datoteka se ne uvozi dvakrat. Zaklep po 5 minutah poteče (npr. zaprt brskalnik med uvozom).",
+      "Stanje »sinhronizirano« zdaj primerja čas datoteke v mapi s časom datoteke, ki je bila nazadnje uvožena (prej s časom uvoza) - ura na serverju z izvozi ne vpliva več na stanje.",
+      "Stran Podatki in okno Sync v glavi: nova podatka »Preverjeno« (kdaj so bile nazadnje prebrane datoteke v mapi) in »Uvožena datoteka« (čas uvožene datoteke). »Uvoženo« ostane čas zadnjega uvoza - če v mapi ni novejše datoteke, se ne spremeni.",
+      "Firefox si zadnjo izbiro mape zapomni 30 minut - po osvežitvi strani stanje ostane znano (ne sivo).",
+      "Baza: migracija 025_sync_stanje.sql.",
+    ],
+  },
+  {
+    verzija: "26.03",
+    datum: "29. 10. 2026",
+    spremembe: ["Meni: modul Podatki je pritrjen na spodnji rob levega menija, ločen s črto - viden je vedno, tudi ko meni drsi."],
+  },
+  {
+    verzija: "26.02",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Sync deluje tudi v Firefoxu: Sync vse (v glavi ali na strani Podatki) odpre izbiro mape - izbereš mapo z izvozi in uvozijo se samo novejše datoteke. Firefox si mape ne zapomni, zato samodejni sync in stanje datotek brez klika ostaneta samo v Edge in Chrome.",
+      "Stran Podatki: novo polje Uvoz več datotek naenkrat - povlečeš poljubne izvoze (npr. vse iz mape), aplikacija jih razporedi po imenu, uvozi samo novejše od zadnjega uvoza, datoteke, ki jih ne pozna, pa prezre (izpiše jih v obvestilu). Ko bo nov izvoz dodan na seznam, se bo začel uvažati sam.",
+    ],
+  },
+  {
+    verzija: "26.01",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Nov sync podatkov iz ERP: aplikacija bere izvoze neposredno iz mape na serverju (\\\\rokadasrv\\RISPSQL$\\Dokumentacija\\Izvoz_excel_dir), ki jo worker posodablja vsakih nekaj ur. Mapo enkrat povežeš z gumbom Poveži mapo (Edge ali Chrome), brskalnik si jo zapomni - nič ni treba nameščati.",
+      "Nov gumb Sync v glavi (levo od »i«): krogec pove stanje (zelen = vse sinhronizirano, rdeč = nova datoteka ni uvožena, moder = sync v teku, siv = mapa ni povezana). Klik pokaže datoteke s časom v mapi in časom uvoza ter gumb Sync vse.",
+      "Nov modul Podatki (na dnu menija) s stranjo Sync iz ERP: kvadratek za vsako datoteko (nalogi, material, naročila VD200, odpreme VD300, prevzemi, izdaje) s stanjem, časi, rezultatom uvoza in opozorili, gumb Sync za posamezno datoteko, Sync vse in ročni uvoz (povleci datoteko v kvadratek).",
+      "Samodejni sync vsakih 5 minut, vklopljiv za posamezen brskalnik (npr. zaslon v skladišču).",
+      "Polja za uvoz so odstranjena s strani Zasedenost, Prioritete, Pakiranje in Doizdaja - desno zgoraj je zdaj vir podatkov (stanje in čas uvoza, klik odpre stran Podatki). Po syncu se strani same osvežijo.",
+      "Odstranjen star testni sync prek strežnika (stran /test), ki na spletu ni deloval.",
+    ],
+  },
+  {
+    verzija: "25.03",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Doizdaja: barva kartice pove, koliko delovnih dni material čaka na izdajo od prevzema (dan prevzema = 1. dan): 1.-2. dan zelena, 3. dan rumena, od 4. dne rdeča z oznako dni (npr. »6. dan«).",
+      "Kartica ne izgine več po izbranem obdobju: ostane, dokler izvoz izdaj ne pokaže, da je material izdan na nalog. Izbirnik »Prevzemi N dni« je odstranjen.",
+      "En stolpec na šifro materiala - vsi prevzemi iste šifre so združeni. Šifra je v glavi stolpca večja (različne šifre s podobnim nazivom, npr. cevovodi čiščenja, se ločijo na prvi pogled).",
+      "Nove kartice se zaznajo iz prevzemov zadnjih 4 delovnih dni in se shranijo v bazo (čakajoče izdaje); tako ostanejo tudi po tem obdobju. Če je izvoz izdaj starejši od prevzemov, se nove kartice ne zaznavajo.",
+      "Kartice-filtri: Nov prevzem, 3. dan, Zamuja, Ni manjkalo. Privzet vrstni red: najprej material, ki najdlje čaka. Zaloga, ki ne pokrije vsega, je na nalogu označena (na voljo X / ni zaloge).",
+      "Po nalogih: nova stolpca Prevzeto (datum) in Čaka (delovni dnevi).",
+      "Baza: migracija 024_doizdaja_cakanje.sql.",
+    ],
+  },
+  {
+    verzija: "25.02",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Doizdaja - Aktivni nalogi: klik na nalog (puščica ▸) pokaže njegov material - ident, naziv, skupina, planirano, izdano, za izdajo, zaloga, naročeno in stanje (neizdano / delno izdano / izdano). Tabela se razvršča s klikom na glavo.",
+      "Nov filter Material razprtega naloga: privzeto sta prikazana neizdan in delno izdan material, izdan se vklopi po potrebi. Gumb Razpri vse / Zloži vse.",
+      "Zaloga neizdanega materiala je zelena, če pokrije izdajo (lahko izdaš), sicer rdeča. Skupine, ki se ne štejejo v delež (npr. pločevina), so označene z »ne šteje«.",
+      "Iskanje v zavihku Aktivni nalogi najde tudi naloge, ki iskani ident še potrebujejo.",
+    ],
+  },
+  {
+    verzija: "25.01",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Skladišče - nova stran Doizdaja materiala (Rutinsko delo): pokaže material, ki je bil na aktivne delovne naloge izdan samo delno in je zdaj prispel s prevzemom od dobavitelja, ter na katere naloge in koliko ga je treba še izdati.",
+      "Uvoz dveh izvozov iz ERP: Kreiranje izdaj v proizvodnjo (shranijo se samo aktivni nalogi, status O in D) in Prevzem od dobavitelja. Krovni nalogi so iz uvoza delovnih nalogov (Zasedenost).",
+      "Upoštevajo se samo nalogi, ki so že nabrani: izdanih vsaj 50 % vrstic (nastavljivo), pločevina in polizdelki (P-...) se v delež ne štejejo, ker se izdajo posebej. Nalog brez izdaje ali še v nabiranju se ne pokaže.",
+      "Material, ki ga je bilo že pred prevzemom dovolj na zalogi (trenutna zaloga - prevzeto), ni manjkal in je privzeto skrit (kartica Ni manjkalo).",
+      "Pogled Po materialu: stolpec za vsak prevzet material (ident, naziv, prevzeto, zaloga, dobavitelj) in pod njim nalogi, grupirani po krovnem, s količino za izdajo - zelena Izdaj, rumena Delno na zalogi, rdeča Ni zaloge.",
+      "Pogleda Po nalogih (razvrstljiva tabela, grupiranje po krovnih) in Aktivni nalogi (delež izdanega in stanje vsakega naloga - za kontrolo filtra).",
+      "Gumb Zaslon: celozaslonski prikaz za zaslon v skladišču (tudi s povezavo ?zaslon=1), podatki se osvežijo vsaki 2 minuti. Brskalnik si zapomni nastavitve.",
+      "Meni: modul trenutne strani se zdaj lahko zloži, razdelki (oranžni naslovi) se razpirajo in zlagajo s klikom. Privzeto je razprt samo razdelek trenutne strani, brskalnik si zapomni izbiro.",
+      "Baza: migracija 023_doizdaja.sql.",
+    ],
+  },
+  {
     verzija: "24.06",
     datum: "28. 10. 2026",
     spremembe: [

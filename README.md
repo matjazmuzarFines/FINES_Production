@@ -19,6 +19,8 @@ src/
     proizvodnja/prioritete     (v izdelavi)
     proizvodnja/orodja/pakiranje  navodila za pakiranje odprem VD300 (PDF checklista + list z lokacijo), povzetek za skladišče
     skladisce/rutina           rutina skladišča
+    skladisce/doizdaja         doizdaja materiala: delno izdani nalogi + prevzemi od dobaviteljev
+    podatki                    sync izvozov iz ERP (mapa na serverju, bere jo brskalnik) + ročni uvoz
   components/
     AppShell.tsx               glava, leva navigacija, noga, "i" popup
     ui/                        enotne komponente (Button, Modal, Toast, ...)
@@ -49,6 +51,10 @@ data/                          izvoz Power Appa + CSV (referenca)
 | `fp_skl_kontrolne_tocke` | `AppSKL_KontrolneTocke` | kontrolne točke |
 | `fp_skl_rutina` | `AppSKL_Rutina` | dnevna rutina (1 kontrolna točka / dan) |
 | `fp_skl_rutina_slike` | `RutinaSKL - slike` | fotografije rutine skladišča |
+| `fp_doi_izdaje_uvozi`, `fp_doi_izdaje` | izvoz Kreiranje izdaj v proizvodnjo | material po aktivnih nalogih (planirano, izdano, za izdajo, zaloga) |
+| `fp_doi_prevzemi_uvozi`, `fp_doi_prevzemi` | izvoz Prevzem od dobavitelja | postavke prevzemov (doizdaja) |
+| `fp_doi_cakanje` | - | čakajoče izdaje: material + nalog + datum prevzema, zaključi se, ko je izdano; obvestilo v Teams (`obvesceno_at`) |
+| `fp_sync_stanje` | - | sync iz ERP: čas uvožene datoteke in zaklep uvoza (funkcije `fp_sync_zakleni`, `fp_sync_koncaj`, `fp_sync_odkleni`) |
 
 **Splošne tabele (predpona `spl_`)** - uporabljajo jih vsi projekti:
 

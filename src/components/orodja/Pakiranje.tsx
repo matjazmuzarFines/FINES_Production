@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { formatShort, type IsoDate } from "@/lib/dates";
 import { ujemaIskanje } from "@/lib/iskanje";
-import { naloziMaterial, preberiMaterialXlsx, shraniMaterialUvoz, type Material, type MaterialUvoz, type MaterialUvozPregled } from "@/lib/material";
+import { naloziMaterial, type Material, type MaterialUvoz } from "@/lib/material";
 import {
   BARVE_LISTOV,
   IME_KATEGORIJE,
@@ -31,10 +31,7 @@ import {
 import {
   danesIso,
   naloziZadnjiOdpUvoz,
-  preberiVd300Xlsx,
-  shraniOdpUvoz,
   type OdpUvoz,
-  type OdpUvozPregled,
   type Odprema,
 } from "@/lib/prioritete";
 import { formatNum } from "@/lib/stevila";
@@ -49,7 +46,8 @@ import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
 import { useToast } from "@/components/ui/Toast";
 import { TxtSporocilo } from "@/components/ui/TxtSporocilo";
-import { UvozDropzone } from "@/components/ui/UvozDropzone";
+import { PodatkiVir } from "@/components/PodatkiVir";
+import { usePoSyncu } from "@/components/SyncProvider";
 
 type Kljuc = "stevilka" | "partner" | "lokacija" | "datum" | "status" | "peci" | "postavk" | "zaloga" | "printano";
 type PeciFilter = "vsi" | "s" | "brez";
@@ -144,10 +142,6 @@ function PakiranjeInner() {
   /** Barva lista za posamezno odpremo (izbere jo vodja v oknu PDF); privzeto prva razpoložljiva barva. */
   const [barveOdprem, setBarveOdprem] = useState<Record<string, string>>({});
 
-  // Uvoz
-  const [vd300Pregled, setVd300Pregled] = useState<(OdpUvozPregled & { datoteka: string }) | null>(null);
-  const [matPregled, setMatPregled] = useState<(MaterialUvozPregled & { datoteka: string }) | null>(null);
-  const [uvazam, setUvazam] = useState<"vd300" | "material" | null>(null);
 
   function uporabi(p: Podatki) {
     setOdpUvoz(p.odp.uvoz);
@@ -162,6 +156,11 @@ function PakiranjeInner() {
   }
 
   const naloziVse = async () => uporabi(await pridobiPodatke());
+
+  // Po syncu podatkov iz ERP (glava ali stran Podatki) znova naloži odpreme in material
+  usePoSyncu(() => {
+    naloziVse().catch((e) => notify("error", `Napaka pri nalaganju odprem: ${(e as Error).message}`, 10000));
+  });
 
   useEffect(() => {
     let preklic = false;
@@ -216,42 +215,6 @@ function PakiranjeInner() {
     }
   }
 
-  async function izberiVd300(f: File) {
-    try {
-      setVd300Pregled({ ...(await preberiVd300Xlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function izberiMaterial(f: File) {
-    try {
-      setMatPregled({ ...(await preberiMaterialXlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function potrdi(tip: "vd300" | "material") {
-    setUvazam(tip);
-    try {
-      if (tip === "vd300" && vd300Pregled) {
-        await shraniOdpUvoz(vd300Pregled.datoteka, vd300Pregled.odpreme);
-        notify("success", `Uvoženih postavk odprem: ${vd300Pregled.odpreme.length} (velja tudi za Prioritete).`);
-        setVd300Pregled(null);
-      } else if (tip === "material" && matPregled) {
-        await shraniMaterialUvoz(matPregled.datoteka, matPregled.material);
-        notify("success", `Uvoženih artiklov materiala: ${matPregled.material.length}.`);
-        setMatPregled(null);
-      }
-      await naloziVse();
-    } catch (e) {
-      notify("error", `Napaka pri uvozu: ${(e as Error).message}`, 10000);
-    } finally {
-      setUvazam(null);
-    }
-  }
-
   if (!nalozeno) return <Loading />;
 
   // ---- filtri
@@ -300,33 +263,22 @@ function PakiranjeInner() {
             pripravi povzetek za skladišče
           </p>
         </div>
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Odpreme VD300 (.xlsx)"
-              hint={niOdpremTabel ? "Najprej zaženi SQL 009 (tabele odprem)" : "Povleci sem celoten izvoz odprem VD300 ali klikni"}
-              enota="postavk"
-              uvoz={odpUvoz ? { ...odpUvoz, stevilo: odpUvoz.st_postavk } : null}
-              nalagam={uvazam === "vd300"}
-              onemogoceno={niOdpremTabel || uvazam !== null}
-              onFile={izberiVd300}
-            />
-          </div>
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Material (.xlsx)"
-              hint={niMaterialTabel ? "Najprej zaženi SQL 018 (tabela materiala)" : "Povleci sem izpis materiala (zaloge) ali klikni"}
-              enota="artiklov"
-              uvoz={matUvoz ? { ...matUvoz, stevilo: matUvoz.st_postavk } : null}
-              nalagam={uvazam === "material"}
-              onemogoceno={niMaterialTabel || uvazam !== null}
-              onFile={izberiMaterial}
-            />
-          </div>
-        </div>
+        <PodatkiVir kljuci={["odpreme", "material"]} />
       </div>
 
       {/* ============ OPOZORILA ============ */}
+      {niOdpremTabel && (
+        <WarningText>
+          V bazi še ni tabel odprem. V Supabase SQL editorju zaženi{" "}
+          <code className="rounded bg-white px-1">supabase/migrations/009_prioritete_odpreme_vd300.sql</code> in osveži stran.
+        </WarningText>
+      )}
+      {niMaterialTabel && (
+        <WarningText>
+          V bazi še ni tabele materiala. V Supabase SQL editorju zaženi{" "}
+          <code className="rounded bg-white px-1">supabase/migrations/018_spl_material.sql</code> in osveži stran.
+        </WarningText>
+      )}
       {!stolpciPakiranja && (
         <WarningText>
           V bazi še ni stolpcev za pakiranje (lokacija, skupine). V Supabase SQL editorju zaženi{" "}
@@ -345,7 +297,7 @@ function PakiranjeInner() {
 
       {!odpUvoz ? (
         <div className="fp-card p-8 text-center text-ink-600">
-          Ni uvoza odprem. Povleci izvoz odprem VD300 v polje desno zgoraj (isti uvoz kot na Prioritetah).
+          Ni uvoza odprem. Uvozi odpreme VD300 z gumbom Sync v glavi ali na strani Podatki.
         </div>
       ) : (
         <>
@@ -623,41 +575,6 @@ function PakiranjeInner() {
       {/* ============ SKLADIŠČE ============ */}
       <Modal open={skladisceOdprt} title="Povzetek za skladišče (TXT)" onClose={() => setSkladisceOdprt(false)} sirina="max-w-4xl">
         {skladisceOdprt && <SkladisceOkno odpreme={izbraneOdpreme} nast={nastSkl} onChange={setNastSkl} danes={danes} />}
-      </Modal>
-
-      {/* ============ PREGLED UVOZA ============ */}
-      <Modal open={!!vd300Pregled} title={`Uvoz odprem: ${vd300Pregled?.datoteka ?? ""}`} onClose={() => !uvazam && setVd300Pregled(null)}>
-        {vd300Pregled && (
-          <UvozPotrditev
-            vrstice={[
-              ["Vrstic v datoteki", vd300Pregled.vseh],
-              ["Izločenih (zaključena naročila, starejša od 30 dni)", vd300Pregled.izlocenih],
-              ["Postavk odprem za uvoz", vd300Pregled.odpreme.length],
-              ["Odpremnih dokumentov", new Set(vd300Pregled.odpreme.map((o) => o.stevilka)).size],
-              ["Postavk z lokacijo", vd300Pregled.odpreme.filter((o) => o.lokacija).length],
-            ]}
-            opomba="Isti uvoz odprem kot na Prioritetah - velja za obe strani."
-            opozorila={vd300Pregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setVd300Pregled(null)}
-            onPotrdi={() => potrdi("vd300")}
-          />
-        )}
-      </Modal>
-      <Modal open={!!matPregled} title={`Uvoz materiala: ${matPregled?.datoteka ?? ""}`} onClose={() => !uvazam && setMatPregled(null)}>
-        {matPregled && (
-          <UvozPotrditev
-            vrstice={[
-              ["Artiklov", matPregled.material.length],
-              ["Z zalogo (matično)", matPregled.material.filter((m) => m.zaloga > 0).length],
-            ]}
-            opomba="Material se shrani v splošno tabelo materiala (velja za vse strani)."
-            opozorila={matPregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setMatPregled(null)}
-            onPotrdi={() => potrdi("material")}
-          />
-        )}
       </Modal>
     </div>
   );
@@ -1062,55 +979,6 @@ function SkladisceOkno({
         ime={`skladisce_nabiranje_${danes}.txt`}
         visina="h-[40vh]"
       />
-    </div>
-  );
-}
-
-// =====================================================================
-// UVOZ
-// =====================================================================
-
-function UvozPotrditev({
-  vrstice,
-  opomba,
-  opozorila,
-  uvazam,
-  onPreklici,
-  onPotrdi,
-}: {
-  vrstice: [string, number][];
-  opomba?: string;
-  opozorila: string[];
-  uvazam: boolean;
-  onPreklici: () => void;
-  onPotrdi: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 text-sm">
-      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-        {vrstice.map(([k, v]) => (
-          <Fragment key={k}>
-            <dt className="text-ink-600">{k}</dt>
-            <dd className="text-right font-bold tabular-nums">{formatNum(v)}</dd>
-          </Fragment>
-        ))}
-      </dl>
-      {opomba && <p className="text-ink-600">{opomba}</p>}
-      {opozorila.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-lg bg-warn-50 p-2 text-xs text-warn-700">
-          {opozorila.map((o, i) => (
-            <div key={i}>{o}</div>
-          ))}
-        </div>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button hint="Prekliči uvoz datoteke" variant="neutral" onClick={onPreklici} disabled={uvazam}>
-          Prekliči
-        </Button>
-        <Button hint="Shrani uvoz kot zadnje podatke" variant="success" onClick={onPotrdi} disabled={uvazam}>
-          {uvazam ? "Uvažam ..." : "Uvozi"}
-        </Button>
-      </div>
     </div>
   );
 }

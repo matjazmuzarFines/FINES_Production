@@ -15,18 +15,15 @@ import {
   naloziKapacitete,
   naloziZadnjiUvoz,
   naloziZasOddelke,
-  preberiNalogeXlsx,
   razpolozljivo,
   shraniKapacitete,
   shraniPrivzeteOddelka,
-  shraniUvoz,
   tedniOd,
   type Kapaciteta,
   type Nalog,
   type NalogIzracun,
   type Teden,
   type Uvoz,
-  type UvozPregled,
   type ZasOddelek,
 } from "@/lib/zasedenost";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -36,7 +33,8 @@ import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
 import { FilterIskanje, FilterPolje, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
-import { UvozDropzone } from "@/components/ui/UvozDropzone";
+import { PodatkiVir } from "@/components/PodatkiVir";
+import { usePoSyncu } from "@/components/SyncProvider";
 import { LegendaObremenitve, ObremenitevVsebina, SkupajVrstica, TedenGlava, ZapadloCelica } from "./Obremenitev";
 
 const STEVILO_TEDNOV = 8;
@@ -74,9 +72,6 @@ function ZasedenostInner() {
   const [verzija, setVerzija] = useState(0);
   const [shranjujem, setShranjujem] = useState(false);
 
-  // Uvoz
-  const [pregled, setPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
-  const [uvazam, setUvazam] = useState(false);
   const [nastavitveOdprte, setNastavitveOdprte] = useState(false);
   // Filtri tabele nalogov (ostanejo ob menjavi tedna)
   const [filterOddelkov, setFilterOddelkov] = useState<OddelekKoda[]>([]);
@@ -122,6 +117,11 @@ function ZasedenostInner() {
       preklic = true;
     };
   }, [notify]);
+
+  // Po syncu podatkov iz ERP (glava ali stran Podatki) znova naloži naloge
+  usePoSyncu(() => {
+    naloziVse().catch((e) => notify("error", `Napaka pri nalaganju zasedenosti: ${(e as Error).message}`));
+  });
 
   const izracun = useMemo(() => izracunajNaloge(nalogi, normativi), [nalogi, normativi]);
   const prikazaniTedni = useMemo(() => tedniOd(zacetek, STEVILO_TEDNOV), [zacetek]);
@@ -173,29 +173,6 @@ function ZasedenostInner() {
     }
   }
 
-  async function izberiDatoteko(f: File) {
-    try {
-      setPregled({ ...(await preberiNalogeXlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function potrdiUvoz() {
-    if (!pregled) return;
-    setUvazam(true);
-    try {
-      await shraniUvoz(pregled.datoteka, pregled.nalogi);
-      notify("success", `Uvoženih nalogov: ${pregled.nalogi.length}.`);
-      setPregled(null);
-      await naloziVse();
-    } catch (e) {
-      notify("error", `Napaka pri uvozu: ${(e as Error).message}`, 10000);
-    } finally {
-      setUvazam(false);
-    }
-  }
-
   if (!oddelki) return <Loading />;
 
   const jeTaTeden = zacetek === mondayOf(danes);
@@ -208,21 +185,12 @@ function ZasedenostInner() {
           <h2 className="text-xl font-bold text-ink-900">Zasedenost po delovnih tednih</h2>
           <p className="text-sm text-ink-500">Tedni od ponedeljka do nedelje · nalogi razvrščeni po roku izdelave</p>
         </div>
-        <div className="w-full sm:w-80">
-          <UvozDropzone
-            naslov="Uvoz nalogov (.xlsx)"
-            hint="Povleci sem xlsx z nalogi ali klikni"
-            enota="nalogov"
-            uvoz={uvoz ? { ...uvoz, stevilo: uvoz.st_nalogov } : null}
-            nalagam={uvazam}
-            onFile={izberiDatoteko}
-          />
-        </div>
+        <PodatkiVir kljuci={["nalogi"]} />
       </div>
 
       {!uvoz ? (
         <div className="fp-card p-8 text-center text-ink-600">
-          Ni uvoženih nalogov. Povleci izvoz delovnih nalogov (.xlsx) v okno zgoraj desno.
+          Ni uvoženih nalogov. Uvozi delovne naloge z gumbom Sync v glavi ali na strani Podatki.
         </div>
       ) : (
         <>
@@ -389,19 +357,6 @@ function ZasedenostInner() {
         shraniLabel="Shrani razpoložljivost"
         shraniHint="Shrani število zaposlenih in delovne dni"
       />
-
-      {/* ============ PREGLED UVOZA ============ */}
-      <Modal open={!!pregled} title={`Uvoz: ${pregled?.datoteka ?? ""}`} onClose={() => !uvazam && setPregled(null)}>
-        {pregled && (
-          <UvozPregledVsebina
-            pregled={pregled}
-            normativi={normativi}
-            uvazam={uvazam}
-            onPreklici={() => setPregled(null)}
-            onPotrdi={potrdiUvoz}
-          />
-        )}
-      </Modal>
 
       <Modal open={nastavitveOdprte} title="Privzeta razpoložljivost oddelkov" onClose={() => setNastavitveOdprte(false)}>
         <OddelkiNastavitve
@@ -729,64 +684,6 @@ function NalogiTabela({
 // =====================================================================
 // MODALI
 // =====================================================================
-
-function UvozPregledVsebina({
-  pregled,
-  normativi,
-  uvazam,
-  onPreklici,
-  onPotrdi,
-}: {
-  pregled: UvozPregled;
-  normativi: Normativ[];
-  uvazam: boolean;
-  onPreklici: () => void;
-  onPotrdi: () => void;
-}) {
-  const identi = new Set(normativi.map((n) => n.ident));
-  const brez = pregled.nalogi.filter((n) => !identi.has(n.koda_artikla)).length;
-  const roki = pregled.nalogi.map((n) => n.rok_izdelave).filter((r): r is string => !!r).sort();
-  return (
-    <div className="flex flex-col gap-3 text-sm">
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-ink-50 p-3">
-          <div className="text-2xl font-bold text-ok-600">{pregled.nalogi.length}</div>
-          <div className="text-xs text-ink-500">nalogov</div>
-        </div>
-        <div className="rounded-lg bg-ink-50 p-3">
-          <div className={`text-2xl font-bold ${brez ? "text-warn-700" : "text-ink-500"}`}>{brez}</div>
-          <div className="text-xs text-ink-500">brez normativa</div>
-        </div>
-        <div className="rounded-lg bg-ink-50 p-3">
-          <div className="text-sm font-bold text-ink-800">
-            {roki.length ? `${formatShort(roki[0])} – ${formatShort(roki[roki.length - 1])}` : "–"}
-          </div>
-          <div className="text-xs text-ink-500">roki izdelave</div>
-        </div>
-      </div>
-      <p className="text-ink-600">
-        Uvoz <strong>nadomesti</strong> trenutno prikazane naloge. Prejšnji uvozi ostanejo shranjeni v bazi.
-      </p>
-      {pregled.opozorila.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-lg bg-warn-50 p-3 text-warn-700">
-          <ul className="list-disc space-y-0.5 pl-5">
-            {pregled.opozorila.slice(0, 50).map((o) => (
-              <li key={o}>{o}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button hint="Prekliči uvoz nalogov" variant="neutral" disabled={uvazam} onClick={onPreklici}>
-          Prekliči
-        </Button>
-        <Button hint="Uvozi naloge in osveži zasedenost" variant="success" disabled={uvazam} onClick={onPotrdi}>
-          {uvazam ? "Uvažam ..." : "Uvozi"}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function OddelkiNastavitve({
   oddelki,

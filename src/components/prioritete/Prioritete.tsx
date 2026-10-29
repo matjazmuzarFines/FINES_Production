@@ -17,11 +17,8 @@ import {
 import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, type IsoDate } from "@/lib/dates";
 import {
   naloziMaterial,
-  preberiMaterialXlsx,
-  shraniMaterialUvoz,
   type Material,
   type MaterialUvoz,
-  type MaterialUvozPregled,
 } from "@/lib/material";
 import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import {
@@ -47,15 +44,10 @@ import {
   naloziOpombe,
   naloziZadnjiOdpUvoz,
   naloziZadnjiPriUvoz,
-  preberiVd300Xlsx,
-  shraniOdpUvoz,
   type OdpUvoz,
-  type OdpUvozPregled,
   type Odprema,
   opisDelov,
-  preberiVd200Xlsx,
   shraniOpombo,
-  shraniPriUvoz,
   type ArtikelPregled,
   type Del,
   type NalogPrioriteta,
@@ -63,7 +55,6 @@ import {
   type Postavka,
   type PostavkaIzracun,
   type PriUvoz,
-  type PriUvozPregled,
   type Status,
 } from "@/lib/prioritete";
 import { formatNum, formatUre } from "@/lib/stevila";
@@ -73,15 +64,12 @@ import {
   naloziKapacitete,
   naloziZadnjiUvoz,
   naloziZasOddelke,
-  preberiNalogeXlsx,
   razpolozljivo,
-  shraniUvoz,
   tedniOd,
   type Kapaciteta,
   type Nalog,
   type Teden,
   type Uvoz,
-  type UvozPregled,
   type ZasOddelek,
 } from "@/lib/zasedenost";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -94,7 +82,8 @@ import { FilterKartica } from "@/components/ui/FilterKartica";
 import { FilterCheckbox, FilterIskanje, FilterIzbira, FilterPolje, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
 import { SortTh, TabelaOkvir, useRazvrscanje, type Razvrscanje } from "@/components/ui/Tabela";
 import { TxtSporocilo } from "@/components/ui/TxtSporocilo";
-import { UvozDropzone } from "@/components/ui/UvozDropzone";
+import { PodatkiVir } from "@/components/PodatkiVir";
+import { usePoSyncu } from "@/components/SyncProvider";
 import { Zavihki, type Zavihek } from "@/components/ui/Zavihki";
 import {
   LegendaObremenitve,
@@ -260,12 +249,6 @@ function PrioriteteInner() {
     pregledano: (p) => (opombe.get(p.kljuc)?.pregledano ? 1 : 0),
   });
 
-  // Uvoz
-  const [vd200Pregled, setVd200Pregled] = useState<(PriUvozPregled & { datoteka: string }) | null>(null);
-  const [nalPregled, setNalPregled] = useState<(UvozPregled & { datoteka: string }) | null>(null);
-  const [vd300Pregled, setVd300Pregled] = useState<(OdpUvozPregled & { datoteka: string }) | null>(null);
-  const [matPregled, setMatPregled] = useState<(MaterialUvozPregled & { datoteka: string }) | null>(null);
-  const [uvazam, setUvazam] = useState<"vd200" | "nalogi" | "vd300" | "material" | null>(null);
 
   function shraniNastavitve(s: Partial<NastavitvePrioritet>) {
     const nove = { tednov, zamikDni, ...s };
@@ -300,6 +283,11 @@ function PrioriteteInner() {
   }
 
   const naloziVse = async () => uporabi(await pridobiPodatke());
+
+  // Po syncu podatkov iz ERP (glava ali stran Podatki) znova naloži naročila, odpreme, material in naloge
+  usePoSyncu(() => {
+    naloziVse().catch((e) => notify("error", `Napaka pri nalaganju prioritet: ${(e as Error).message}`, 10000));
+  });
 
   useEffect(() => {
     let preklic = false;
@@ -368,66 +356,6 @@ function PrioriteteInner() {
           (a.p.zap ?? 0) - (b.p.zap ?? 0),
       ),
   );
-
-  async function izberiVd200(f: File) {
-    try {
-      setVd200Pregled({ ...(await preberiVd200Xlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function izberiVd300(f: File) {
-    try {
-      setVd300Pregled({ ...(await preberiVd300Xlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function izberiMaterial(f: File) {
-    try {
-      setMatPregled({ ...(await preberiMaterialXlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function izberiNaloge(f: File) {
-    try {
-      setNalPregled({ ...(await preberiNalogeXlsx(f)), datoteka: f.name });
-    } catch (e) {
-      notify("error", (e as Error).message, 10000);
-    }
-  }
-
-  async function potrdi(tip: "vd200" | "nalogi" | "vd300" | "material") {
-    setUvazam(tip);
-    try {
-      if (tip === "material" && matPregled) {
-        await shraniMaterialUvoz(matPregled.datoteka, matPregled.material);
-        notify("success", `Uvoženih artiklov materiala: ${matPregled.material.length}.`);
-        setMatPregled(null);
-      } else if (tip === "vd200" && vd200Pregled) {
-        await shraniPriUvoz(vd200Pregled.datoteka, vd200Pregled.postavke);
-        notify("success", `Uvoženih postavk naročil: ${vd200Pregled.postavke.length}.`);
-        setVd200Pregled(null);
-      } else if (tip === "vd300" && vd300Pregled) {
-        await shraniOdpUvoz(vd300Pregled.datoteka, vd300Pregled.odpreme);
-        notify("success", `Uvoženih postavk odprem: ${vd300Pregled.odpreme.length}.`);
-        setVd300Pregled(null);
-      } else if (tip === "nalogi" && nalPregled) {
-        await shraniUvoz(nalPregled.datoteka, nalPregled.nalogi);
-        notify("success", `Uvoženih nalogov: ${nalPregled.nalogi.length} (velja tudi za Zasedenost).`);
-        setNalPregled(null);
-      }
-      await naloziVse();
-    } catch (e) {
-      notify("error", `Napaka pri uvozu: ${(e as Error).message}`, 10000);
-    } finally {
-      setUvazam(null);
-    }
-  }
 
   async function posodobiOpombo(o: Opomba) {
     const prej = opombe.get(o.kljuc);
@@ -501,53 +429,21 @@ function PrioriteteInner() {
             Potrjena naročila (VD200) · zaloga iz izpisa materiala · zaloga in delovni nalogi razdeljeni po datumu odpreme
           </p>
         </div>
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2 2xl:grid-cols-4">
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Material (.xlsx)"
-              hint={niMaterialTabel ? "Najprej zaženi SQL 018 (tabela materiala)" : "Povleci sem izpis materiala (zaloge) ali klikni"}
-              enota="artiklov"
-              uvoz={matUvoz ? { ...matUvoz, stevilo: matUvoz.st_postavk } : null}
-              nalagam={uvazam === "material"}
-              onemogoceno={niMaterialTabel || uvazam !== null}
-              onFile={izberiMaterial}
-            />
-          </div>
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Izvoz VD200 (.xlsx)"
-              hint="Povleci sem izvozvd200.xlsx ali klikni za izbiro"
-              enota="postavk"
-              uvoz={priUvoz ? { ...priUvoz, stevilo: priUvoz.st_postavk } : null}
-              nalagam={uvazam === "vd200"}
-              onemogoceno={!!napakaBaze || uvazam !== null}
-              onFile={izberiVd200}
-            />
-          </div>
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Odpreme VD300 (.xlsx)"
-              hint={niOdpremTabel ? "Najprej zaženi SQL 009 (tabele odprem)" : "Povleci sem celoten izvoz odprem VD300 ali klikni"}
-              enota="postavk"
-              uvoz={odpUvoz ? { ...odpUvoz, stevilo: odpUvoz.st_postavk } : null}
-              nalagam={uvazam === "vd300"}
-              onemogoceno={niOdpremTabel || uvazam !== null}
-              onFile={izberiVd300}
-            />
-          </div>
-          <div className="sm:w-72">
-            <UvozDropzone
-              naslov="Delovni nalogi (.xlsx)"
-              hint="Isti uvoz nalogov kot v Zasedenosti"
-              enota="nalogov"
-              uvoz={nalUvoz ? { ...nalUvoz, stevilo: nalUvoz.st_nalogov } : null}
-              nalagam={uvazam === "nalogi"}
-              onemogoceno={uvazam !== null}
-              onFile={izberiNaloge}
-            />
-          </div>
-        </div>
+        <PodatkiVir kljuci={["narocila", "odpreme", "material", "nalogi"]} />
       </div>
+
+      {niOdpremTabel && (
+        <WarningText>
+          V bazi še ni tabel odprem. V Supabase SQL editorju zaženi{" "}
+          <code className="rounded bg-white px-1">supabase/migrations/009_prioritete_odpreme_vd300.sql</code> in osveži stran.
+        </WarningText>
+      )}
+      {niMaterialTabel && (
+        <WarningText>
+          V bazi še ni tabele materiala. V Supabase SQL editorju zaženi{" "}
+          <code className="rounded bg-white px-1">supabase/migrations/018_spl_material.sql</code> in osveži stran.
+        </WarningText>
+      )}
 
       {napakaBaze ? (
         <WarningText>
@@ -556,7 +452,7 @@ function PrioriteteInner() {
         </WarningText>
       ) : !priUvoz ? (
         <div className="fp-card p-8 text-center text-ink-600">
-          Ni uvoženih naročil. Povleci izvoz <strong>izvozvd200.xlsx</strong> v okno zgoraj desno.
+          Ni uvoženih naročil. Uvozi naročila VD200 z gumbom Sync v glavi ali na strani Podatki.
         </div>
       ) : (
         <>
@@ -816,72 +712,6 @@ function PrioriteteInner() {
               ime={`prioritete_${danes}.txt`}
             />
           ))}
-      </Modal>
-
-      {/* ============ PREGLED UVOZA ============ */}
-      <Modal open={!!vd200Pregled} title={`Uvoz: ${vd200Pregled?.datoteka ?? ""}`} onClose={() => !uvazam && setVd200Pregled(null)}>
-        {vd200Pregled && (
-          <UvozPotrditev
-            vrstice={[
-              ["Postavk skupaj", vd200Pregled.postavke.length],
-              ["Naročil", new Set(vd200Pregled.postavke.map((p) => p.stevilka)).size],
-              ["Potrjenih postavk izdelkov (100/099/110)", vd200Pregled.postavke.filter((p) => /^(100|099|110)-/.test(p.ident) && (p.status ?? "").includes("potrjeno")).length],
-            ]}
-            opozorila={vd200Pregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setVd200Pregled(null)}
-            onPotrdi={() => potrdi("vd200")}
-          />
-        )}
-      </Modal>
-      <Modal open={!!vd300Pregled} title={`Uvoz odprem: ${vd300Pregled?.datoteka ?? ""}`} onClose={() => !uvazam && setVd300Pregled(null)}>
-        {vd300Pregled && (
-          <UvozPotrditev
-            vrstice={[
-              ["Vrstic v datoteki", vd300Pregled.vseh],
-              ["Izločenih (zaključena naročila, starejša od 30 dni)", vd300Pregled.izlocenih],
-              ["Postavk odprem za uvoz", vd300Pregled.odpreme.length],
-              ["Odpremnih dokumentov", new Set(vd300Pregled.odpreme.map((o) => o.stevilka)).size],
-              ["Postavk z dobavnico (vzeto z zaloge)", vd300Pregled.odpreme.filter((o) => o.dokument).length],
-              ["Zaključenih odprem na še odprtih naročilih", vd300Pregled.odpreme.filter((o) => o.dokument && /zaklju/i.test(o.status ?? "") && !/zaklju/i.test(o.narocilo_status ?? "")).length],
-            ]}
-            opomba="Uvozi celoten izvoz odprem (tudi zaključene, npr. od začetka leta) - shranijo se samo odpreme odprtih naročil in zadnjih 30 dni. Postavke naročil VD200 z dobavnico dobijo status V odpremi in ne porabijo zaloge, tudi če je odprema danes zaključena in se naročilo zapre šele ponoči."
-            opozorila={vd300Pregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setVd300Pregled(null)}
-            onPotrdi={() => potrdi("vd300")}
-          />
-        )}
-      </Modal>
-      <Modal open={!!matPregled} title={`Uvoz materiala: ${matPregled?.datoteka ?? ""}`} onClose={() => !uvazam && setMatPregled(null)}>
-        {matPregled && (
-          <UvozPotrditev
-            vrstice={[
-              ["Artiklov", matPregled.material.length],
-              ["Izdelkov (100/099/110)", matPregled.material.filter((m) => /^(100|099|110)-/.test(m.ident)).length],
-              ["Z zalogo (matično)", matPregled.material.filter((m) => m.zaloga > 0).length],
-              ["Rezervirano kot material na DN", matPregled.material.filter((m) => m.planirano_proizvodnja > 0).length],
-              ["S planirano količino DN", matPregled.material.filter((m) => m.planirano_dn > 0).length],
-            ]}
-            opomba="Material se shrani v splošno tabelo materiala (velja za vse strani). Zaloga, DN in rezervacije za delovne naloge se v Prioritetah računajo iz tega izpisa."
-            opozorila={matPregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setMatPregled(null)}
-            onPotrdi={() => potrdi("material")}
-          />
-        )}
-      </Modal>
-      <Modal open={!!nalPregled} title={`Uvoz nalogov: ${nalPregled?.datoteka ?? ""}`} onClose={() => !uvazam && setNalPregled(null)}>
-        {nalPregled && (
-          <UvozPotrditev
-            vrstice={[["Nalogov", nalPregled.nalogi.length]]}
-            opomba="Nalogi se shranijo kot nov uvoz in veljajo tudi za Zasedenost in Delovni plan."
-            opozorila={nalPregled.opozorila}
-            uvazam={uvazam !== null}
-            onPreklici={() => setNalPregled(null)}
-            onPotrdi={() => potrdi("nalogi")}
-          />
-        )}
       </Modal>
     </div>
   );
@@ -1895,50 +1725,6 @@ function Oznaka({ cls, children }: { cls: string; children: React.ReactNode }) {
   return <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{children}</span>;
 }
 
-function UvozPotrditev({
-  vrstice,
-  opomba,
-  opozorila,
-  uvazam,
-  onPreklici,
-  onPotrdi,
-}: {
-  vrstice: [string, number][];
-  opomba?: string;
-  opozorila: string[];
-  uvazam: boolean;
-  onPreklici: () => void;
-  onPotrdi: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 text-sm">
-      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-        {vrstice.map(([k, v]) => (
-          <Fragment key={k}>
-            <dt className="text-ink-600">{k}</dt>
-            <dd className="text-right font-bold tabular-nums">{formatNum(v)}</dd>
-          </Fragment>
-        ))}
-      </dl>
-      {opomba && <p className="text-ink-600">{opomba}</p>}
-      {opozorila.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-lg bg-warn-50 p-2 text-xs text-warn-700">
-          {opozorila.map((o, i) => (
-            <div key={i}>{o}</div>
-          ))}
-        </div>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button hint="Prekliči uvoz datoteke" variant="neutral" onClick={onPreklici} disabled={uvazam}>
-          Prekliči
-        </Button>
-        <Button hint="Shrani uvoz kot zadnje podatke" variant="success" onClick={onPotrdi} disabled={uvazam}>
-          {uvazam ? "Uvažam ..." : "Uvozi"}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 const DNEVI = ["", "Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"];
 function dan(iso: IsoDate) {

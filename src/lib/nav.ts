@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Factory, Footprints, Gauge, ListOrdered, PackageCheck, ShieldCheck, Warehouse } from "lucide-react";
+import { BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Database, Factory, Footprints, Gauge, ListOrdered, PackageCheck, PackageSearch, RefreshCw, ShieldCheck, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -22,6 +22,8 @@ export type NavGroup = {
   label: string;
   icon: LucideIcon;
   sekcije: NavSekcija[];
+  /** Modul je pritrjen na spodnji rob menija (npr. Podatki), ločen od ostalih. */
+  dno?: boolean;
 };
 
 export const NAV: NavGroup[] = [
@@ -149,6 +151,30 @@ export const NAV: NavGroup[] = [
             href: "/skladisce/rutina",
             icon: ClipboardCheck,
             hint: "Odpri dnevno rutino skladišča",
+          },
+          {
+            label: "Doizdaja materiala",
+            href: "/skladisce/doizdaja",
+            icon: PackageSearch,
+            hint: "Prevzet material, ki ga še izdati",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Podatki",
+    icon: Database,
+    dno: true,
+    sekcije: [
+      {
+        label: "Uvoz podatkov",
+        items: [
+          {
+            label: "Sync iz ERP",
+            href: "/podatki",
+            icon: RefreshCw,
+            hint: "Uvoz izvozov iz mape na serverju",
           },
         ],
       },

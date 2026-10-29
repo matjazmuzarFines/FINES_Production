@@ -44,6 +44,7 @@ export function UvozDropzone({
   onemogoceno,
   accept = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   onFile,
+  onFiles,
 }: {
   naslov: string;
   /** Hover tekst (max 6-8 besed). */
@@ -54,7 +55,9 @@ export function UvozDropzone({
   nalagam: boolean;
   onemogoceno?: boolean;
   accept?: string;
-  onFile: (f: File) => void;
+  onFile?: (f: File) => void;
+  /** Več datotek naenkrat (izbira in povleci in spusti) - namesto onFile. */
+  onFiles?: (f: File[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [nadOknom, setNadOknom] = useState(false);
@@ -64,8 +67,9 @@ export function UvozDropzone({
   const zaklenjeno = nalagam || !!onemogoceno;
 
   function sprejmi(files: FileList | null) {
-    const f = files?.[0];
-    if (f && !zaklenjeno) onFile(f);
+    if (!files?.length || zaklenjeno) return;
+    if (onFiles) onFiles([...files]);
+    else onFile?.(files[0]);
   }
 
   const kdaj = uvoz ? new Date(uvoz.created_at) : null;
@@ -118,6 +122,7 @@ export function UvozDropzone({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={!!onFiles}
         className="hidden"
         onChange={(e) => {
           sprejmi(e.target.files);
