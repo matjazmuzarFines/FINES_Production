@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.06",
+    datum: "29. 10. 2026",
+    spremembe: [
+      "Meni: razprti razdelki in moduli ostanejo razprti, ko odpreš stran v drugem razdelku - zapreš jih samo s klikom. Razdelki so privzeto zloženi, razdelek strani, na katero greš, se razpre sam.",
+    ],
+  },
+  {
     verzija: "26.05",
     datum: "29. 10. 2026",
     spremembe: [

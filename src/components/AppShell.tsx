@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,31 +30,32 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const isHome = pathname === "/";
   const current = findNav(pathname);
-  // Ročno razprti / zloženi moduli in razdelki menija (brskalnik si jih zapomni).
-  // Modul in razdelek trenutne strani sta ob prihodu na stran vedno razprta.
-  const [rocno, setRocno] = useState<Record<string, boolean>>(() => brezAktivnih(preberiMeni(), pathname));
+  // Razprti / zloženi moduli in razdelki menija (brskalnik si jih zapomni). Ob prihodu na stran se njen modul
+  // in razdelek razpreta in ostaneta razprta tudi na drugi strani - zapre ju samo uporabnik.
+  const [rocno, setRocno] = useState<Record<string, boolean>>(() => zAktivnimi(preberiMeni(), pathname));
   const [potMenija, setPotMenija] = useState(pathname);
   if (potMenija !== pathname) {
     setPotMenija(pathname);
-    setRocno((r) => brezAktivnih(r, pathname));
+    setRocno((r) => zAktivnimi(r, pathname));
   }
+  useEffect(() => {
+    try {
+      localStorage.setItem(MENI_KLJUC, JSON.stringify(rocno));
+    } catch {
+      // brez shrambe velja do osvežitve
+    }
+  }, [rocno]);
   const title = current
     ? [current.group.label, current.item.label, current.sub?.label].filter(Boolean).join(" · ")
     : "Domov";
 
   function preklopiMeni(kljuc: string, prikazan: boolean) {
-    const nov = { ...rocno, [kljuc]: !prikazan };
-    setRocno(nov);
-    try {
-      localStorage.setItem(MENI_KLJUC, JSON.stringify(nov));
-    } catch {
-      // brez shrambe velja do osvežitve
-    }
+    setRocno((r) => ({ ...r, [kljuc]: !prikazan }));
   }
 
   function modulMenija(group: NavGroup) {
     const aktiven = current?.group === group;
-    const prikazan = rocno[group.label] ?? aktiven;
+    const prikazan = rocno[group.label] ?? false;
     return (
       <NavModul
         key={group.label}
@@ -65,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {group.sekcije.map((sekcija) => {
           const kljuc = kljucSekcije(group, sekcija);
-          const prikazana = rocno[kljuc] ?? current?.sekcija === sekcija;
+          const prikazana = rocno[kljuc] ?? false;
           return (
             <NavSekcijaBlok
               key={sekcija.label}
@@ -235,14 +236,11 @@ function preberiMeni(): Record<string, boolean> {
   }
 }
 
-/** Odstrani ročno izbiro za modul in razdelek strani `pathname` - ta dva sta ob prihodu na stran razprta. */
-function brezAktivnih(rocno: Record<string, boolean>, pathname: string): Record<string, boolean> {
+/** Razpre modul in razdelek strani `pathname`; ostali ostanejo, kot jih je pustil uporabnik (privzeto zloženi). */
+function zAktivnimi(rocno: Record<string, boolean>, pathname: string): Record<string, boolean> {
   const c = findNav(pathname);
   if (!c) return rocno;
-  const ostalo = { ...rocno };
-  delete ostalo[c.group.label];
-  delete ostalo[kljucSekcije(c.group, c.sekcija)];
-  return ostalo;
+  return { ...rocno, [c.group.label]: true, [kljucSekcije(c.group, c.sekcija)]: true };
 }
 
 /**
