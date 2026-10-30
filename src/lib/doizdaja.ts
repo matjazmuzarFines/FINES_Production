@@ -520,6 +520,8 @@ export type Doizdaja = {
   nalogi: NalogPregled[];
   stolpci: Stolpec[];
   skupine: string[];
+  /** Klasifikati (prve 3 števke šifre materiala) po skupini, npr. "096" ali "096, 097". */
+  klasifikati: Record<string, string>;
   /** Na novo zaznane čakajoče izdaje - zapiši v bazo. */
   nove: Cakanje[];
   /** Shranjene čakajoče izdaje, ki so izdane (ali nalog ni več aktiven) - zaključi v bazi. */
@@ -559,7 +561,14 @@ function zadnjeObvestilo(kartice: Kartica[]): Stolpec["obvesceno"] {
   return k ? { cas: k.obvesceno_at!, kdo: k.obvestil } : null;
 }
 
-const prevzemKljuc = (p: Prevzem) => p.cas ?? p.datum ?? "";
+/** Klasifikat materiala: številčna predpona šifre ("096-10129" -> "096"). */
+const klasifikat = (ident: string) => ident.match(/^(\d+)-/)?.[1] ?? null;
+
+/** "096 · Pločevina" - skupina s klasifikatom za prikaz. */
+export const skupinaSKlasifikatom = (skupina: string, klasifikati: Record<string, string>) =>
+  klasifikati[skupina] ? `${klasifikati[skupina]} · ${skupina}` : skupina;
+
+const prevzemKljuc =(p: Prevzem) => p.cas ?? p.datum ?? "";
 const kljucCakanja = (ident: string, st_naloga: string) => `${ident}|${st_naloga}`;
 
 /**
@@ -589,7 +598,20 @@ export function izracunajDoizdajo(
     zaznavaj?: boolean;
   } = {},
 ): Doizdaja {
-  const skupine = [...new Set(vrstice.map((v) => v.skupina ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b, "sl"));
+  const klasifikatiSkupin = new Map<string, Set<string>>();
+  for (const v of vrstice) {
+    if (!v.skupina) continue;
+    const k = klasifikat(v.ident);
+    if (!klasifikatiSkupin.has(v.skupina)) klasifikatiSkupin.set(v.skupina, new Set());
+    if (k) klasifikatiSkupin.get(v.skupina)!.add(k);
+  }
+  const klasifikati = Object.fromEntries(
+    [...klasifikatiSkupin].map(([s, ks]) => [s, [...ks].sort((a, b) => a.localeCompare(b, "sl", { numeric: true })).join(", ")]),
+  );
+  // Po klasifikatu (skladišče skupine pozna po številki), nato po nazivu
+  const skupine = [...klasifikatiSkupin.keys()].sort(
+    (a, b) => klasifikati[a].localeCompare(klasifikati[b], "sl", { numeric: true }) || a.localeCompare(b, "sl"),
+  );
   const izlocene = new Set(nast.izlocene ?? privzeteIzlocene(skupine));
 
   // ---- 1. nalogi
@@ -781,7 +803,7 @@ export function izracunajDoizdajo(
     });
   }
 
-  return { danes, nalogi: [...nalogi.values()].sort(poRoku), stolpci, skupine, nove, zakljuci };
+  return { danes, nalogi: [...nalogi.values()].sort(poRoku), stolpci, skupine, klasifikati, nove, zakljuci };
 }
 
 // =====================================================================

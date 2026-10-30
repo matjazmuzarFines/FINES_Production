@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.09",
+    datum: "30. 10. 2026",
+    spremembe: [
+      "Doizdaja: v filtru »Ne štej v delež izdanega« je pred nazivom skupine še klasifikat (npr. »096 · Pločevina«), skupine so razvrščene po klasifikatu. Iskanje v filtru najde skupino tudi po številki.",
+    ],
+  },
+  {
     verzija: "26.08",
     datum: "29. 10. 2026",
     spremembe: [

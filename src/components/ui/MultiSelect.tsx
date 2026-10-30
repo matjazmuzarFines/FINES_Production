@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { FilterNaslov } from "./Filtri";
+import { ujemaIskanje } from "@/lib/iskanje";
 
 /** Spustni seznam z večkratnim izborom (checkboxi + Izberi vse). */
 export function MultiSelect({
@@ -11,12 +12,15 @@ export function MultiSelect({
   value,
   onChange,
   hint,
+  oznaka = (o) => o,
 }: {
   label: string;
   options: string[];
   value: string[];
   onChange: (v: string[]) => void;
   hint: string;
+  /** Prikazno besedilo možnosti (vrednost ostane `o`). */
+  oznaka?: (o: string) => string;
 }) {
   const [odprt, setOdprt] = useState(false);
   const [iskanje, setIskanje] = useState("");
@@ -31,9 +35,9 @@ export function MultiSelect({
     return () => document.removeEventListener("mousedown", zapri);
   }, [odprt]);
 
-  const vidne = options.filter((o) => o.toLowerCase().includes(iskanje.toLowerCase()));
+  const vidne = options.filter((o) => ujemaIskanje(iskanje, [oznaka(o)]));
   const vseIzbrane = vidne.length > 0 && vidne.every((o) => value.includes(o));
-  const povzetek = value.length === 0 ? "Vse" : value.length <= 2 ? value.join(", ") : `${value.length} izbranih`;
+  const povzetek = value.length === 0 ? "Vse" : value.length <= 2 ? value.map(oznaka).join(", ") : `${value.length} izbranih`;
 
   function preklopi(o: string) {
     onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
@@ -91,7 +95,7 @@ export function MultiSelect({
                 <button
                   key={o}
                   type="button"
-                  title={`${izbrana ? "Odstrani" : "Dodaj"} filter: ${o}`}
+                  title={`${izbrana ? "Odstrani" : "Dodaj"} filter: ${oznaka(o)}`}
                   onClick={() => preklopi(o)}
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-ink-50"
                 >
@@ -102,7 +106,7 @@ export function MultiSelect({
                   >
                     {izbrana && <Check className="h-3 w-3" aria-hidden />}
                   </span>
-                  {o}
+                  {oznaka(o)}
                 </button>
               );
             })}

@@ -33,6 +33,7 @@ import {
   naloziPrevzeme,
   poKrovnih,
   privzeteIzlocene,
+  skupinaSKlasifikatom,
   shraniCakanje,
   stanjeVrstice,
   zabeleziObvestilo,
@@ -546,9 +547,10 @@ function DoizdajaInner() {
                   <MultiSelect
                     label="Ne štej v delež izdanega"
                     options={rezultat.skupine}
+                    oznaka={(s) => skupinaSKlasifikatom(s, rezultat.klasifikati)}
                     value={izlocene}
                     onChange={(v) => spremeni({ izlocene: v })}
-                    hint="Skupine, ki se izdajo posebej (npr. pločevina)"
+                    hint="Skupine (klasifikat · naziv), ki se izdajo posebej (npr. pločevina)"
                   />
                 </div>
                 {nast.pogled === "material" && (
