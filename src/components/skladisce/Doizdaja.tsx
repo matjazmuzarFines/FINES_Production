@@ -347,7 +347,7 @@ function DoizdajaInner() {
 
   const { izd, prev, nal } = podatki;
   const niTabelVBazi = izd.niTabel || prev.niTabel;
-  const izlocene = nast.izlocene ?? privzeteIzlocene(rezultat.skupine);
+  const izlocene = nast.izlocene ?? privzeteIzlocene(rezultat.skupine, rezultat.klasifikati);
 
   // ---- iskanje in kategorije
   const ujemaKartica = (s: Stolpec, k: Kartica) =>

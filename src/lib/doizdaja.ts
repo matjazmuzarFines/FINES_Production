@@ -411,8 +411,17 @@ export const RDECA_OD = 4;
  */
 export const ROK_ZAZNAVE = RDECA_OD;
 
-/** Privzeto izločene skupine: pločevina (izda se prej za razrez) in polizdelki (P-...), ki jih izdela proizvodnja. */
-export const privzeteIzlocene = (skupine: string[]) => skupine.filter((s) => /PLOČEVIN|^P-/i.test(s));
+/** Klasifikati, ki se privzeto ne štejejo v delež izdanega (izdajo se posebej). */
+const PRIVZETI_KLASIFIKATI = new Set(["051", "052", "060", "061", "062", "064"]);
+
+/**
+ * Privzeto izločene skupine: pločevina (izda se prej za razrez), polizdelki (P-...), ki jih izdela proizvodnja,
+ * in skupine s klasifikati iz PRIVZETI_KLASIFIKATI.
+ */
+export const privzeteIzlocene = (skupine: string[], klasifikati: Record<string, string>) =>
+  skupine.filter(
+    (s) => /PLOČEVIN|^P-/i.test(s) || (klasifikati[s] ?? "").split(", ").some((k) => PRIVZETI_KLASIFIKATI.has(k)),
+  );
 
 export type StanjeNaloga = "upostevan" | "pod_pragom" | "ni_zacet" | "izdan";
 
@@ -612,7 +621,7 @@ export function izracunajDoizdajo(
   const skupine = [...klasifikatiSkupin.keys()].sort(
     (a, b) => klasifikati[a].localeCompare(klasifikati[b], "sl", { numeric: true }) || a.localeCompare(b, "sl"),
   );
-  const izlocene = new Set(nast.izlocene ?? privzeteIzlocene(skupine));
+  const izlocene = new Set(nast.izlocene ?? privzeteIzlocene(skupine, klasifikati));
 
   // ---- 1. nalogi
   const poNalogu = new Map<string, IzdajaVrstica[]>();
