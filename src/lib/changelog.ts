@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "26.10",
+    datum: "2. 11. 2026",
+    spremembe: [
+      "Meni proizvodnje: Rutina vodij in Produktivnost sta neposredno v razdelku Rutinsko delo; vmesni spustni meni Rutina je odstranjen.",
+    ],
+  },
+  {
     verzija: "26.09",
     datum: "30. 10. 2026",
     spremembe: [

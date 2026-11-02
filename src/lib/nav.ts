@@ -52,24 +52,16 @@ export const NAV: NavGroup[] = [
         label: "Rutinsko delo",
         items: [
           {
-            label: "Rutina",
+            label: "Rutina vodij",
             href: "/proizvodnja/rutina",
             icon: ClipboardCheck,
-            hint: "Pokaži rutino vodij in produktivnost",
-            children: [
-              {
-                label: "Rutina vodij",
-                href: "/proizvodnja/rutina",
-                icon: ClipboardCheck,
-                hint: "Odpri dnevno rutino delovnih mest",
-              },
-              {
-                label: "Produktivnost",
-                href: "/proizvodnja/rutina/produktivnost",
-                icon: Footprints,
-                hint: "Tedenski Gemba walk in akcije produktivnosti",
-              },
-            ],
+            hint: "Odpri dnevno rutino delovnih mest",
+          },
+          {
+            label: "Produktivnost",
+            href: "/proizvodnja/rutina/produktivnost",
+            icon: Footprints,
+            hint: "Tedenski Gemba walk in akcije produktivnosti",
           },
         ],
       },
