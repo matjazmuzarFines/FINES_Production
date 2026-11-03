@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { FilterNaslov } from "./Filtri";
 import { ujemaIskanje } from "@/lib/iskanje";
@@ -13,6 +13,8 @@ export function MultiSelect({
   onChange,
   hint,
   oznaka = (o) => o,
+  prazno = "Vse",
+  info,
 }: {
   label: string;
   options: string[];
@@ -21,6 +23,10 @@ export function MultiSelect({
   hint: string;
   /** Prikazno besedilo možnosti (vrednost ostane `o`). */
   oznaka?: (o: string) => string;
+  /** Besedilo praznega izbora, kadar komponenta ni filter. */
+  prazno?: string;
+  /** Daljše pojasnilo za ikono "i" na koncu naslova. */
+  info?: ReactNode;
 }) {
   const [odprt, setOdprt] = useState(false);
   const [iskanje, setIskanje] = useState("");
@@ -37,7 +43,7 @@ export function MultiSelect({
 
   const vidne = options.filter((o) => ujemaIskanje(iskanje, [oznaka(o)]));
   const vseIzbrane = vidne.length > 0 && vidne.every((o) => value.includes(o));
-  const povzetek = value.length === 0 ? "Vse" : value.length <= 2 ? value.map(oznaka).join(", ") : `${value.length} izbranih`;
+  const povzetek = value.length === 0 ? prazno : value.length <= 2 ? value.map(oznaka).join(", ") : `${value.length} izbranih`;
 
   function preklopi(o: string) {
     onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
@@ -45,7 +51,7 @@ export function MultiSelect({
 
   return (
     <div ref={ref} className="relative">
-      <FilterNaslov>{label}</FilterNaslov>
+      <FilterNaslov info={info}>{label}</FilterNaslov>
       <button
         type="button"
         title={hint}
@@ -80,7 +86,7 @@ export function MultiSelect({
             {value.length > 0 && (
               <button
                 type="button"
-                title="Počisti izbor (prikaži vse)"
+                title="Počisti trenutni izbor"
                 className="ml-auto font-semibold text-ink-500 hover:underline"
                 onClick={() => onChange([])}
               >

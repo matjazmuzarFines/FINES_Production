@@ -1,7 +1,7 @@
 // Izvozi iz ERP, ki jih worker vsakih nekaj ur shrani v mapo na serverju podjetja
 // (\\rokadasrv\RISPSQL$\Dokumentacija\Izvoz_excel_dir). Brskalnik jih prebere iz mape in uvozi (stran Podatki).
 
-export type SyncDatotekaKljuc = "nalogi" | "material" | "narocila" | "odpreme" | "prevzemi" | "izdaje";
+export type SyncDatotekaKljuc = "nalogi" | "material" | "narocila" | "odpreme" | "prevzemi" | "izdaje" | "identi" | "kosovnice";
 
 export const SYNC_MAPA = "\\\\rokadasrv\\RISPSQL$\\Dokumentacija\\Izvoz_excel_dir";
 
@@ -15,11 +15,13 @@ export type SyncDatotekaOpis = {
 /** Vrstni red je tudi vrstni red pri "Sync vse" (prevzemi pred izdajami - Doizdaja primerja čase). */
 export const SYNC_DATOTEKE: Record<SyncDatotekaKljuc, SyncDatotekaOpis> = {
   nalogi: { datoteka: "nalogi.xlsx", naslov: "Delovni nalogi", strani: "Zasedenost, Delovni plan, Prioritete, Doizdaja" },
-  material: { datoteka: "Material_pregled_planirane_porabe.xlsx", naslov: "Material (zaloge)", strani: "Prioritete, Pakiranje" },
+  material: { datoteka: "Material_pregled_planirane_porabe.xlsx", naslov: "Material (zaloge)", strani: "Prioritete, Pakiranje, Primerjava kosovnic" },
   narocila: { datoteka: "narocila.xlsx", naslov: "Naročila VD200", strani: "Prioritete" },
   odpreme: { datoteka: "odpreme.xlsx", naslov: "Odpreme VD300", strani: "Prioritete, Pakiranje" },
   prevzemi: { datoteka: "Prevzem_dobavitelja.xlsx", naslov: "Prevzemi od dobavitelja", strani: "Doizdaja" },
   izdaje: { datoteka: "Kreiranje_izdaj_v_proizvodnjo.xlsx", naslov: "Izdaje v proizvodnjo", strani: "Doizdaja" },
+  identi: { datoteka: "Identi.xlsx", naslov: "Identi", strani: "Primerjava kosovnic" },
+  kosovnice: { datoteka: "Kosovnice.xlsx", naslov: "Kosovnice", strani: "Primerjava kosovnic" },
 };
 
 export const SYNC_KLJUCI = Object.keys(SYNC_DATOTEKE) as SyncDatotekaKljuc[];
@@ -32,4 +34,6 @@ export const TABELE_UVOZOV: Record<SyncDatotekaKljuc, string> = {
   odpreme: "fp_pri_odp_uvozi",
   prevzemi: "fp_doi_prevzemi_uvozi",
   izdaje: "fp_doi_izdaje_uvozi",
+  identi: "spl_identi_uvozi",
+  kosovnice: "spl_kosovnice_uvozi",
 };

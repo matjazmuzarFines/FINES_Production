@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Search } from "lucide-react";
+import { InfoNamig } from "./InfoNamig";
 
 /**
  * Standardna vrstica filtrov: vsi gumbi / polja so poravnani spodaj (enaka višina 40 px),
@@ -11,16 +12,21 @@ export function FilterVrstica({ children, className = "" }: { children: ReactNod
   return <div className={`flex flex-wrap items-end gap-3 ${className}`}>{children}</div>;
 }
 
-/** Naslov nad poljem (vedno enak slog). */
-export function FilterNaslov({ children }: { children: ReactNode }) {
-  return <span className="mb-1 block text-xs font-semibold leading-tight text-ink-600">{children}</span>;
+/** Naslov nad poljem (vedno enak slog). `info` doda ikono "i" s pojasnilom na konec naslova. */
+export function FilterNaslov({ children, info }: { children: ReactNode; info?: ReactNode }) {
+  return (
+    <span className="mb-1 block text-xs font-semibold leading-tight text-ink-600">
+      {children}
+      {info && <> <InfoNamig naslov={String(children)}>{info}</InfoNamig></>}
+    </span>
+  );
 }
 
 /** Polje filtra z naslovom nad njim. Brez naslova se polje vseeno poravna z ostalimi (spodaj). */
-export function FilterPolje({ label, children, className = "" }: { label?: string; children: ReactNode; className?: string }) {
+export function FilterPolje({ label, info, children, className = "" }: { label?: string; info?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <div className={`flex flex-col justify-end ${className}`}>
-      {label && <FilterNaslov>{label}</FilterNaslov>}
+      {label && <FilterNaslov info={info}>{label}</FilterNaslov>}
       {children}
     </div>
   );
@@ -33,9 +39,15 @@ export function FilterIskanje({
   onChange,
   placeholder,
   hint,
+  info,
+  telefon,
   className = "w-full sm:w-72",
 }: {
   label?: string;
+  /** Na telefonu 44 px in pisava 16 px (stran za delo na telefonu - iPhone ob vnosu ne poveča strani). */
+  telefon?: boolean;
+  /** Daljše pojasnilo za ikono "i". */
+  info?: ReactNode;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
@@ -43,16 +55,16 @@ export function FilterIskanje({
   className?: string;
 }) {
   return (
-    <FilterPolje label={label} className={className}>
+    <FilterPolje label={label} info={info} className={className}>
       <span className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-ink-400" aria-hidden />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           title={hint}
           aria-label={label}
-          className="h-10 w-full rounded-lg border border-ink-200 bg-white pl-8 pr-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
+          className={`${telefon ? "h-11 text-base sm:h-10 sm:text-sm" : "h-10 text-sm"} w-full rounded-lg border border-ink-200 bg-white pl-8 pr-2 focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100`}
         />
       </span>
     </FilterPolje>
@@ -66,17 +78,20 @@ export function FilterIzbira<V extends string | number>({
   options,
   onChange,
   hint,
+  info,
   className = "",
 }: {
   label: string;
   value: V;
   options: { value: V; label: string }[];
+  /** Daljše pojasnilo za ikono "i". */
+  info?: ReactNode;
   onChange: (v: V) => void;
   hint: string;
   className?: string;
 }) {
   return (
-    <FilterPolje label={label} className={className}>
+    <FilterPolje label={label} info={info} className={className}>
       <select
         value={value}
         title={hint}
@@ -107,16 +122,19 @@ export function FilterCheckbox({
   checked,
   onChange,
   hint,
+  info,
 }: {
   label: string;
   /** Neobvezen naslov nad okvirjem. */
   naslov?: string;
+  /** Pojasnilo za ikono "i": na koncu naslova, brez naslova v okvirju takoj za besedilom. */
+  info?: ReactNode;
   checked: boolean;
   onChange: (v: boolean) => void;
   hint: string;
 }) {
   return (
-    <FilterPolje label={naslov}>
+    <FilterPolje label={naslov} info={naslov ? info : undefined}>
       <label
         title={hint}
         className={`inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-lg border px-3 text-sm transition-colors ${
@@ -125,6 +143,7 @@ export function FilterCheckbox({
       >
         <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-fines-500" />
         {label}
+        {info && !naslov && <InfoNamig naslov={label}>{info}</InfoNamig>}
       </label>
     </FilterPolje>
   );
@@ -140,14 +159,17 @@ export function FilterPreklopnik<V extends string>({
   value,
   options,
   onChange,
+  info,
 }: {
   label: string;
   value: V;
   options: { value: V; label: string; hint: string; stevilo?: number }[];
   onChange: (v: V) => void;
+  /** Daljše pojasnilo za ikono "i". */
+  info?: ReactNode;
 }) {
   return (
-    <FilterPolje label={label} className="min-w-0 max-w-full">
+    <FilterPolje label={label} info={info} className="min-w-0 max-w-full">
       <div className="inline-flex h-10 max-w-full overflow-x-auto rounded-lg border border-ink-200" role="group" aria-label={label}>
         {options.map((o, i) => {
           const izbran = o.value === value;

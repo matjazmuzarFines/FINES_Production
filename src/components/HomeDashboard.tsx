@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { NAV, listiNav, type NavItem } from "@/lib/nav";
+import { listiNav, type NavItem } from "@/lib/nav";
+import { useDostop } from "@/lib/dostop";
 import { formatLong, todayWorkday } from "@/lib/dates";
 import {
   aktivnaDelovnaMesta,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/rutina";
 import { supabaseConfigured } from "@/lib/supabase";
 import { STATUS_STYLE } from "@/components/rutina/MonthCalendar";
+import { WarningText } from "@/components/ui/Notice";
 
 type Kpi = Record<string, DanPovzetek | undefined>;
 
@@ -44,6 +46,7 @@ async function naloziKpi(datum: string): Promise<Kpi> {
 export function HomeDashboard() {
   const [datum] = useState(todayWorkday);
   const [kpi, setKpi] = useState<Kpi>({});
+  const nav = useDostop().nav;
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -59,7 +62,11 @@ export function HomeDashboard() {
         <p className="mt-1 capitalize text-ink-600" suppressHydrationWarning>{formatLong(datum)}</p>
       </section>
 
-      {NAV.map((group) => (
+      {nav.length === 0 && (
+        <WarningText>Nimaš dodeljenega dostopa do nobene strani. Obrni se na skrbnika aplikacije.</WarningText>
+      )}
+
+      {nav.map((group) => (
         <section key={group.label} className="flex flex-col gap-3">
           <h3 className="flex items-center gap-2 text-lg font-bold text-ink-800">
             <group.icon className="h-5 w-5 text-fines-500" aria-hidden />

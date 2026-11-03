@@ -4,15 +4,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft, Home, Info, LogOut, Menu, X } from "lucide-react";
-import { NAV, aktivnaPostavka, findNav, listiNav, parentHref, type NavGroup, type NavItem, type NavSekcija } from "@/lib/nav";
+import { ChevronDown, ChevronLeft, Home, Info, Lock, LogOut, Menu, X } from "lucide-react";
+import { aktivnaPostavka, findNav, listiNav, parentHref, stranZaDostop, type NavGroup, type NavItem, type NavSekcija } from "@/lib/nav";
+import { DostopContext, POLN_DOSTOP, naloziMojDostop, type Dostop } from "@/lib/dostop";
 import { lahkoZapustim } from "@/lib/neshranjeno";
 import { odjava, useSeja } from "@/lib/auth";
 import { supabaseConfigured } from "@/lib/supabase";
 import { APP_VERSION, CHANGELOG } from "@/lib/changelog";
 import { Button, IconButton } from "./ui/Button";
 import { Modal } from "./ui/Modal";
-import { Loading } from "./ui/Notice";
+import { ErrorText, Loading } from "./ui/Notice";
 import { Prijava } from "./Prijava";
 import { ToastProvider } from "./ui/Toast";
 import { SyncGlava } from "./SyncGlava";
@@ -27,6 +28,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   const setMenuOpen = (open: boolean) => setMenuOdprtNa(open ? pathname : null);
   const [infoOpen, setInfoOpen] = useState(false);
   const seja = useSeja();
+  const uid = seja?.user.id ?? null;
+  // Dostop prijavljenega po straneh (Podatki → Nastavitve); velja za uporabnika, za katerega je naložen
+  const [nalozenDostop, setNalozenDostop] = useState<{ uid: string; dostop?: Dostop; napaka?: string } | null>(null);
+  useEffect(() => {
+    if (!supabaseConfigured || !uid) return;
+    let preklic = false;
+    naloziMojDostop()
+      .then((dostop) => {
+        if (!preklic) setNalozenDostop({ uid, dostop });
+      })
+      .catch((e) => {
+        if (!preklic) setNalozenDostop({ uid, napaka: (e as Error).message });
+      });
+    return () => {
+      preklic = true;
+    };
+  }, [uid]);
+  const zame = nalozenDostop?.uid === uid ? nalozenDostop : null;
+  const dostop = supabaseConfigured ? zame?.dostop : POLN_DOSTOP;
+  const nav = dostop?.nav ?? [];
+  const dovoljene = dostop?.dovoljene ?? [];
+  // Uporabnik z eno samo stranjo (npr. vijacni@fines.si) gre z domače strani naravnost nanjo
+  const edina = dostop && !dostop.vse && dovoljene.length === 1 ? dovoljene[0].href : null;
+  useEffect(() => {
+    if (edina && pathname === "/") router.replace(edina);
+  }, [edina, pathname, router]);
+  const stranDovoljena = dostop?.ima(stranZaDostop(pathname)) ?? false;
 
   const isHome = pathname === "/";
   const current = findNav(pathname);
@@ -96,8 +124,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Brez prijave aplikacija pokaže samo prijavno okno (podatke ščiti tudi RLS v bazi).
   if (supabaseConfigured && seja === undefined) return <Loading />;
   if (supabaseConfigured && !seja) return <Prijava />;
+  if (zame?.napaka)
+    return (
+      <div className="p-4">
+        <ErrorText>Napaka pri preverjanju dostopa: {zame.napaka}. Osveži stran.</ErrorText>
+      </div>
+    );
+  if (!dostop || (edina && pathname === "/")) return <Loading />;
 
   return (
+    <DostopContext.Provider value={dostop}>
     <ToastProvider>
       <SyncProvider>
         <div className="flex min-h-dvh flex-col overflow-x-clip">
@@ -120,7 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <Image src="/fines-logo.png" alt="FINES d.o.o. logotip" width={136} height={36} priority className="h-auto w-24 sm:w-[136px]" />
               </Link>
-              {!isHome && (
+              {!isHome && !edina && (
                 <Button
                   hint="Vrni se na nadrejeno stran"
                   variant="neutral"
@@ -134,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <h1 className="ml-1 min-w-0 flex-1 truncate text-sm font-bold text-ink-800 sm:ml-2 sm:text-lg">
                 {title}
               </h1>
-              {!isHome && (
+              {!isHome && !edina && (
                 <IconButton
                   hint="Vrni se na nadrejeno stran"
                   variant="neutral"
@@ -143,7 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   onClick={nazaj}
                 />
               )}
-              <SyncGlava />
+              {dostop.ima("/podatki") && <SyncGlava />}
               <IconButton
                 hint="Prikaži verzije in spremembe aplikacije"
                 icon={Info}
@@ -185,16 +221,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <NavLink href="/" active={isHome} icon={Home} hint="Pojdi na domačo stran">
                   Domov
                 </NavLink>
-                <div className="flex flex-col gap-2">{NAV.filter((g) => !g.dno).map(modulMenija)}</div>
+                <div className="flex flex-col gap-2">{nav.filter((g) => !g.dno).map(modulMenija)}</div>
               </nav>
               {/* Moduli, pritrjeni na spodnji rob menija (Podatki) - vidni tudi, ko meni drsi */}
-              <div className="flex shrink-0 flex-col gap-2 border-t border-white/10 px-3 py-3">
-                {NAV.filter((g) => g.dno).map(modulMenija)}
-              </div>
+              {nav.some((g) => g.dno) && (
+                <div className="flex shrink-0 flex-col gap-2 border-t border-white/10 px-3 py-3">
+                  {nav.filter((g) => g.dno).map(modulMenija)}
+                </div>
+              )}
             </aside>
 
             {/* ============ VSEBINA ============ */}
-            <main className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">{children}</main>
+            <main className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">
+              {stranDovoljena ? children : <NiDostopa prva={dovoljene[0]} />}
+            </main>
           </div>
 
           {/* ============ NOGA ============ */}
@@ -222,6 +262,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Modal>
       </SyncProvider>
     </ToastProvider>
+    </DostopContext.Provider>
+  );
+}
+
+/** Stran, ki je uporabnik nima dodeljene (Podatki → Nastavitve). */
+function NiDostopa({ prva }: { prva?: NavItem }) {
+  return (
+    <div className="mx-auto mt-8 flex max-w-md flex-col items-center gap-3 text-center">
+      <Lock className="h-10 w-10 text-ink-400" aria-hidden />
+      <h2 className="text-xl font-bold text-ink-900">Ni dostopa</h2>
+      <p className="text-sm text-ink-600">Do te strani nimaš dostopa. Če ga potrebuješ, se obrni na skrbnika aplikacije.</p>
+      {prva && (
+        <Link href={prva.href} title={prva.hint} className="inline-flex h-10 items-center rounded-lg bg-fines-500 px-4 text-sm font-semibold text-white hover:bg-fines-600">
+          Odpri {prva.label}
+        </Link>
+      )}
+    </div>
   );
 }
 

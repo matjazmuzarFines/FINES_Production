@@ -2,6 +2,7 @@
 // Modul uvozi vse bralnike Excela (knjižnica xlsx), zato ga glava aplikacije naloži šele ob syncu.
 import { preberiIzdajeXlsx, preberiPrevzemeXlsx, shraniIzdajeUvoz, shraniPrevzemeUvoz } from "./doizdaja";
 import { preberiMaterialXlsx, shraniMaterialUvoz } from "./material";
+import { preberiIdenteXlsx, preberiKosovniceXlsx, shraniIdenteUvoz, shraniKosovniceUvoz } from "./kosovniceUvoz";
 import type { SyncDatotekaKljuc } from "./syncDatoteke";
 import { preberiVd200Xlsx, preberiVd300Xlsx, shraniOdpUvoz, shraniPriUvoz } from "./prioritete";
 import { preberiNalogeXlsx, shraniUvoz } from "./zasedenost";
@@ -9,6 +10,16 @@ import { preberiNalogeXlsx, shraniUvoz } from "./zasedenost";
 export type RezultatUvoza = { opis: string; opozorila: string[] };
 
 const UVOZ: Record<SyncDatotekaKljuc, (f: File) => Promise<RezultatUvoza>> = {
+  identi: async (f) => {
+    const { identi, opozorila } = await preberiIdenteXlsx(f);
+    await shraniIdenteUvoz(f.name, identi);
+    return { opis: `${identi.length} identov`, opozorila };
+  },
+  kosovnice: async (f) => {
+    const { vrstice, opozorila } = await preberiKosovniceXlsx(f);
+    await shraniKosovniceUvoz(f.name, vrstice);
+    return { opis: `${vrstice.length} postavk kosovnic`, opozorila };
+  },
   nalogi: async (f) => {
     const { nalogi, opozorila } = await preberiNalogeXlsx(f);
     await shraniUvoz(f.name, nalogi);

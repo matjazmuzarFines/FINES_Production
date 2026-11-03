@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Database, Factory, Footprints, Gauge, ListOrdered, PackageCheck, PackageSearch, RefreshCw, ShieldCheck, Warehouse } from "lucide-react";
+import { Bolt, BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Database, Factory, Footprints, Gauge, GitCompareArrows, ListOrdered, PackageCheck, PackageSearch, RefreshCw, ShieldCheck, UserCog, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -100,6 +100,12 @@ export const NAV: NavGroup[] = [
         label: "Orodja",
         items: [
           {
+            label: "Primerjava kosovnic",
+            href: "/proizvodnja/orodja/primerjava-kosovnic",
+            icon: GitCompareArrows,
+            hint: "Primerjaj kosovnici in material za skladišče",
+          },
+          {
             label: "Pakiranje",
             href: "/proizvodnja/orodja/pakiranje",
             icon: PackageCheck,
@@ -126,6 +132,12 @@ export const NAV: NavGroup[] = [
             href: "/proizvodnja/normativi",
             icon: BookOpen,
             hint: "Urejanje normativov izdelkov",
+          },
+          {
+            label: "Vijačni material",
+            href: "/proizvodnja/vijacni-material",
+            icon: Bolt,
+            hint: "Zaloga in lokacije vijačnega materiala",
           },
         ],
       },
@@ -170,6 +182,17 @@ export const NAV: NavGroup[] = [
           },
         ],
       },
+      {
+        label: "Nastavitve",
+        items: [
+          {
+            label: "Dostop uporabnikov",
+            href: "/podatki/nastavitve",
+            icon: UserCog,
+            hint: "Določi, katere strani vidi uporabnik",
+          },
+        ],
+      },
     ],
   },
 ];
@@ -186,14 +209,38 @@ export function aktivnaPostavka(items: NavItem[], pathname: string): NavItem | n
   );
 }
 
+/** Modul, razdelek in postavka strani - najdaljše ujemanje poti (/podatki/nastavitve ima prednost pred /podatki). */
 export function findNav(pathname: string) {
+  let najdeno: { group: NavGroup; sekcija: NavSekcija; item: NavItem; sub: NavItem | null } | null = null;
   for (const group of NAV) {
     for (const sekcija of group.sekcije) {
       const item = aktivnaPostavka(sekcija.items, pathname);
-      if (item) return { group, sekcija, item, sub: item.children ? aktivnaPostavka(item.children, pathname) : null };
+      if (item && (!najdeno || item.href.length > najdeno.item.href.length))
+        najdeno = { group, sekcija, item, sub: item.children ? aktivnaPostavka(item.children, pathname) : null };
     }
   }
-  return null;
+  return najdeno;
+}
+
+/** Pot strani, po kateri se preverja dostop (podstran podmenija ali postavka); domača stran = null. */
+export function stranZaDostop(pathname: string): string | null {
+  const c = findNav(pathname);
+  return c ? (c.sub?.href ?? c.item.href) : null;
+}
+
+/** Meni samo s stranmi, ki jih `ima` dovoli (prazni razdelki in moduli izpadejo). */
+export function filtrirajNav(ima: (href: string) => boolean): NavGroup[] {
+  return NAV.map((g) => ({
+    ...g,
+    sekcije: g.sekcije
+      .map((s) => ({
+        ...s,
+        items: s.items
+          .map((i) => (i.children ? { ...i, children: i.children.filter((c) => ima(c.href)) } : i))
+          .filter((i) => (i.children ? i.children.length > 0 : ima(i.href))),
+      }))
+      .filter((s) => s.items.length > 0),
+  })).filter((g) => g.sekcije.length > 0);
 }
 
 /** Vse strani (postavke brez podmenija + postavke podmenijev) - za domačo stran. */

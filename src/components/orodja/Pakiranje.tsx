@@ -955,6 +955,7 @@ function SkladisceOkno({
           checked={nast.samoNaZalogi}
           onChange={(v) => onChange({ ...nast, samoNaZalogi: v })}
           hint="Kar ni na zalogi, je v ločenem razdelku"
+          info="Vpliva na sporočilo za skladišče. Vklopljeno: pod NABERI je samo količina, ki jo pokrije zaloga; ostanek je v razdelku »Ni (dovolj) na zalogi - ne nabiraj, javi vodji«. Izklopljeno: pod NABERI je celotna količina, tudi če je ni na zalogi."
         />
         <FilterCheckbox
           naslov="Dobavnica"

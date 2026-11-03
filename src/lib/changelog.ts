@@ -9,6 +9,62 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "29.01",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Nov razdelek Podatki → Nastavitve → Dostop uporabnikov: tabela uporabnikov s kljukico za vsako stran (in \"Vse\" za vse strani, tudi nove). Meni in domača stran pokažeta samo dovoljene strani, ostale so zaklenjene.",
+      "Uporabnik z eno samo stranjo (npr. vijacni@fines.si → Vijačni material) gre po prijavi naravnost na to stran. Nov uporabnik nima dostopa, dokler mu ga ne dodeliš. Za bazo je ročna skripta 033.",
+      "Vijačni material ima novo ikono (matica namesto lešnika).",
+    ],
+  },
+  {
+    verzija: "28.01",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Nova stran Vijačni material (Proizvodnja → Podatki proizvodnje) nadomesti Power App in Microsoft List: iskanje po šifri in nazivu, filter lokacije, izbira materiala s tapom.",
+      "Prilagojena za telefon: kartice materiala, spodnja vrstica z gumboma Zaloga in Lokacija, velika vnosna polja. Ob izbiri drugega materiala vpraša, ali res želiš izbrati več materialov.",
+      "Sprememba zaloge v treh načinih: Prejem (prišteje), Odpis (odšteje) in Popis (preštet točno stanje). Sproti pokaže izračun (npr. 2.650 + 425 = 3.075), odpisa več od zaloge ne dovoli, opozori na verjetne napake vnosa.",
+      "Vsaka sprememba zaloge ali lokacije se zapiše v zgodovino (kdo, kdaj, iz česa v kaj) - zavihek Zgodovina. Za bazo sta ročni skripti 031 (tabele) in 032 (enkraten uvoz iz CSV, šifre iz identov).",
+    ],
+  },
+  {
+    verzija: "27.04",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Primerjava kosovnic: nov preklop Namen primerjave (Pregled kosovnice / Predelava) nad oknoma; prikaže se samo rezultat izbranega namena.",
+      "Iskanje komponente in gumb Primerjaj sta med oknoma IDENT 1 in IDENT 2. Gumb Osveži je odstranjen (stran se po syncu osveži sama).",
+      "Izbrana identa, filtri oken in namen ostanejo po osvežitvi strani in menjavi strani.",
+      "Nova ikona \"i\" s pojasnilom, kaj se spremeni v rezultatu, samo pri nastavitvah z nedirektnim učinkom: Upoštevaj zalogo (prej Upoštevaj zalogo sestavov), Ne uporabi ponovno, Polizdelke 096/097 naroči cele, Nepotrjena naročila (Prioritete), Samo kar je na zalogi (Pakiranje).",
+    ],
+  },
+  {
+    verzija: "27.03",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Nov načrt predelave 1 → 2 in 2 → 1 z izbiro količine: skupne uporabne sestave in komponente najprej odšteje od obstoječih izdelkov, ne glede na različne nadrejene sestave.",
+      "Predelava ohrani različne sestave v hierarhiji. Polizdelki 096/097 se privzeto naročajo kot celota. Dodane so izključitve ponovne uporabe in ločena Excel izvoza s hierarhijo, prevzemom ter sledjo ponovno uporabljenih delov.",
+      "Uvoz identov na novo, enako kot material: shranjuje po kosih, zato ne preseže več časovne omejitve baze. Nobena šifra se ne skrije. Za bazo je ročna skripta 030 (nadomesti 028/029).",
+    ],
+  },
+  {
+    verzija: "27.02",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Popravek uvoza identov: klasifikat izračuna baza. Pripravljena je ročna skripta 028 za popravek že ustvarjene funkcije.",
+      "Primerjava kosovnic: oznaki IDENT 1 in IDENT 2, gumb Primerjaj nad oknoma, zgoščen enovrstični prikaz in majhna gumba +/− v glavi hierarhije.",
+      "Iskanje komponent v obeh kosovnicah razkrije nadrejene sestave, fluorescentno rumeno označi zadetke in omogoči premik med pojavitvami. Popravljeni šumniki v glavi primerjave.",
+    ],
+  },
+  {
+    verzija: "27.01",
+    datum: "3. 11. 2026",
+    spremembe: [
+      "Novo orodje Primerjava kosovnic: iskanje identov, klasifikati in statusi, dve hierarhični kosovnici z razpiranjem nivojev ter primerjava razlik po sestavih.",
+      "Material za skladišče upošteva zalogo podsestavov in razvije le nepokrito količino brez dvojnega štetja. Primerjava ima izvoz v Excel.",
+      "Sync iz ERP vključuje Identi.xlsx in Kosovnice.xlsx; za pripravo baze je priložena ročna skripta 027. Obstoječi ID-ji identov se ohranijo.",
+    ],
+  },
+  {
     verzija: "26.10",
     datum: "2. 11. 2026",
     spremembe: [

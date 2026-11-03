@@ -570,6 +570,7 @@ function PrioriteteInner() {
                       onChange={setVkljuciNepotrjena}
                       label="Nepotrjena naročila"
                       hint="Upoštevaj tudi predvidena in definirana naročila"
+                      info="Ne skrije samo vrstic, ampak spremeni izračun. Vklopljeno: tudi predvidena in definirana (v ERP še nepotrjena) naročila dobijo zalogo in naloge, zato se lahko potrjenim naročilom spremenijo statusi in datumi. Izklopljeno: zaloga in nalogi se delijo samo med potrjena naročila in naročila v odpremi."
                     />
                     <FilterCheckbox
                       checked={samoNepregledano}
@@ -586,6 +587,7 @@ function PrioriteteInner() {
                       onChange={setVkljuciNepotrjena}
                       label="Nepotrjena naročila"
                       hint="Upoštevaj tudi predvidena in definirana naročila"
+                      info="Ne skrije samo vrstic, ampak spremeni izračun. Vklopljeno: tudi predvidena in definirana (v ERP še nepotrjena) naročila dobijo zalogo in naloge, zato se lahko potrjenim naročilom spremenijo statusi in datumi. Izklopljeno: zaloga in nalogi se delijo samo med potrjena naročila in naročila v odpremi."
                     />
                     <FilterPreklopnik
                       label="Normativ"
