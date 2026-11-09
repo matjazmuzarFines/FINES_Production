@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Bolt, BriefcaseBusiness, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Database, Factory, Footprints, Gauge, GitCompareArrows, ListOrdered, PackageCheck, PackageSearch, RefreshCw, ShieldCheck, UserCog, Warehouse } from "lucide-react";
+import { Bolt, BriefcaseBusiness, CalendarClock, ChartColumn, TrendingUp, BookOpen, CalendarRange, ClipboardCheck, Database, Factory, Footprints, Gauge, GitCompareArrows, GraduationCap, Grid3x3, ListOrdered, PackageCheck, PackageSearch, RefreshCw, ShieldCheck, UserCog, Warehouse } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -122,6 +122,26 @@ export const NAV: NavGroup[] = [
             icon: TrendingUp,
             hint: "Tedenski napredek vodij po področjih",
           },
+          {
+            label: "Usposobljenost",
+            href: "/proizvodnja/usposobljenost",
+            icon: GraduationCap,
+            hint: "Matrika usposobljenosti in izobraževanja zaposlenih",
+            children: [
+              {
+                label: "Matrika usposobljenosti",
+                href: "/proizvodnja/usposobljenost",
+                icon: Grid3x3,
+                hint: "Znanje zaposlenih po delovnih mestih in družinah",
+              },
+              {
+                label: "Izobraževanja",
+                href: "/proizvodnja/usposobljenost/izobrazevanja",
+                icon: CalendarClock,
+                hint: "Koledar ocenjevanj in zgodovina izpitov",
+              },
+            ],
+          },
         ],
       },
       {
@@ -156,6 +176,11 @@ export const NAV: NavGroup[] = [
             icon: ClipboardCheck,
             hint: "Odpri dnevno rutino skladišča",
           },
+        ],
+      },
+      {
+        label: "Material",
+        items: [
           {
             label: "Doizdaja materiala",
             href: "/skladisce/doizdaja",

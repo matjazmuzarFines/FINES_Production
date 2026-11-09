@@ -2,7 +2,7 @@
 // Na gembi se zapisujejo akcije (problem -> ukrep -> odgovoren -> rok -> ocena prihranka),
 // slike, skice (tabla) in povpraševanja. Datoteke so v bucketu fp-rutina-slike pod "prod/".
 
-import { addDays, formatDayMonth, fromIso, isoWeek, mondayOf, toIso, type IsoDate } from "./dates";
+import { addDays, formatDayMonth, isoWeek, isoWeekYear, mesecTedna, mondayOf, tedniLeta, toIso, type IsoDate } from "./dates";
 import { prenesiPrilogo, virPrilog } from "./priloge";
 import { fetchAll, getSupabase, kosi } from "./supabase";
 
@@ -494,23 +494,9 @@ export function primerjajNormative(izhodisce: NormStanje[], zdaj: NormStanje[]) 
 /** "12. 10. – 16. 10." (delovni teden) */
 export const obdobjeTedna = (pon: IsoDate) => `${formatDayMonth(pon)} – ${formatDayMonth(addDays(pon, 4))}`;
 
-/** Ponedeljki vseh ISO tednov leta (teden spada v leto svojega četrtka). */
-export function tedniLeta(leto: number): IsoDate[] {
-  let pon = mondayOf(toIso(new Date(leto, 0, 4)));
-  const out: IsoDate[] = [];
-  while (fromIso(addDays(pon, 3)).getFullYear() === leto) {
-    out.push(pon);
-    pon = addDays(pon, 7);
-  }
-  return out;
-}
-
-/** Mesec tedna (po četrtku) 0-11. */
-export const mesecTedna = (pon: IsoDate) => fromIso(addDays(pon, 3)).getMonth();
+export { isoWeek, tedniLeta, mesecTedna };
 /** Leto tedna (po četrtku). */
-export const letoTedna = (pon: IsoDate) => fromIso(addDays(pon, 3)).getFullYear();
-
-export { isoWeek };
+export const letoTedna = isoWeekYear;
 
 // =====================================================================
 // PRIHRANEK

@@ -127,7 +127,7 @@ export function DostopUporabnikov() {
         </FilterVrstica>
       </div>
 
-      <div className="fp-card p-0">
+      <div className="rounded-xl bg-white shadow-sm">
         <TabelaOkvir>
           <table className="w-full text-sm">
             <thead className="fp-thead">

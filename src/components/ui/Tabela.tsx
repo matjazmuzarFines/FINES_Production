@@ -115,7 +115,7 @@ export function SortTh<T, K extends string>({
         type="button"
         title={hint ?? "Razvrsti po stolpcu (naraščajoče / padajoče)"}
         onClick={() => sort.klik(kljuc)}
-        className={`group inline-flex items-center gap-1 uppercase tracking-wide hover:text-white ${
+        className={`fp-sort group inline-flex items-center gap-1 hover:text-white ${
           desno ? "flex-row-reverse" : ""
         } ${aktiven ? "text-fines-200" : ""}`}
       >

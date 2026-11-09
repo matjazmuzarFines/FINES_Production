@@ -3,6 +3,7 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import { formatShort, toIso } from "./dates";
+import { asciiIme, prenesiDatoteko } from "./prenos";
 import { prenesiPrilogo, type Priloga } from "./priloge";
 
 export const A4: [number, number] = [595.28, 841.89];
@@ -282,25 +283,7 @@ export class Pisec {
 // ---------------------------------------------------------------------------
 // Prenos
 
-/** Ime datoteke samo z ASCII znaki (č -> c ...), da ga razume vsak e-mail odjemalec. */
-export const asciiIme = (t: string) =>
-  t
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^A-Za-z0-9_-]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/_$/, "");
-
-export function prenesiDatoteko(blob: Blob, ime: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = ime;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+export { asciiIme, prenesiDatoteko };
 
 // ---------------------------------------------------------------------------
 // E-mail za Outlook: .eml z oznako X-Unsent - Outlook ga odpre kot novo (neposlano) sporočilo s PDF priponko.

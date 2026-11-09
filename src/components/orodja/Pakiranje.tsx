@@ -643,7 +643,7 @@ function Postavke({ d }: { d: OdpremaPak }) {
   return (
     <div className="flex flex-col gap-2">
       {d.opombe.length > 0 && <WarningText>{d.opombe.join(" · ")}</WarningText>}
-      <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
+      <div className="overflow-x-auto rounded-xl bg-white">
         <table className="w-full text-sm">
           {/* Tabela znotraj razprte vrstice: glava se ne lepi (prilepila bi se čez glavo glavne tabele) */}
           <thead className="fp-thead" style={{ position: "static" }}>

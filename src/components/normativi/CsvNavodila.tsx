@@ -67,19 +67,19 @@ export function CsvNavodila({ onPredloga }: { onPredloga: () => void }) {
         <h3 className="mb-1 font-bold text-ink-900">Stolpci</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-ink-200 text-ink-500">
-                <th className="py-1 pr-2">Stolpec</th>
-                <th className="py-1 pr-2">Obvezen</th>
-                <th className="py-1">Opis</th>
+            <thead className="fp-thead">
+              <tr>
+                <th className="px-2">Stolpec</th>
+                <th className="px-2">Obvezen</th>
+                <th className="px-2">Opis</th>
               </tr>
             </thead>
             <tbody>
               {STOLPCI.map(([ime, obv, opis]) => (
                 <tr key={ime} className="border-b border-ink-100">
-                  <td className="py-1 pr-2 font-mono">{ime}</td>
-                  <td className={`py-1 pr-2 font-semibold ${obv === "DA" ? "text-fines-500" : "text-ink-400"}`}>{obv}</td>
-                  <td className="py-1">{opis}</td>
+                  <td className="px-2 py-1 font-mono">{ime}</td>
+                  <td className={`px-2 py-1 font-semibold ${obv === "DA" ? "text-fines-500" : "text-ink-400"}`}>{obv}</td>
+                  <td className="px-2 py-1">{opis}</td>
                 </tr>
               ))}
             </tbody>

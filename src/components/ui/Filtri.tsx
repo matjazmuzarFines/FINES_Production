@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { InfoNamig } from "./InfoNamig";
 
@@ -168,9 +168,33 @@ export function FilterPreklopnik<V extends string>({
   /** Daljše pojasnilo za ikono "i". */
   info?: ReactNode;
 }) {
+  const skupina = useRef<HTMLDivElement>(null);
+  const [raztegni, setRaztegni] = useState(false);
+
+  // Sam v vrstici (npr. v oknu): ozek ostane naravne širine, nad 60 % prostora se raztegne. V vrsti filtrov vedno naravna širina.
+  useLayoutEffect(() => {
+    const el = skupina.current;
+    const polje = el?.parentElement;
+    const okvir = polje?.parentElement;
+    if (!el || !polje || !okvir) return;
+    const s = getComputedStyle(okvir);
+    if (s.display.includes("flex") && s.flexDirection.startsWith("row")) return;
+    const preveri = () => {
+      const prej = el.style.width;
+      el.style.width = "max-content";
+      const naravna = el.offsetWidth;
+      el.style.width = prej;
+      setRaztegni(naravna > polje.clientWidth * 0.6);
+    };
+    preveri();
+    const ro = new ResizeObserver(preveri);
+    ro.observe(polje);
+    return () => ro.disconnect();
+  }, [options.length]);
+
   return (
     <FilterPolje label={label} info={info} className="min-w-0 max-w-full">
-      <div className="inline-flex h-10 max-w-full overflow-x-auto rounded-lg border border-ink-200" role="group" aria-label={label}>
+      <div ref={skupina} className={`flex h-10 max-w-full overflow-x-auto rounded-lg border border-ink-200 ${raztegni ? "w-full" : "w-fit"}`} role="group" aria-label={label}>
         {options.map((o, i) => {
           const izbran = o.value === value;
           return (
@@ -180,7 +204,7 @@ export function FilterPreklopnik<V extends string>({
               title={o.hint}
               aria-pressed={izbran}
               onClick={() => onChange(o.value)}
-              className={`whitespace-nowrap px-3 text-sm font-semibold transition-colors ${i > 0 ? "border-l border-ink-200" : ""} ${
+              className={`whitespace-nowrap px-3 text-sm font-semibold transition-colors ${raztegni ? "flex-1" : ""} ${i > 0 ? "border-l border-ink-200" : ""} ${
                 izbran ? "bg-fines-500 text-white" : "bg-white text-ink-600 hover:bg-ink-100"
               }`}
             >

@@ -62,22 +62,79 @@ body {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
 
-/* Standardna glava tabele: temno siva, prilepi se pod glavo aplikacije (glej TabelaOkvir) */
+/* Standardna glava tabele: temno siva z oranžno črto spodaj, ločila med stolpci, zaobljena zgornja kota.
+   Prilepi se pod glavo aplikacije (glej TabelaOkvir). Barve so na celicah, da zaobljenost deluje. */
 .fp-thead {
   position: sticky;
   top: var(--fp-thead-top, 0px);
   z-index: 10;
-  background: var(--color-ink-800);
   color: var(--color-ink-100);
   text-align: left;
-  font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.01em;
+}
+.fp-thead th {
+  padding-block: 0.625rem;
+  vertical-align: middle;
+  font-size: 0.8125rem;
+}
+.fp-thead th:not(.sticky) {
+  position: relative;
+}
+.fp-thead tr:last-child > th {
+  box-shadow: inset 0 -2px 0 var(--color-fines-500);
+}
+.fp-thead th + th::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  height: 56%;
+  width: 1px;
+  background: rgb(255 255 255 / 0.25);
 }
 
-/* Zaobljeni koti tabel s standardno glavo (zgoraj glava, spodaj zadnja vrstica).
+/* Razvrščanje v glavi (SortTh): ikona je v kotu celice, napis ostane poravnan s stolpcem */
+.fp-sort {
+  max-width: 100%;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+}
+.fp-sort > svg {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+}
+th.text-right > .fp-sort > svg {
+  right: auto;
+  left: 0.3rem;
+}
+th:has(> .fp-sort):not(.text-center):not(.text-right) {
+  padding-right: 1.25rem;
+}
+th.text-right:has(> .fp-sort) {
+  padding-left: 1.25rem;
+}
+th.text-center:has(> .fp-sort) {
+  padding-inline: 1.125rem;
+}
+
+/* V sloju components: barve glave in levi rob lahko posamezna celica povozi (npr. črta sklopa border-l-4) */
+@layer components {
+  table:has(> .fp-thead) > .fp-thead th {
+    background: linear-gradient(180deg, var(--color-ink-700), var(--color-ink-800));
+  }
+  table:has(> .fp-thead) > .fp-thead tr:not(:only-child) > th {
+    background: var(--color-ink-800);
+  }
+  table:has(> .fp-thead) > :is(tbody, tfoot) > tr > td:first-child {
+    border-left: 1px solid var(--color-ink-200);
+  }
+}
+
+/* Robovi in zaobljeni koti tabel s standardno glavo.
    Zaobljenost celic deluje samo pri border-collapse: separate - zato črte vrstic (border-b na <tr>)
    prenesemo na celice. */
 table:has(> .fp-thead) {
@@ -87,20 +144,31 @@ table:has(> .fp-thead) {
 table:has(> .fp-thead) > tbody > tr > td {
   border-bottom: inherit;
 }
+table:has(> .fp-thead) > :is(tbody, tfoot) > tr > td:last-child {
+  border-right: 1px solid var(--color-ink-200);
+}
+table:has(> .fp-thead) > :is(tbody, tfoot):last-child > tr:last-child > td {
+  border-bottom: 1px solid var(--color-ink-200);
+}
 .fp-thead tr:first-child > :first-child {
-  border-top-left-radius: 0.5rem;
+  border-top-left-radius: 0.75rem;
 }
 .fp-thead tr:first-child > :last-child {
-  border-top-right-radius: 0.5rem;
+  border-top-right-radius: 0.75rem;
 }
-table:has(> .fp-thead) > tbody:last-child > tr:last-child > td:first-child {
-  border-bottom-left-radius: 0.5rem;
+table:has(> .fp-thead) > :is(tbody, tfoot):last-child > tr:last-child > td:first-child {
+  border-bottom-left-radius: 0.75rem;
 }
-table:has(> .fp-thead) > tbody:last-child > tr:last-child > td:last-child {
-  border-bottom-right-radius: 0.5rem;
+table:has(> .fp-thead) > :is(tbody, tfoot):last-child > tr:last-child > td:last-child {
+  border-bottom-right-radius: 0.75rem;
 }
 
 /* Drsnik (procent) */
 input[type="range"].fp-range {
   accent-color: var(--color-fines-500);
+}
+
+/* V oknu (Modal) se glava tabele prilepi na vrh okna, ne pod glavo aplikacije */
+[role="dialog"] .fp-thead {
+  top: 0;
 }

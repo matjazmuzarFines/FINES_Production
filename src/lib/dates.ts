@@ -120,6 +120,25 @@ export function isoWeek(iso: IsoDate): number {
   return Math.floor(Math.round((thursday.getTime() - jan1.getTime()) / 86400000) / 7) + 1;
 }
 
+/** Leto, ki mu pripada ISO teden datuma. */
+export function isoWeekYear(iso: IsoDate): number {
+  return fromIso(addDays(mondayOf(iso), 3)).getFullYear();
+}
+
+/** Ponedeljki vseh tednov leta (leto tedna določa četrtek). */
+export function tedniLeta(leto: number): IsoDate[] {
+  let pon = mondayOf(toIso(new Date(leto, 0, 4)));
+  const out: IsoDate[] = [];
+  while (fromIso(addDays(pon, 3)).getFullYear() === leto) {
+    out.push(pon);
+    pon = addDays(pon, 7);
+  }
+  return out;
+}
+
+/** Mesec tedna (po četrtku) 0-11. */
+export const mesecTedna = (pon: IsoDate) => fromIso(addDays(pon, 3)).getMonth();
+
 /** "5. 10." */
 export function formatDayMonth(iso: IsoDate): string {
   const d = fromIso(iso);

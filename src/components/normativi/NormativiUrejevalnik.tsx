@@ -525,7 +525,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
       )}
 
       {/* ============ TABELA ============ */}
-      <TabelaOkvir className="fp-card">
+      <TabelaOkvir className="rounded-xl bg-white shadow-sm">
         <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead className="fp-thead">
             <tr>
@@ -596,7 +596,7 @@ function Urejevalnik({ nov }: { nov?: NovNormativ }) {
                       autoFocus={n.id === primerjavaId && !n.druzina}
                     />
                   </td>
-                  <td className="px-1 py-1">
+                  <td className="px-1 py-1 text-right">
                     <NumCell
                       key={`v${n.id}-${verzija}`}
                       value={n.velikost}

@@ -1400,9 +1400,9 @@ function MaterialNaloga({
       {prikazane.length === 0 ? (
         <p className="py-2 text-center text-sm text-ink-500">Ni materiala za izbrane filtre.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white">
+        <div className="overflow-x-auto rounded-xl bg-white">
           <table className="w-full min-w-[880px] text-sm">
-            <thead className="bg-ink-800 text-ink-100">
+            <thead className="fp-thead" style={{ position: "static" }}>
               <tr className="text-left text-xs font-bold">
                 <SortTh sort={sort} kljuc="ident">
                   Ident

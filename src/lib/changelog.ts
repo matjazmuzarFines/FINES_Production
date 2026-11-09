@@ -9,6 +9,56 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "30.06",
+    datum: "9. 11. 2026",
+    spremembe: ["Usposobljenost: številka stopnje v oranžnem krogcu je večja."],
+  },
+  {
+    verzija: "30.05",
+    datum: "9. 11. 2026",
+    spremembe: [
+      "Prioritete: kljukica Pregledano v glavi tabele ne prekriva več gumba za razvrščanje.",
+      "Normativi: vnos Velikost je poravnan desno, kot njen naslov.",
+    ],
+  },
+  {
+    verzija: "30.04",
+    datum: "9. 11. 2026",
+    spremembe: [
+      "Vse tabele imajo novo obliko: črti levo in desno, bolj zaobljeni koti, modernejša glava z oranžno črto in ločili med stolpci, napisi niso več z velikimi črkami.",
+      "Ikona za razvrščanje je v kotu celice glave, napisi številskih stolpcev so poravnani s številkami.",
+    ],
+  },
+  {
+    verzija: "30.03",
+    datum: "9. 11. 2026",
+    spremembe: [
+      "Usposobljenost: obrazi Fineska imajo spet kovinski okvir pečice. Značka mentorja pri stopnji 5 je večja, zelena z zlatim bleščečim robom.",
+    ],
+  },
+  {
+    verzija: "30.02",
+    datum: "9. 11. 2026",
+    spremembe: [
+      "Usposobljenost: stopnje prikazuje glava Fineska z obrazom (1 resen, 2 nevtralen, 3 nasmeh, 4 odprt nasmeh, 5 še značka mentorja), brez ocene je prazen kvadratek.",
+      "Matrika ima novo obliko tabele (robovi, zaobljena glava, ločila med stolpci, enake širine stolpcev). Na izpitni poli je gumb Izbriši oceno.",
+      "Termin ocenjevanja je zdaj za osebo: oddelek, osebe, tema in obdobje na koledarju tednov. Termin je viden v celici matrike. Za bazo je ročna skripta 035.",
+      "Izobraževanja uporabljajo isti koledar tednov kot Produktivnost (skupna komponenta).",
+      "Preklopnik sam v vrstici (npr. v oknu) je širok samo toliko, kot potrebuje; čez celo širino gre šele nad 60 % prostora.",
+    ],
+  },
+  {
+    verzija: "30.01",
+    datum: "9. 11. 2026",
+    spremembe: [
+      "Nova stran Usposobljenost (Proizvodnja → Management): matrika znanja zaposlenih v dveh zavihkih - Proizvodnja po delovnih mestih in Montaža po družinah izdelkov (brez končnic -e, -k, -o).",
+      "Stopnje 1-5 prikazuje Finesek: na 1 je samo obris, na 2 dobi telo, na 3 in 4 nogi, na 5 še roki in lahko uči druge. Klik na celico odpre izpitno polo.",
+      "Predogled in tisk PDF (A4 ležeče, za delovna mesta) ter Excel z dodatnim stolpcem za zapiske. V glavi stolpca je tedenski termin naslednjega ocenjevanja.",
+      "Nova stran Izobraževanja: koledar terminov ocenjevanja po tednih in zgodovina izpitov (čas, ocenjevalec, rezultat, ocena, razlogi, komentar). Za bazo je ročna skripta 034.",
+      "Skladišče: nov razdelek Material, Doizdaja materiala je premaknjena vanj.",
+    ],
+  },
+  {
     verzija: "29.01",
     datum: "3. 11. 2026",
     spremembe: [

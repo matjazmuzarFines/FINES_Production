@@ -724,19 +724,19 @@ function OddelkiNastavitve({
         Privzete vrednosti veljajo za vse tedne, kjer število zaposlenih ni vpisano posebej.
       </p>
       <table className="w-full">
-        <thead className="text-left text-xs text-ink-500">
+        <thead className="fp-thead">
           <tr>
-            <th className="py-1">Oddelek</th>
-            <th className="py-1">Zaposlenih</th>
-            <th className="py-1">Ure na dan / osebo</th>
+            <th className="px-2">Oddelek</th>
+            <th className="px-2">Zaposlenih</th>
+            <th className="px-2">Ure na dan / osebo</th>
           </tr>
         </thead>
         <tbody>
           {oddelki.map((o) => (
-            <tr key={o.id} className="border-t border-ink-100">
-              <td className="py-2 font-semibold">{o.naziv}</td>
+            <tr key={o.id} className="border-b border-ink-100">
+              <td className="px-2 py-2 font-semibold">{o.naziv}</td>
               {(["zap", "ure"] as const).map((polje) => (
-                <td key={polje} className="py-2 pr-2">
+                <td key={polje} className="px-2 py-2">
                   <input
                     value={vrednosti[o.id][polje]}
                     inputMode="decimal"
