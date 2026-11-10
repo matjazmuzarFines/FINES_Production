@@ -185,6 +185,21 @@ export async function uvozeniIzvozi(): Promise<Partial<Record<SyncDatotekaKljuc,
   return out;
 }
 
+/** Čas izvoza (datoteke) in čas uvoza v aplikacijo za vsak izvoz (ms); null brez SQL 025. */
+export type SyncCasi = Partial<Record<SyncDatotekaKljuc, { izvoz: number | null; uvozeno: number | null }>>;
+
+export async function naloziSyncCase(): Promise<SyncCasi | null> {
+  const { data, error } = await getSupabase().from("fp_sync_stanje").select("kljuc, izvoz_cas, uvozeno_at").eq("visible", true);
+  if (error) return null;
+  const out: SyncCasi = {};
+  for (const r of data as { kljuc: SyncDatotekaKljuc; izvoz_cas: string | null; uvozeno_at: string | null }[])
+    out[r.kljuc] = {
+      izvoz: r.izvoz_cas ? Date.parse(r.izvoz_cas) : null,
+      uvozeno: r.uvozeno_at ? Date.parse(r.uvozeno_at) : null,
+    };
+  return out;
+}
+
 export type Zaklep = "ok" | "uvozeno" | { zaklenil: string } | "brez_zaklepa";
 
 /**

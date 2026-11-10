@@ -9,6 +9,80 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "31.09",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Zamude dobav: zamuda v stolpcu Narejeno je v koledarskih dneh z vikendom v oklepaju, npr. +5 d (+2) - rdeča številka = dnevi vikenda (hover tekst). V Excelu stolpca Dni zamude in Od tega vikend.",
+    ],
+  },
+  {
+    verzija: "31.08",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Zamude dobav: zamuda v stolpcu Narejeno je v delovnih dneh (+3 dd = pet, pon, tor), prej so se šteli tudi vikendi.",
+      "Odpreme z istim rokom dobijo peči v vrstnem redu naročil kot na Prioritetah (prej je odločal vrstni red nalogov v krovnem).",
+    ],
+  },
+  {
+    verzija: "31.07",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Zamude dobav: nova tabela Ure za pokritje zamud - po tednih in celicah, koliko peči in ur je treba dodatno narediti, da odpreme ne zamudijo (≈ oseb·dni, odpreme, krovni). Ure so v tednu pred odpremo, odprema v četrtek ali petek: isti teden, zapadle: tekoči teden.",
+    ],
+  },
+  {
+    verzija: "31.06",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Zamude dobav: zamujene peči zaradi poznega plana se ne odpišejo več - proizvodnja dela naprej in jih konča takoj, ko lahko, pri tem vzamejo peči naslednjim odpremam (npr. Baltic 1. 12. narejeno 4. 12., odprema 9. 12. pravočasno). Presežek nad 100 % se še vedno ujame z nadurami.",
+      "Nov stolpec Narejeno: dan zadnje peči po planu in dni zamude (+4 d); pri presežku piše nadure.",
+      "Nova kartica Zapadlo: rok odpreme je že mimo, peči niso narejene (prej pod Plan po roku).",
+    ],
+  },
+  {
+    verzija: "31.05",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Zamude dobav: nov preklopnik Plan (Vse / Na planu / Ni na planu) - odpreme brez kosov na planu se lahko skrijejo.",
+    ],
+  },
+  {
+    verzija: "31.04",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Delovni plan: dnevi nad 100 % so črtasti samo v ozadju traku (rdeče črte čez oranžno) - krovni, ure in nalogi na traku ostanejo vidni.",
+    ],
+  },
+  {
+    verzija: "31.03",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Delovni plan: zelena črtica na traku kaže izdelano od razpisanih kosov nalogov postavitve (krovni s 100 pečmi: vsaka izdelana peč = 1 %).",
+      "Okno postavitve: tabela nalogov je ožja - izdelano/razpisano v enem stolpcu (izdelano zeleno), brez stolpca Ostane, krajši rok; vodoravni drsnik ne prekrije več zadnje vrstice, gumb X je manjši.",
+    ],
+  },
+  {
+    verzija: "31.02",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Popravek: že shranjen delovni plan se ob odprtju ne pretvarja več znova (prekrivanje, ki ga narediš, ostane).",
+      "Okno postavitve: pri nalogih so Razpisano, Izdelano, Ostane in Drugje (kosi v drugih postavitvah krovnega) - jasno, zakaj gre v plan največ npr. 6 kosov.",
+      "Črtica napredka na traku je zelena (temna = zaostaja), v namigu je napredek po nalogih; zaključen nalog (ni več v uvozu) šteje kot izdelan.",
+    ],
+  },
+  {
+    verzija: "31.01",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Delovni plan ne premika več postavitev samodejno: vsaka postavitev računa s celo kapaciteto svoje celice, postavitve se med seboj ne čakajo. Prekrivanje pokaže presežek (200 %, 300 % ...) - dnevi nad 100 % so oranžno-rdeče črtasti, odstotek rdeč.",
+      "Postavitev je zaklenjena na naloge in kose ob planiranju: nov nalog, ki ga vodja doda v krovni, se ne doda sam (na zadnji postavitvi krovnega je rumena značka +h z nalogi, ki niso na planu).",
+      "Izdelani kosi ne skrajšajo več traku: na dnu traku je črtica, koliko je izdelano od planiranega (temna = zaostaja za planom do danes).",
+      "Obstoječe postavitve so ob prvem odprtju pretvorjene tako, da plan ostane enak (dejanski začetek, zaklenjena vsebina) - plan je treba enkrat shraniti.",
+      "Nov zavihek Zamude dobav: koliko peči po odpremah plan ne pokrije zaradi dni nad 100 % (pa tudi plan po roku in kosi, ki niso na planu), do izbranega datuma, z izvozom v Excel. Spodaj seznam celic nad 100 % s presežkom ur.",
+      "Kontrola plana: VD200 z datumom in uro izvoza ter uvoza. Če je kdo medtem uvozil novejše podatke, se pokaže opozorilo z gumbom Osveži podatke.",
+    ],
+  },
+  {
     verzija: "30.08",
     datum: "10. 11. 2026",
     spremembe: [

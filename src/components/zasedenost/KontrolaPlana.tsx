@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, Minus, Search, X } from "lucide-react";
-import { formatShort, toIso } from "@/lib/dates";
+import { formatDatumUra, formatShort } from "@/lib/dates";
 import { jeOdprta, RANG_KONTROLE, type KontrolaStatus, type KontrolaVrstica } from "@/lib/kontrolaPlana";
 import type { Material } from "@/lib/material";
 import { ddmm } from "@/lib/plan";
@@ -40,7 +40,10 @@ export function KontrolaPlana({
   oddelek,
   oznacen,
   onKrovni,
+  casVD200,
 }: {
+  /** Čas izvoza datoteke VD200 (iz ERP) in čas uvoza v aplikacijo (ms); null = ni znano. */
+  casVD200?: { izvoz: number | null; uvozeno: number | null } | null;
   /** null = podatki prioritet se še nalagajo. */
   vrstice: KontrolaVrstica[] | null;
   uvoz: PriUvoz | null;
@@ -122,8 +125,14 @@ export function KontrolaPlana({
                 {f.label} {f.st}
               </button>
             ))}
-            <span className="ml-auto text-xs text-ink-500" title="Datum uvoza naročil VD200">
-              VD200 {formatShort(toIso(new Date(uvoz.created_at)))}
+            <span
+              className="ml-auto text-right text-xs leading-tight text-ink-500"
+              title="Naročila VD200: kdaj je ERP izvozil datoteko in kdaj je bila uvožena v aplikacijo"
+            >
+              <span className="block font-semibold text-ink-700">
+                VD200 {casVD200?.izvoz ? `izvoz ${formatDatumUra(casVD200.izvoz)}` : formatDatumUra(uvoz.created_at)}
+              </span>
+              <span className="block">uvoženo {formatDatumUra(casVD200?.uvozeno ?? uvoz.created_at)}</span>
             </span>
           </div>
 

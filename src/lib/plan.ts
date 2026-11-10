@@ -41,7 +41,10 @@ export type Postavitev = {
   rocne_ure: boolean;
   /** Prosta naloga (ni iz uvoza): krovni_dn = naziv naloge, ure so ročne. */
   prosta: boolean;
+  /** Zadnja sprememba v bazi (za prepoznavo postavitev iz časa zaporednega razporeda). */
+  updated_at?: string;
 };
+
 
 export type ZaposleniDan = { delovno_mesto_id: number; datum: IsoDate; st_zaposlenih: number };
 
@@ -91,7 +94,7 @@ export async function naloziCelice(datum: IsoDate): Promise<Celica[]> {
 export async function naloziPostavitve(): Promise<Postavitev[]> {
   const { data, error } = await getSupabase()
     .from("fp_plan_postavitve")
-    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, kosi, rocne_ure, prosta")
+    .select("id, oddelek_id, delovno_mesto_id, krovni_dn, datum_zacetka, ure, opomba, nalogi, kosi, rocne_ure, prosta, updated_at")
     .eq("visible", true)
     .order("datum_zacetka")
     .order("id");
@@ -144,7 +147,11 @@ export async function shraniPlan({
     if (error) throw error;
   }
   if (spremenjene.length) {
-    const { error } = await sb.from("fp_plan_postavitve").upsert(spremenjene, { onConflict: "id" });
+    // updated_at nastavi baza (sprožilec)
+    const { error } = await sb.from("fp_plan_postavitve").upsert(
+      spremenjene.map(({ updated_at: _u, ...p }) => p),
+      { onConflict: "id" },
+    );
     if (error) throw error;
   }
   if (odstranjene.length) {
@@ -218,7 +225,8 @@ export const ureNalogov = (nalogi: NalogIzracun[], koda: OddelekKoda, kos?: (st:
  * Če krovnega ni v uvozu ali so nalogi izdelani, ostanejo zadnje shranjene ure.
  */
 export function urePostavitve(p: Postavitev, k: Krovni | undefined, koda: OddelekKoda, kosi?: Map<string, number>): number {
-  if (p.rocne_ure || !k) return p.ure;
+  // Zaklenjena postavitev: ure so tiste iz trenutka planiranja (izdelani kosi ali novi nalogi je ne spremenijo)
+  if (p.rocne_ure || !k || jeZaklenjena(p)) return p.ure;
   const ure = ureNalogov(nalogiPostavitve(p, k), koda, kosi && ((st) => kosi.get(st) ?? 0));
   return ure > 0 ? ure : p.ure;
 }
@@ -295,19 +303,48 @@ export function stanjeKrovnega(k: Krovni, postavitve: Postavitev[], koda: Oddele
 export const jeDelovniDan = (d: IsoDate) => weekday(d) <= 5;
 
 /**
- * Razporedi postavitve po dnevih glede na kapaciteto celic.
- * Na isti celici imajo prednost postavitve z zgodnejšim začetkom (nato starejše);
- * vsaka porabi prosto kapaciteto od svojega začetka naprej, dokler ne porabi vseh ur.
+ * Razporedi postavitve po dnevih. Vsaka postavitev računa s celotno kapaciteto svoje celice od svojega začetka
+ * naprej, dokler ne porabi vseh ur - **ne glede na druge postavitve**. Postavitve se med seboj ne premikajo:
+ * če se na celici prekrivajo, je obremenitev dneva nad 100 % (presežek, ki ga planer vidi in reši sam).
  */
 export function razporedi(
   postavitve: Postavitev[],
   kapaciteta: (celicaId: number, datum: IsoDate) => number,
 ): { razpored: Map<number, Razpored>; zasedeno: Map<string, number> } {
-  const zasedeno = new Map<string, number>(); // `${celica}|${datum}` -> ure
+  const zasedeno = new Map<string, number>(); // `${celica}|${datum}` -> ure (lahko več kot kapaciteta)
   const razpored = new Map<number, Razpored>();
-  const urejene = [...postavitve].sort(poZacetku);
-  for (const p of urejene) {
+  for (const p of postavitve) {
     const dnevi = new Map<IsoDate, number>();
+    let ostanek = p.ure;
+    let d = p.datum_zacetka;
+    for (let i = 0; ostanek > 1e-6 && i < OBZORJE_DNI; i++, d = addDays(d, 1)) {
+      const kap = kapaciteta(p.delovno_mesto_id, d);
+      if (kap <= 1e-6) continue;
+      const ure = Math.min(kap, ostanek);
+      dnevi.set(d, ure);
+      const kljuc = `${p.delovno_mesto_id}|${d}`;
+      zasedeno.set(kljuc, (zasedeno.get(kljuc) ?? 0) + ure);
+      ostanek -= ure;
+    }
+    const kljuci = [...dnevi.keys()];
+    razpored.set(p.id, { dnevi, od: kljuci[0] ?? null, do: kljuci[kljuci.length - 1] ?? null, nerazporejeno: Math.max(0, ostanek) });
+  }
+  return { razpored, zasedeno };
+}
+
+/**
+ * Prejšnji (zaporedni) razpored: postavitev porabi samo kapaciteto, ki je ostala za postavitvami z zgodnejšim
+ * začetkom na isti celici. Uporablja se samo za pretvorbo postavitev, shranjenih pred novim razporedom.
+ * Vrne dan, od katerega postavitev dela s celo kapaciteto celice: če si je prvi dan delila s prejšnjo
+ * postavitvijo (predaja), začne naslednji dan - tako se na dan predaje ne pokaže lažni presežek.
+ */
+function razporediZaporedno(postavitve: Postavitev[], kapaciteta: (celicaId: number, datum: IsoDate) => number): Map<number, IsoDate | null> {
+  const zasedeno = new Map<string, number>();
+  const od = new Map<number, IsoDate | null>();
+  for (const p of [...postavitve].sort(poZacetku)) {
+    let prvi: IsoDate | null = null;
+    let drugi: IsoDate | null = null;
+    let deljen = false;
     let ostanek = p.ure;
     let d = p.datum_zacetka;
     for (let i = 0; ostanek > 1e-6 && i < OBZORJE_DNI; i++, d = addDays(d, 1)) {
@@ -315,20 +352,121 @@ export function razporedi(
       const prosto = kapaciteta(p.delovno_mesto_id, d) - (zasedeno.get(kljuc) ?? 0);
       if (prosto <= 1e-6) continue;
       const ure = Math.min(prosto, ostanek);
-      dnevi.set(d, ure);
+      if (!prvi) {
+        prvi = d;
+        deljen = (zasedeno.get(kljuc) ?? 0) > 1e-6;
+      } else drugi ??= d;
       zasedeno.set(kljuc, (zasedeno.get(kljuc) ?? 0) + ure);
       ostanek -= ure;
     }
-    const kljuci = [...dnevi.keys()];
-    razpored.set(p.id, {
-      dnevi,
-      od: kljuci[0] ?? null,
-      do: kljuci[kljuci.length - 1] ?? null,
-      nerazporejeno: Math.max(0, ostanek),
-    });
+    od.set(p.id, deljen && drugi ? drugi : prvi);
   }
-  return { razpored, zasedeno };
+  return od;
 }
+
+/**
+ * Zaklenjena postavitev ima izrecen seznam nalogov in planirane kose za vsak nalog. Ure so shranjene ob planiranju:
+ * nov nalog v krovnem se ne doda sam (pokaže se kot nerazporejen), izdelani kosi ne skrajšajo plana (pokažejo se kot napredek).
+ */
+export const jeZaklenjena = (p: Postavitev) => !p.prosta && !!p.nalogi && !!p.kosi && p.nalogi.every((st) => !!p.kosi![st]);
+
+/** Zaklene postavitev na vsebino, ki jo plan kaže zdaj (nalogi, planirani kosi, ure). */
+export function zakleni(p: Postavitev, k: Krovni | undefined, koda: OddelekKoda, kosiZdaj?: Map<string, number>): Postavitev {
+  // Prosta naloga in razporejanje po urah (brez izbire nalogov) imata ročne ure - `kosi = {}` označi nov razpored
+  if (p.prosta || (p.rocne_ure && !p.nalogi)) return { ...p, kosi: p.kosi ?? {} };
+  const ure = urePostavitve(p, k, koda, kosiZdaj);
+  const kosi: Record<string, KosNaloga> = {};
+  const nalogi: string[] = [];
+  for (const n of nalogiPostavitve(p, k)) {
+    const prej = p.kosi?.[n.st_naloga];
+    const kos = prej ? prej.kos : (kosiZdaj?.get(n.st_naloga) ?? n.preostala);
+    if (!prej && kos <= 0) continue; // nalog je v celoti v drugih postavitvah ali izdelan
+    kosi[n.st_naloga] = prej ?? { kos, od: n.preostala };
+    nalogi.push(n.st_naloga);
+  }
+  // Nalogi, ki jih ni več v uvozu (zaključeni), ostanejo v postavitvi
+  for (const st of p.nalogi ?? []) {
+    if (kosi[st]) continue;
+    kosi[st] = p.kosi?.[st] ?? { kos: 0, od: 0 };
+    nalogi.push(st);
+  }
+  return { ...p, nalogi, kosi, ure };
+}
+
+/**
+ * Postavitve, shranjene pred novim razporedom, se pretvorijo tako, da plan ostane videti enako kot do zdaj:
+ * začetek = dan, ko je postavitev v zaporednem razporedu res začela, vsebina in ure se zaklenejo.
+ * Pretvorjene je treba shraniti (spremembe na planu), potem se ne pretvarjajo več.
+ */
+export function pretvoriStarePostavitve(
+  postavitve: Postavitev[],
+  krovni: Map<string, Krovni>,
+  koda: OddelekKoda,
+  kapaciteta: (celicaId: number, datum: IsoDate) => number,
+): { postavitve: Postavitev[]; pretvorjene: Set<number> } {
+  // Stara = shranjena v času zaporednega razporeda (brez kosov); nov razpored vedno shrani kose (prosta naloga: {})
+  const stara = (p: Postavitev) => p.kosi === null;
+  if (!postavitve.some(stara)) return { postavitve, pretvorjene: new Set() };
+
+  const kosiZdaj = new Map<number, Map<string, number>>();
+  for (const kljuc of new Set(postavitve.map((p) => p.krovni_dn))) {
+    const k = krovni.get(kljuc);
+    if (k) for (const [id, m] of kosiKrovnega(k, postavitve)) kosiZdaj.set(id, m);
+  }
+  const krovniZa = (p: Postavitev) => (p.prosta ? undefined : krovni.get(p.krovni_dn));
+  // Ure in začetki, kot jih je plan kazal do zdaj
+  const efektivne = postavitve.map((p) => ({ ...p, ure: urePostavitve(p, krovniZa(p), koda, kosiZdaj.get(p.id)) }));
+  const zacetki = razporediZaporedno(efektivne, kapaciteta);
+
+  const pretvorjene = new Set<number>();
+  const out = postavitve.map((p) => {
+    if (!stara(p)) return p;
+    pretvorjene.add(p.id);
+    const z = zakleni(p, krovniZa(p), koda, kosiZdaj.get(p.id));
+    const od = zacetki.get(p.id);
+    return { ...z, datum_zacetka: od && od > p.datum_zacetka ? od : p.datum_zacetka };
+  });
+  return { postavitve: out, pretvorjene };
+}
+
+/**
+ * Napredek zaklenjene postavitve: planirani kosi in koliko jih je že izdelanih (iz "Izdelana količina" v uvozu nalogov;
+ * izdelani kosi naloga se štejejo najprej najzgodnejši postavitvi). `preostali` = kosiKrovnega za to postavitev.
+ */
+export type NapredekNaloga = {
+  st: string;
+  razpisano: number;
+  izdelano: number;
+  /** Nalog ni več v uvozu (zaključen). */
+  zakljucen: boolean;
+};
+/** Izdelano od razpisanega za naloge postavitve (izpis delovnih nalogov); razpisano 0 = vsi nalogi zaključeni. */
+export type Napredek = { razpisano: number; izdelano: number; nalogi: NapredekNaloga[] };
+
+/**
+ * Napredek postavitve: koliko kosov nalogov postavitve je izdelanih od razpisanih ("Izdelana količina" iz uvoza nalogov).
+ * Krovni s 100 pečmi: vsaka izdelana peč = 1 %. Zaključeni nalogi (niso več v uvozu) se ne štejejo, vsi zaključeni = 100 %.
+ */
+export function napredekPostavitve(p: Postavitev, k: Krovni | undefined): Napredek | null {
+  if (p.prosta) return null;
+  const vUvozu = new Map((k?.nalogi ?? []).map((n) => [n.st_naloga, n]));
+  const stevilke = p.nalogi ?? k?.nalogi.map((n) => n.st_naloga) ?? [];
+  if (!stevilke.length) return null;
+  const nalogi: NapredekNaloga[] = stevilke.map((st) => {
+    const n = vUvozu.get(st);
+    return n
+      ? { st, razpisano: n.razpisana_kolicina, izdelano: Math.min(n.izdelana_kolicina, n.razpisana_kolicina), zakljucen: false }
+      : { st, razpisano: 0, izdelano: 0, zakljucen: true };
+  });
+  return {
+    razpisano: nalogi.reduce((s, n) => s + n.razpisano, 0),
+    izdelano: nalogi.reduce((s, n) => s + n.izdelano, 0),
+    nalogi,
+  };
+}
+
+/** Delež izdelanega (0-1); vsi nalogi zaključeni = 1. */
+export const delezNapredka = (n: Napredek) => (n.razpisano > 0 ? Math.min(1, n.izdelano / n.razpisano) : 1);
 
 // =====================================================================
 // IZVOZ

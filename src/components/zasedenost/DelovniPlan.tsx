@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import Link from "next/link";
 import {
   AlertTriangle,
+  CalendarRange,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -13,18 +14,22 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   Trash2,
   X,
 } from "lucide-react";
-import { addDays, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
+import { addDays, formatDatumUra, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
 import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { imaNeshranjeno, lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import { PodatkiVir } from "@/components/PodatkiVir";
 import { usePoSyncu } from "@/components/SyncProvider";
 import {
+  delezNapredka,
   izvoziPlanXlsx,
+  napredekPostavitve,
+  pretvoriStarePostavitve,
   pripraviWorkflow,
   jeDelovniDan,
   kosiKrovnega,
@@ -36,6 +41,7 @@ import {
   shraniPlan,
   shraniPrivzetoCelice,
   stanjeKrovnega,
+  jeZaklenjena,
   ureNalogov,
   urePoKosu,
   urePostavitve,
@@ -43,6 +49,7 @@ import {
   type Celica,
   type Krovni,
   type KosNaloga,
+  type Napredek,
   type Postavitev,
   type Razpored,
   type StanjeKrovnega,
@@ -61,6 +68,9 @@ import {
   type PriUvoz,
 } from "@/lib/prioritete";
 import { kontrolaPlana } from "@/lib/kontrolaPlana";
+import { naloziSyncCase, type SyncCasi } from "@/lib/syncMapa";
+import { SYNC_DATOTEKE, type SyncDatotekaKljuc } from "@/lib/syncDatoteke";
+import { zamudePlana } from "@/lib/zamudePlana";
 import { formatNum, formatUre, formatVnos, parseNum } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
@@ -75,11 +85,13 @@ import {
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Izvoz } from "@/components/ui/Izvoz";
-import { ConfigMissing, Loading } from "@/components/ui/Notice";
+import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
+import { Zavihki } from "@/components/ui/Zavihki";
 import { SortTh, useRazvrscanje } from "@/components/ui/Tabela";
 import { useToast } from "@/components/ui/Toast";
 import { SaveBar } from "@/components/rutina/SaveBar";
 import { KontrolaPlana } from "./KontrolaPlana";
+import { ZamudeDobav } from "./ZamudeDobav";
 
 const DAN_IME = ["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"];
 const SIRINA_IMENA = 170; // px - stolpec z imenom delovnega mesta
@@ -88,6 +100,14 @@ const VISINA_PASU = 38; // px - en pas postavitev
 const TEDNI_IZBIRA = [1, 2, 4] as const;
 const KONTROLA_KLJUC = "fp-delovni-plan-kontrola"; // panel Kontrola plana odprt (brskalnik)
 const PRAZEN_MATERIAL = new Map<string, Material>();
+
+type Pogled = "plan" | "zamude";
+/** Hatch za dni nad 100 %: oranžno-rdeče črte. */
+const PRESEZEK_CRTE = "bg-[repeating-linear-gradient(-45deg,var(--color-nok-500)_0_4px,var(--color-fines-500)_4px_8px)]";
+/** Ozadje traku na dneh nad 100 %: rdeče poševne črte čez oranžno (besedilo traku ostane nad njimi). */
+const PRESEZEK_TRAK = "bg-[repeating-linear-gradient(-45deg,var(--color-nok-500)_0_5px,transparent_5px_10px)]";
+/** Kateri izvozi se gledajo za opozorilo "novejši podatki". */
+const IZVOZI_PRI: SyncDatotekaKljuc[] = ["narocila", "odpreme", "material"];
 
 type Vlecenje = { tip: "krovni"; kljuc: string } | { tip: "postavitev"; id: number };
 type FilterKrovnih = "nerazporejeni" | "z_urami" | "vsi";
@@ -163,12 +183,22 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
   const [kontrola, setKontrola] = useState(preberiKontrolo);
   const [pri, setPri] = useState<PriPodatki | null>(null);
   const [zamikDni] = useState(() => preberiNastavitvePrioritet().zamikDni);
+  const [pogled, setPogled] = useState<Pogled>("plan");
+  /** Prioritete potrebujeta kontrola plana in zavihek Zamude dobav. */
+  const potrebujePri = kontrola || pogled === "zamude";
+  // Časi uvozov: ob nalaganju (prikazani podatki) in zadnje preverjanje v bazi - za opozorilo "novejši podatki"
+  const [casiPlan, setCasiPlan] = useState<SyncCasi | null>(null);
+  const [casiPri, setCasiPri] = useState<SyncCasi | null>(null);
+  const [casiZdaj, setCasiZdaj] = useState<SyncCasi | null>(null);
 
   useEffect(() => {
     let preklic = false;
-    naloziPodatke()
-      .then((p) => {
-        if (!preklic) setPodatki(p);
+    Promise.all([naloziPodatke(), naloziSyncCase()])
+      .then(([p, c]) => {
+        if (preklic) return;
+        setPodatki(p);
+        setCasiPlan(c);
+        setCasiZdaj(c);
       })
       .catch((e) => notify("error", `Napaka pri nalaganju delovnega plana: ${e.message}`, 10000));
     return () => {
@@ -177,17 +207,46 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
   }, [notify]);
 
   useEffect(() => {
-    if (!kontrola || pri) return;
+    if (!potrebujePri || pri) return;
     let preklic = false;
-    naloziPriPodatke()
-      .then((p) => {
-        if (!preklic) setPri(p);
+    Promise.all([naloziPriPodatke(), naloziSyncCase()])
+      .then(([p, c]) => {
+        if (preklic) return;
+        setPri(p);
+        setCasiPri(c);
       })
       .catch((e) => notify("error", `Napaka pri nalaganju prioritet: ${e.message}`, 10000));
     return () => {
       preklic = true;
     };
-  }, [kontrola, pri, notify]);
+  }, [potrebujePri, pri, notify]);
+
+  // Ali je kdo (tudi na drugem računalniku) medtem uvozil novejše podatke: ob vrnitvi na stran in vsake 3 min
+  useEffect(() => {
+    const preveri = () => {
+      if (document.visibilityState !== "visible") return;
+      naloziSyncCase()
+        .then((c) => c && setCasiZdaj(c))
+        .catch(() => {});
+    };
+    const t = setInterval(preveri, 3 * 60 * 1000);
+    document.addEventListener("visibilitychange", preveri);
+    window.addEventListener("focus", preveri);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", preveri);
+      window.removeEventListener("focus", preveri);
+    };
+  }, []);
+  const novejse = (k: SyncDatotekaKljuc, ob: SyncCasi | null) => {
+    const zdaj = casiZdaj?.[k]?.uvozeno;
+    const prej = ob?.[k]?.uvozeno;
+    return !!zdaj && !!prej && zdaj > prej;
+  };
+  const novejsi: SyncDatotekaKljuc[] = [
+    ...(novejse("nalogi", casiPlan) ? (["nalogi"] as const) : []),
+    ...(pri ? IZVOZI_PRI.filter((k) => novejse(k, casiPri)) : []),
+  ];
 
   function preklopiKontrolo() {
     setKontrola(!kontrola);
@@ -220,8 +279,17 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
   const krovni = useMemo(() => zdruziKrovne(izracun, koda), [izracun, koda]);
 
   async function osvezi() {
-    setPodatki(await naloziPodatke());
+    const [p, c] = await Promise.all([naloziPodatke(), naloziSyncCase()]);
+    setPodatki(p);
+    setCasiPlan(c);
+    setCasiZdaj(c);
     setVerzija((v) => v + 1);
+  }
+
+  /** Opozorilo "novejši podatki": znova naloži plan in prioritete. */
+  function osveziVse() {
+    setPri(null);
+    osvezi().catch((e) => notify("error", `Napaka pri nalaganju delovnega plana: ${(e as Error).message}`, 10000));
   }
 
   // Po syncu podatkov iz ERP: nalogi (in podatki kontrole plana) se znova naložijo - razen ob neshranjenih spremembah
@@ -243,7 +311,7 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
   const oddelek = podatki.oddelki.find((o) => o.koda === koda);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 [&>[role=tablist]]:-mb-4">
       {/* ============ GLAVA ============ */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
@@ -253,7 +321,7 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           </p>
         </div>
         {/* Kontrola plana uporablja še naročila, odpreme in material (kot Prioritete) */}
-        <PodatkiVir kljuci={kontrola ? ["nalogi", "narocila", "odpreme", "material"] : ["nalogi"]} />
+        <PodatkiVir kljuci={potrebujePri ? ["nalogi", "narocila", "odpreme", "material"] : ["nalogi"]} />
       </div>
 
       {/* ============ ODDELKI ============ */}
@@ -282,17 +350,53 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
             );
           })}
         </div>
-        <Button
-          hint={kontrola ? "Zapri kontrolo plana in pokaži krovne naloge" : "Odpri kontrolo plana: naročila po prioritetah s kljukicami"}
-          variant={kontrola ? "primary" : "neutral"}
-          icon={kontrola ? PanelRightClose : PanelRightOpen}
-          aria-pressed={kontrola}
-          onClick={preklopiKontrolo}
-          className="ml-auto"
-        >
-          Kontrola plana
-        </Button>
+        {pogled === "plan" && (
+          <Button
+            hint={kontrola ? "Zapri kontrolo plana in pokaži krovne naloge" : "Odpri kontrolo plana: naročila po prioritetah s kljukicami"}
+            variant={kontrola ? "primary" : "neutral"}
+            icon={kontrola ? PanelRightClose : PanelRightOpen}
+            aria-pressed={kontrola}
+            onClick={preklopiKontrolo}
+            className="ml-auto"
+          >
+            Kontrola plana
+          </Button>
+        )}
       </div>
+
+      {/* ============ NOVEJŠI PODATKI V BAZI ============ */}
+      {novejsi.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="min-w-[min(100%,16rem)] flex-1">
+            Na voljo so novejši podatki:{" "}
+            <strong>
+              {novejsi.map((k) => `${SYNC_DATOTEKE[k].naslov} (uvoženo ${formatDatumUra(casiZdaj![k]!.uvozeno!)})`).join(", ")}
+            </strong>
+            . Plan in kontrola še kažeta podatke ob odprtju strani.
+          </span>
+          <Button
+            hint={imaNeshranjeno() ? "Najprej shrani spremembe plana" : "Naloži novejše podatke iz baze"}
+            variant="sync"
+            icon={RefreshCw}
+            disabled={imaNeshranjeno()}
+            onClick={osveziVse}
+          >
+            Osveži podatke
+          </Button>
+        </div>
+      )}
+
+      {/* ============ POGLEDI ============ */}
+      <Zavihki<Pogled>
+        label="Pogled delovnega plana"
+        value={pogled}
+        onChange={setPogled}
+        zavihki={[
+          { koda: "plan", label: "Plan", hint: "Delovni plan po delovnih mestih in dnevih", icon: CalendarRange },
+          { koda: "zamude", label: "Zamude dobav", hint: "Odpreme, ki jih plan nad 100 % ne pokrije", icon: AlertTriangle },
+        ]}
+      />
 
       {!oddelek ? (
         <div className="fp-card p-8 text-center text-ink-600">Oddelek ni najden.</div>
@@ -313,8 +417,10 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           onShranjeno={osvezi}
           onCeliceSpremenjene={osveziCelice}
           kontrola={kontrola}
-          prioritete={kontrola ? prioritete : null}
+          pogled={pogled}
+          prioritete={potrebujePri ? prioritete : null}
           priUvoz={pri?.uvoz ?? null}
+          casVD200={casiPri?.narocila ?? null}
           material={pri?.material ?? PRAZEN_MATERIAL}
           zamikDni={zamikDni}
         />
@@ -342,11 +448,16 @@ function PlanOddelka({
   onShranjeno,
   onCeliceSpremenjene,
   kontrola,
+  pogled,
   prioritete,
   priUvoz,
+  casVD200,
   material,
   zamikDni,
 }: {
+  pogled: Pogled;
+  /** Čas izvoza in uvoza naročil VD200 (za kontrolo plana). */
+  casVD200: { izvoz: number | null; uvozeno: number | null } | null;
   oddelek: ZasOddelek;
   celice: Celica[];
   krovni: Krovni[];
@@ -373,8 +484,16 @@ function PlanOddelka({
   const notify = useToast();
   const danes = toIso(new Date());
 
+  // Postavitve iz časa zaporednega razporeda: plan ostane enak (dejanski začetek, zaklenjena vsebina) - shraniti jih je treba
+  const [zacetne] = useState(() => {
+    const zap = new Map(zaposleni.map((z) => [`${z.delovno_mesto_id}|${z.datum}`, z.st_zaposlenih]));
+    const cel = new Map(celice.map((c) => [c.id, c]));
+    const kap = (id: number, d: IsoDate) =>
+      jeDelovniDan(d) ? (zap.get(`${id}|${d}`) ?? cel.get(id)?.privzeto_zaposlenih ?? 0) * oddelek.ure_na_dan : 0;
+    return pretvoriStarePostavitve(postavitve, new Map(krovni.map((k) => [k.kljuc, k])), oddelek.koda, kap);
+  });
   // Lokalna kopija plana - spremembe se shranijo z gumbom Shrani plan
-  const [lokalne, setLokalne] = useState<Postavitev[]>(postavitve);
+  const [lokalne, setLokalne] = useState<Postavitev[]>(zacetne.postavitve);
   const [zapEdits, setZapEdits] = useState<Record<string, number>>({});
   const [inputVerzija, setInputVerzija] = useState(0);
   const [shranjujem, setShranjujem] = useState(false);
@@ -400,7 +519,8 @@ function PlanOddelka({
     return (
       p.id > 0 &&
       !!o &&
-      (o.delovno_mesto_id !== p.delovno_mesto_id ||
+      (zacetne.pretvorjene.has(p.id) ||
+        o.delovno_mesto_id !== p.delovno_mesto_id ||
         o.krovni_dn !== p.krovni_dn ||
         o.datum_zacetka !== p.datum_zacetka ||
         o.ure !== p.ure ||
@@ -502,6 +622,39 @@ function PlanOddelka({
     [prioritete, nalogiPoSt, oddelek.koda, planNalogov],
   );
 
+  // Zavihek Zamude dobav: isti plan, nad 100 % se naredi samo kapaciteta celice
+  const izracunajZamude = useCallback(
+    (doDatuma: IsoDate) =>
+      zamudePlana({
+        postavke: prioritete ?? [],
+        nalogi: nalogiPoSt,
+        krovni: krovniPoKljucu,
+        koda: oddelek.koda,
+        postavitve: efektivne,
+        razpored,
+        zasedeno,
+        preostaliKosi: kosiPostavitev,
+        kapaciteta,
+        danes,
+        doDatuma,
+      }),
+    [prioritete, nalogiPoSt, krovniPoKljucu, oddelek.koda, efektivne, razpored, zasedeno, kosiPostavitev, kapaciteta, danes],
+  );
+
+  // Nalogi krovnega, ki niso na planu (npr. vodja je dodal nov nalog v krovni) - značka na zadnji postavitvi krovnega
+  const zadnjaPostavitev = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of [...lokalne].sort((a, b) => a.datum_zacetka.localeCompare(b.datum_zacetka)))
+      if (!p.prosta) m.set(p.krovni_dn, p.id);
+    return m;
+  }, [lokalne]);
+  const novoVKrovnem = (p: Postavitev) => {
+    if (p.prosta || zadnjaPostavitev.get(p.krovni_dn) !== p.id) return null;
+    const st = stanja.get(p.krovni_dn);
+    if (!st || st.poUrah || st.ostane <= 0) return null;
+    return { ure: st.ostane, nalogi: st.ostali.filter((n) => (st.prostiKosi.get(n.st_naloga) ?? 0) > 0).map((n) => n.st_naloga) };
+  };
+
   /** Klik na krovni v kontroli: nerazporejen se izbere za postavitev s klikom, sicer se poudari na planu. */
   function izKontrole(kljuc: string) {
     const k = krovniPoKljucu.get(kljuc);
@@ -533,20 +686,18 @@ function PlanOddelka({
       notify("warning", `Krovni ${kljuc} je že v celoti razporejen. Naloge in ure spremeniš s klikom na postavitev.`);
       return;
     }
-    // Prva postavitev zajame ves krovni; naslednje samo še nerazporejene naloge in kose (po urah, če je krovni razporejen ročno)
-    const prva = !lokalne.some((p) => !p.prosta && p.krovni_dn === kljuc);
+    // Postavitev zajame vse še nerazporejene naloge in kose krovnega (po urah, če je krovni razporejen ročno).
+    // Vsebina se zaklene: nalogi, ki jih vodja kasneje doda v krovni, se ne dodajo sami (pokažejo se kot nerazporejeni).
     const prosti = (n: NalogIzracun) => st.prostiKosi.get(n.st_naloga) ?? n.preostala;
-    const delni = st.ostali.filter((n) => prosti(n) < n.preostala);
-    const izbira: Pick<Postavitev, "nalogi" | "kosi" | "rocne_ure" | "ure"> = prva
-      ? { nalogi: null, kosi: null, rocne_ure: false, ure: k.ure }
-      : st.poUrah
-        ? { nalogi: null, kosi: null, rocne_ure: true, ure: st.ostane }
-        : {
-            nalogi: st.ostali.map((n) => n.st_naloga),
-            kosi: delni.length ? Object.fromEntries(delni.map((n) => [n.st_naloga, { kos: prosti(n), od: n.preostala }])) : null,
-            rocne_ure: false,
-            ure: st.ostane,
-          };
+    const vzeti = st.ostali.filter((n) => prosti(n) > 0);
+    const izbira: Pick<Postavitev, "nalogi" | "kosi" | "rocne_ure" | "ure"> = st.poUrah
+      ? { nalogi: null, kosi: {}, rocne_ure: true, ure: st.ostane }
+      : {
+          nalogi: vzeti.map((n) => n.st_naloga),
+          kosi: Object.fromEntries(vzeti.map((n) => [n.st_naloga, { kos: prosti(n), od: n.preostala }])),
+          rocne_ure: false,
+          ure: st.ostane,
+        };
     const id = naslednjiId.current--;
     setLokalne((l) => [
       ...l,
@@ -558,7 +709,7 @@ function PlanOddelka({
   /** Prosta naloga (ni iz uvoza) na mestu Dodatno delo, npr. pakiranje elektronik. */
   function dodajProsto(p: Pick<Postavitev, "delovno_mesto_id" | "krovni_dn" | "datum_zacetka" | "ure" | "opomba">) {
     const id = naslednjiId.current--;
-    setLokalne((l) => [...l, { id, oddelek_id: oddelek.id, nalogi: null, kosi: null, rocne_ure: true, prosta: true, ...p }]);
+    setLokalne((l) => [...l, { id, oddelek_id: oddelek.id, nalogi: null, kosi: {}, rocne_ure: true, prosta: true, ...p }]);
     setNovaNalogaCelica(null);
   }
 
@@ -684,6 +835,25 @@ function PlanOddelka({
 
   return (
     <>
+      {zacetne.pretvorjene.size > 0 && steviloSprememb > 0 && (
+        <WarningText className="mt-4">
+          Delovni plan ne premika več postavitev samodejno: postavitve se med seboj ne čakajo, prekrivanje na celici pokaže
+          presežek nad 100 %. {zacetne.pretvorjene.size} obstoječih postavitev je pretvorjenih tako, da plan ostane enak (začetek =
+          dejanski začetek, nalogi in kosi so zaklenjeni) - preglej plan in ga shrani.
+        </WarningText>
+      )}
+      {pogled === "zamude" ? (
+        <div className="fp-card rounded-tl-none p-3 sm:p-4">
+          <ZamudeDobav
+            izracunaj={izracunajZamude}
+            nalaganje={!prioritete}
+            celice={celice}
+            ureNaDan={oddelek.ure_na_dan}
+            oddelek={oddelek.naziv}
+            danes={danes}
+          />
+        </div>
+      ) : (
       <div className={`grid gap-4 ${kontrola ? "xl:grid-cols-[minmax(0,1fr)_440px]" : "xl:grid-cols-[340px_minmax(0,1fr)]"}`}>
         {/* ============ KROVNI NALOGI ============ */}
         {!kontrola && (
@@ -847,6 +1017,8 @@ function PlanOddelka({
                     zasedeno={zasedeno}
                     krovniPoKljucu={krovniPoKljucu}
                     kosiPostavitev={kosiPostavitev}
+                    napredek={(p) => napredekPostavitve(p, krovniZa(p))}
+                    novoVKrovnem={novoVKrovnem}
                     kapaciteta={kapaciteta}
                     steviloZaposlenih={steviloZaposlenih}
                     spremenjeniZaposleni={(d) => zapEdits[`${c.id}|${d}`] !== undefined}
@@ -872,7 +1044,17 @@ function PlanOddelka({
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
             <Legenda cls="bg-ok-500" label="do 85 %" />
             <Legenda cls="bg-warn-400" label="85–100 %" />
-            <Legenda cls="bg-nok-500" label="nad 100 %" />
+            <Legenda cls={PRESEZEK_CRTE} label="nad 100 % (postavitve se prekrivajo, trak je na teh dneh črtast)" />
+            <span className="flex items-center gap-1.5">
+              <span className="relative inline-block h-2.5 w-5 overflow-hidden rounded-sm bg-fines-500">
+                <span className="absolute bottom-0 left-0 h-0.5 w-3 bg-ok-500" />
+              </span>
+              črtica: izdelano od razpisanih kosov nalogov (1 peč od 100 = 1 %)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="rounded bg-warn-400 px-1 text-[10px] font-bold text-ink-900">+h</span>
+              nalogi krovnega, ki niso na planu
+            </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-5 rounded-sm bg-fines-500 ring-2 ring-nok-500" />
               konec plana po roku izdelave
@@ -897,16 +1079,18 @@ function PlanOddelka({
             oddelek={oddelek.naziv}
             oznacen={izbranKrovni ?? oznacen}
             onKrovni={izKontrole}
+            casVD200={casVD200}
           />
         )}
       </div>
+      )}
 
       <SaveBar
         steviloSprememb={steviloSprememb}
         shranjujem={shranjujem}
         onSave={shrani}
         onReset={() => {
-          setLokalne(postavitve);
+          setLokalne(zacetne.postavitve);
           setZapEdits({});
           setInputVerzija((v) => v + 1);
         }}
@@ -924,6 +1108,7 @@ function PlanOddelka({
           koda={oddelek.koda}
           drugje={drugjeRazporejeni(urejana)}
           kosiZdaj={kosiPostavitev.get(urejana.id)}
+          napredek={napredekPostavitve(urejana, krovniZa(urejana))}
           onPotrdi={(p) => {
               setLokalne((l) => l.map((x) => (x.id === p.id ? p : x)));
               setUrejamId(null);
@@ -975,6 +1160,8 @@ function CelicaVrstica({
   zasedeno,
   krovniPoKljucu,
   kosiPostavitev,
+  napredek,
+  novoVKrovnem,
   kapaciteta,
   steviloZaposlenih,
   spremenjeniZaposleni,
@@ -1001,6 +1188,10 @@ function CelicaVrstica({
   zasedeno: Map<string, number>;
   krovniPoKljucu: Map<string, Krovni>;
   kosiPostavitev: Map<number, Map<string, number>>;
+  /** Planirani in izdelani kosi zaklenjene postavitve. */
+  napredek: (p: Postavitev) => Napredek | null;
+  /** Nalogi krovnega, ki niso na planu (samo na zadnji postavitvi krovnega). */
+  novoVKrovnem: (p: Postavitev) => { ure: number; nalogi: string[] } | null;
   kapaciteta: (celicaId: number, d: IsoDate) => number;
   steviloZaposlenih: (celicaId: number, d: IsoDate) => number;
   spremenjeniZaposleni: (d: IsoDate) => boolean;
@@ -1040,6 +1231,11 @@ function CelicaVrstica({
   const brezKapacitete = postavitve.filter((p) => (razpored.get(p.id)?.nerazporejeno ?? 0) > 0);
 
   const stPasov = Math.max(1, pasovi.length);
+  /** Dan, ko je celica nad 100 % (postavitve se prekrivajo). */
+  const presezen = (d: IsoDate) => {
+    const kap = kapaciteta(celica.id, d);
+    return kap > 0 && (zasedeno.get(`${celica.id}|${d}`) ?? 0) > kap + 0.01;
+  };
   const vrsticaVse = `1 / span ${stPasov + 2}`;
   const vsotaKap = dnevi.reduce((s, d) => s + kapaciteta(celica.id, d), 0);
   const vsotaPlan = dnevi.reduce((s, d) => s + (zasedeno.get(`${celica.id}|${d}`) ?? 0), 0);
@@ -1138,6 +1334,13 @@ function CelicaVrstica({
         const kosi = kosiPostavitev.get(p.id);
         const delniKosi = k ? nalogiPostavitve(p, k).filter((n) => (kosi?.get(n.st_naloga) ?? n.preostala) < n.preostala) : [];
         const delni = k && p.nalogi ? `${nalogiPostavitve(p, k).length}/${k.nalogi.length}${delniKosi.length ? "*" : ""}` : null;
+        // Napredek: zelena črtica na dnu traku = izdelano od razpisanih kosov nalogov postavitve
+        const nap = napredek(p);
+        const delez = nap ? delezNapredka(nap) : 0;
+        const novo = novoVKrovnem(p);
+        // Dnevi traku nad 100 % (samo dnevi, ko postavitev dela)
+        const crtasti = dnevi.slice(zac, kon + 1).map((d) => presezen(d) && (r.dnevi.get(d) ?? 0) > 0);
+        const imaPresezek = crtasti.some(Boolean);
         const opis = [
           p.prosta ? `Dodatno delo: ${p.krovni_dn}` : `Krovni ${p.krovni_dn}`,
           p.prosta ? null : !k ? "ni v zadnjem uvozu" : delni ? `${delni} nalogov (${p.nalogi!.join(", ")})` : `${k.nalogi.length} nalogov`,
@@ -1150,6 +1353,12 @@ function CelicaVrstica({
           k?.rok ? `rok ${formatShort(k.rok)}` : null,
           poRoku ? "KONEC PO ROKU!" : null,
           r.nerazporejeno > 0 ? `${formatUre(r.nerazporejeno)} h brez kapacitete` : null,
+          nap
+            ? `${nap.razpisano > 0 ? `izdelano ${formatNum(nap.izdelano)}/${formatNum(nap.razpisano)} kos (${Math.round(delez * 100)} %)` : "nalogi zaključeni"}: ${nap.nalogi
+                .map((n) => `${n.st} ${n.zakljucen ? "zaključen" : `${formatNum(n.izdelano)}/${formatNum(n.razpisano)}`}`)
+                .join(", ")}`
+            : null,
+          novo ? `NI NA PLANU: ${formatUre(novo.ure)} h krovnega (${novo.nalogi.join(", ")})` : null,
           p.opomba,
           "Klik: uredi · povleci: premakni",
         ]
@@ -1172,14 +1381,32 @@ function CelicaVrstica({
               odrezanZac ? "rounded-l-none" : "rounded-l-md"
             } ${odrezanKon ? "rounded-r-none" : "rounded-r-md"} ${
               p.prosta ? "bg-ink-600 hover:bg-ink-700" : !k ? "bg-ink-400" : jePoudarjen ? "bg-ink-800" : "bg-fines-500 hover:bg-fines-600"
-            } ${poRoku || r.nerazporejeno > 0 ? "ring-2 ring-inset ring-nok-500" : ""} ${vlecem ? "pointer-events-none opacity-60" : ""}`}
+            } ${poRoku || r.nerazporejeno > 0 ? "ring-2 ring-inset ring-nok-500" : ""} ${vlecem ? "pointer-events-none opacity-60" : ""} ${
+              imaPresezek ? "[text-shadow:0_1px_2px_rgb(0_0_0/0.45)]" : ""
+            }`}
           >
+            {imaPresezek && (
+              <span className="pointer-events-none absolute inset-0 -z-10 flex" aria-hidden>
+                {crtasti.map((c, i) => (
+                  <span key={i} className={`h-full flex-1 ${c ? PRESEZEK_TRAK : ""}`} />
+                ))}
+              </span>
+            )}
             {odrezanZac && <ChevronLeft className="h-3 w-3 shrink-0" aria-hidden />}
             {(poRoku || r.nerazporejeno > 0) && <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />}
             <span className={`truncate ${p.prosta ? "" : "font-mono"}`}>{p.krovni_dn}</span>
             {delni && <span className="shrink-0 rounded bg-white/25 px-1 font-normal">{delni}</span>}
             <span className="shrink-0 font-normal opacity-90">{formatUre(p.ure)} h</span>
+            {novo && <span className="shrink-0 rounded bg-warn-400 px-1 text-[11px] font-bold text-ink-900">+{formatUre(novo.ure)} h</span>}
             {odrezanKon && <ChevronRight className="ml-auto h-3 w-3 shrink-0" aria-hidden />}
+            {nap && (
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-black/25" aria-hidden>
+                <span
+                  className="block h-full bg-ok-500"
+                  style={{ width: `${delez * 100}%` }}
+                />
+              </span>
+            )}
           </button>
         );
       })}
@@ -1199,9 +1426,9 @@ function CelicaVrstica({
             {kap > 0 ? (
               <>
                 <div className="h-2 overflow-hidden rounded-full bg-ink-100">
-                  <div className={`h-full ${ob.cls}`} style={{ width: `${Math.min(100, ob.pct)}%` }} />
+                  <div className={`h-full ${ob.pct > 100 ? PRESEZEK_CRTE : ob.cls}`} style={{ width: `${Math.min(100, ob.pct)}%` }} />
                 </div>
-                <div className={`text-right text-[11px] font-bold tabular-nums ${plan > 0 ? ob.txt : "text-ink-400"}`}>
+                <div className={`text-right font-bold tabular-nums ${ob.pct > 100 ? "text-xs" : "text-[11px]"} ${plan > 0 ? ob.txt : "text-ink-400"}`}>
                   {fmtPct(ob.pct)}
                 </div>
               </>
@@ -1548,7 +1775,7 @@ function Povzetek({ label, vrednost, cls = "text-ink-800" }: { label: string; vr
 // MODALI
 // =====================================================================
 
-type NalogStolpec = "nalog" | "ident" | "artikel" | "kos" | "plan" | "rok" | "ure";
+type NalogStolpec = "nalog" | "ident" | "artikel" | "izdelano" | "drugje" | "plan" | "rok" | "ure";
 
 function UrediPostavitev({
   postavitev,
@@ -1558,10 +1785,13 @@ function UrediPostavitev({
   koda,
   drugje,
   kosiZdaj,
+  napredek,
   onPotrdi,
   onOdstrani,
   onPreklici,
 }: {
+  /** Planirani in izdelani kosi (zaklenjena postavitev). */
+  napredek: Napredek | null;
   postavitev: Postavitev;
   razpored?: Razpored;
   krovni?: Krovni;
@@ -1594,41 +1824,53 @@ function UrediPostavitev({
         .map((n) => [n.st_naloga, kosiZdaj?.get(n.st_naloga) ?? najvec(n)]),
     ),
   );
+  // Zaklenjena postavitev obdrži vsebino in ure, dokler ne spremeniš nalogov ali kosov
+  const zaklenjena = jeZaklenjena(postavitev);
+  const [kosSpremenjen, setKosSpremenjen] = useState(false);
+  const spremeniKos = (f: (k: Record<string, number>) => Record<string, number>) => {
+    setKos(f);
+    setKosSpremenjen(true);
+  };
   const vkljucen = (st: string) => (kos[st] ?? 0) > 0;
   const izbrani = vsi.filter((n) => vkljucen(n.st_naloga));
-  const ureIzNalogov = ureNalogov(izbrani, koda, (st) => kos[st] ?? 0);
+  /** Nespremenjen vnos šteje s planiranimi kosi (izdelani ne skrajšajo plana). */
+  const kosZaUre = (st: string) => {
+    const prej = postavitev.kosi?.[st];
+    return prej && kosiZdaj?.get(st) === kos[st] ? prej.kos : (kos[st] ?? 0);
+  };
+  const ureIzNalogov = ureNalogov(izbrani, koda, kosZaUre);
+  const ureVsebine = !kosSpremenjen && zaklenjena ? postavitev.ure : krovni ? ureIzNalogov : postavitev.ure;
   // Vključeni nalogi, ki jih ni več v uvozu (zaključeni) - ostanejo v postavitvi
   const brezUvoza = postavitev.nalogi?.filter((st) => !vsi.some((n) => n.st_naloga === st)) ?? [];
   const vseVkljuceno = vsi.every((n) => (kos[n.st_naloga] ?? 0) >= najvec(n));
 
-  const preklopi = (n: NalogIzracun) => setKos((k) => ({ ...k, [n.st_naloga]: vkljucen(n.st_naloga) ? 0 : najvec(n) }));
-  const vkljuciVse = () => setKos(Object.fromEntries(vsi.map((n) => [n.st_naloga, najvec(n)])));
+  const preklopi = (n: NalogIzracun) => spremeniKos((k) => ({ ...k, [n.st_naloga]: vkljucen(n.st_naloga) ? 0 : najvec(n) }));
+  const vkljuciVse = () => spremeniKos(() => Object.fromEntries(vsi.map((n) => [n.st_naloga, najvec(n)])));
 
-  /** Izbrani nalogi in kosi za shranjevanje; vsi nalogi s celimi kosi brez drugih postavitev = null (novi nalogi iz uvoza se vključijo sami). */
+  /**
+   * Izbrani nalogi in kosi za shranjevanje - vedno izrecno (zaklenjeno): nalogi, ki jih vodja kasneje doda v krovni,
+   * se ne vključijo sami. Brez spremembe nalogov / kosov ostane vsebina, kot je bila.
+   */
   function izbira(): Pick<Postavitev, "nalogi" | "kosi"> {
-    if (!krovni) return { nalogi: postavitev.nalogi, kosi: postavitev.kosi };
+    if (!krovni || (!kosSpremenjen && (zaklenjena || (postavitev.rocne_ure && !postavitev.nalogi))))
+      return { nalogi: postavitev.nalogi, kosi: postavitev.kosi ?? {} };
     const kosi: Record<string, KosNaloga> = {};
     for (const n of izbrani) {
       const v = kos[n.st_naloga];
-      if (v >= n.preostala) continue;
-      // Nespremenjen vpis obdrži prvotno preostalo količino (za odštevanje izdelanih kosov)
+      // Nespremenjen vpis obdrži prvotne kose in preostalo količino (za štetje izdelanih kosov)
       const prej = postavitev.kosi?.[n.st_naloga];
       kosi[n.st_naloga] = prej && kosiZdaj?.get(n.st_naloga) === v ? prej : { kos: v, od: n.preostala };
     }
-    const drugjeKosi = [...(drugje?.planKosi.values() ?? [])].some((v) => v > 0);
-    const ves =
-      !drugjeKosi && !brezUvoza.length && !Object.keys(kosi).length && vsi.filter((n) => n.preostala > 0).every((n) => vkljucen(n.st_naloga));
-    return {
-      nalogi: ves ? null : [...izbrani.map((n) => n.st_naloga), ...brezUvoza],
-      kosi: Object.keys(kosi).length ? kosi : null,
-    };
+    for (const st of brezUvoza) kosi[st] = postavitev.kosi?.[st] ?? { kos: 0, od: 0 };
+    return { nalogi: [...izbrani.map((n) => n.st_naloga), ...brezUvoza], kosi };
   }
 
   const sort = useRazvrscanje<NalogIzracun, NalogStolpec>({
     nalog: (n) => n.st_naloga,
     ident: (n) => n.koda_artikla,
     artikel: (n) => n.naziv_artikla ?? n.koda_artikla,
-    kos: (n) => n.preostala,
+    izdelano: (n) => n.izdelana_kolicina,
+    drugje: (n) => drugje?.planKosi.get(n.st_naloga) ?? 0,
     plan: (n) => kos[n.st_naloga] ?? 0,
     rok: (n) => n.rok_izdelave,
     ure: (n) => n.ure[koda],
@@ -1636,7 +1878,7 @@ function UrediPostavitev({
 
   const ureNum = parseNum(ure);
   const veljavno =
-    !!datum && (!prosta || !!naziv.trim()) && (rocne ? ureNum !== null && ureNum > 0 : !krovni || ureIzNalogov > 0);
+    !!datum && (!prosta || !!naziv.trim()) && (rocne ? ureNum !== null && ureNum > 0 : !krovni || ureVsebine > 0);
   const polje =
     "h-10 w-full rounded-lg border border-ink-200 px-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 disabled:bg-ink-50 disabled:text-ink-500";
 
@@ -1666,7 +1908,7 @@ function UrediPostavitev({
                 datum_zacetka: datum,
                 ...izbira(),
                 rocne_ure: rocne,
-                ure: rocne ? round2(ureNum ?? postavitev.ure) : ureIzNalogov > 0 ? ureIzNalogov : postavitev.ure,
+                ure: rocne ? round2(ureNum ?? postavitev.ure) : ureVsebine > 0 ? ureVsebine : postavitev.ure,
                 opomba: opomba.trim() || null,
               })
             }
@@ -1690,11 +1932,23 @@ function UrediPostavitev({
         )}
         <div className={`grid gap-2 text-center ${prosta ? "grid-cols-1" : "grid-cols-3"}`}>
           {!prosta && <Povzetek label="nalogov v planu" vrednost={krovni ? `${izbrani.length}/${vsi.length}` : "–"} />}
-          <Povzetek label="ure oddelka" vrednost={`${formatUre(rocne ? (ureNum ?? 0) : krovni ? ureIzNalogov : postavitev.ure)} h`} />
+          <Povzetek label="ure oddelka" vrednost={`${formatUre(rocne ? (ureNum ?? 0) : ureVsebine)} h`} />
           {!prosta && <Povzetek label="rok izdelave" vrednost={krovni?.rok ? formatShort(krovni.rok) : "–"} />}
         </div>
         {!krovni && !prosta && (
           <p className="rounded-lg bg-warn-50 px-3 py-2 text-warn-700">Krovni nalog ni v zadnjem uvozu (morda je že zaključen).</p>
+        )}
+        {napredek && napredek.razpisano > 0 && (
+          <p className="text-ink-600">
+            Izdelano <strong className="text-ok-600">{formatNum(napredek.izdelano)}</strong> od {formatNum(napredek.razpisano)} kosov nalogov
+            postavitve ({Math.round(delezNapredka(napredek) * 100)} %).
+          </p>
+        )}
+        {zaklenjena && (
+          <p className="text-xs text-ink-500">
+            Postavitev je zaklenjena: nalogi, ki jih vodja kasneje doda v krovni, se ne dodajo sami (na planu so označeni z +h),
+            izdelani kosi ne skrajšajo plana. Ure se preračunajo, ko spremeniš naloge ali kose.
+          </p>
         )}
         {razpored?.od && (
           <p className="text-ink-600">
@@ -1711,7 +1965,8 @@ function UrediPostavitev({
               <div className="mr-auto">
                 <div className="text-xs font-semibold text-ink-600">Nalogi krovnega</div>
                 <div className="text-[11px] text-ink-500">
-                  Plan kos = koliko kosov naloga delamo v tej postavitvi · X = nalog ne delamo (ostali kosi ostanejo za kasneje)
+                  Izdelano = izdelano / razpisano · Drugje = v drugih postavitvah krovnega · Plan kos = koliko jih delamo v tej postavitvi
+                  (največ razpisano - izdelano - drugje) · X = nalog ne delamo
                 </div>
               </div>
               <Button
@@ -1724,18 +1979,19 @@ function UrediPostavitev({
                 Vključi vse
               </Button>
             </div>
-            <div className="max-h-[40vh] overflow-auto rounded-lg">
+            <div className="max-h-[40vh] overflow-auto rounded-lg pb-3">
               <table className="w-full text-xs">
                 <thead className="fp-thead">
                   <tr>
                     <SortTh sort={sort} kljuc="nalog">Nalog</SortTh>
                     <SortTh sort={sort} kljuc="ident">Ident</SortTh>
                     <SortTh sort={sort} kljuc="artikel">Artikel</SortTh>
-                    <SortTh sort={sort} kljuc="kos" desno>Kos</SortTh>
+                    <SortTh sort={sort} kljuc="izdelano" desno hint="Izdelano / razpisano (izpis delovnih nalogov)">Izdelano</SortTh>
+                    <SortTh sort={sort} kljuc="drugje" desno hint="Kosi naloga v drugih postavitvah krovnega">Drugje</SortTh>
                     <SortTh sort={sort} kljuc="plan" desno>Plan kos</SortTh>
                     <SortTh sort={sort} kljuc="rok">Rok</SortTh>
                     <SortTh sort={sort} kljuc="ure" desno>Ure</SortTh>
-                    <th className="w-12 px-2 py-2" />
+                    <th className="w-11 px-1 py-2" />
                   </tr>
                 </thead>
                 <tbody className="border-ink-100">
@@ -1752,10 +2008,23 @@ function UrediPostavitev({
                       >
                         <td className="px-2 py-1 font-mono">{n.st_naloga}</td>
                         <td className="whitespace-nowrap px-2 py-1 font-mono">{n.koda_artikla}</td>
-                        <td className="max-w-48 truncate px-2 py-1" title={n.naziv_artikla ?? ""}>
+                        <td className="max-w-40 truncate px-2 py-1" title={n.naziv_artikla ?? ""}>
                           {n.naziv_artikla ?? n.koda_artikla}
                         </td>
-                        <td className="px-2 py-1 text-right tabular-nums">{formatNum(n.preostala)}</td>
+                        <td
+                          className="whitespace-nowrap px-2 py-1 text-right tabular-nums"
+                          title={`Izdelano ${formatNum(n.izdelana_kolicina)} od ${formatNum(n.razpisana_kolicina)} · ostane ${formatNum(n.preostala)}`}
+                        >
+                          <span className={n.izdelana_kolicina > 0 ? "font-bold text-ok-600" : ""}>{formatNum(n.izdelana_kolicina)}</span>/
+                          {formatNum(n.razpisana_kolicina)}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums">
+                          {(drugje?.planKosi.get(n.st_naloga) ?? 0) > 0 ? (
+                            formatNum(drugje!.planKosi.get(n.st_naloga)!)
+                          ) : (
+                            <span className="text-ink-300">–</span>
+                          )}
+                        </td>
                         <td className="px-1 py-0.5 text-right no-underline">
                           {!vDrugi && (
                             <KosInput
@@ -1764,12 +2033,14 @@ function UrediPostavitev({
                               max={max}
                               delni={vkl && (kos[n.st_naloga] ?? 0) < n.preostala}
                               hint={`Planirani kosi naloga ${n.st_naloga} (največ ${formatNum(max)})`}
-                              onCommit={(v) => setKos((k) => ({ ...k, [n.st_naloga]: v }))}
+                              onCommit={(v) => spremeniKos((k) => ({ ...k, [n.st_naloga]: v }))}
                             />
                           )}
                         </td>
-                        <td className="px-2 py-1 tabular-nums">{n.rok_izdelave ? formatShort(n.rok_izdelave) : "–"}</td>
-                        <td className="px-2 py-1 text-right font-semibold tabular-nums">
+                        <td className="whitespace-nowrap px-2 py-1 tabular-nums" title={n.rok_izdelave ? formatShort(n.rok_izdelave) : undefined}>
+                          {n.rok_izdelave ? formatDayMonth(n.rok_izdelave) : "–"}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right font-semibold tabular-nums">
                           {n.normativ ? `${formatUre(vkl ? urePoKosu(n, koda) * kos[n.st_naloga] : n.ure[koda])} h` : <span className="text-warn-700">ni norm.</span>}
                         </td>
                         <td className="px-1 py-0.5 text-right no-underline">
@@ -1783,6 +2054,7 @@ function UrediPostavitev({
                               variant={vkl ? "danger" : "success"}
                               icon={vkl ? X : Plus}
                               onClick={() => preklopi(n)}
+                              className="!h-9 !w-9 [&>svg]:!h-[18px] [&>svg]:!w-[18px]"
                             />
                           )}
                         </td>
@@ -1821,7 +2093,7 @@ function UrediPostavitev({
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-ink-600">Delovne ure</span>
             <input
-              value={rocne ? ure : formatVnos(krovni ? ureIzNalogov : postavitev.ure)}
+              value={rocne ? ure : formatVnos(ureVsebine)}
               disabled={!rocne}
               inputMode="decimal"
               onChange={(e) => setUre(e.target.value)}

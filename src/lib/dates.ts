@@ -97,6 +97,9 @@ const fmtShort = new Intl.DateTimeFormat("sl-SI", {
 
 export const formatLong = (iso: IsoDate) => fmtLong.format(fromIso(iso));
 export const formatShort = (iso: IsoDate) => fmtShort.format(fromIso(iso));
+const fmtDatumUra = new Intl.DateTimeFormat("sl-SI", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+/** Čas (ms ali ISO niz) kot "10. 11. 08:02". */
+export const formatDatumUra = (cas: number | string) => fmtDatumUra.format(new Date(cas));
 export function formatMonth(iso: IsoDate) {
   const s = fmtMonth.format(fromIso(iso));
   return s.charAt(0).toUpperCase() + s.slice(1);
