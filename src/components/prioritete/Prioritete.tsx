@@ -88,8 +88,10 @@ import { Zavihki, type Zavihek } from "@/components/ui/Zavihki";
 import {
   LegendaObremenitve,
   ObremenitevVsebina,
+  PrikazOddelkov,
   SkupajVrstica,
   TedenGlava,
+  useSkritiOddelki,
   ZapadloCelica,
 } from "@/components/zasedenost/Obremenitev";
 
@@ -1465,6 +1467,9 @@ function ZasedenostNarocil({
 }) {
   const prikazaniTedni = tedniOd(zacetek, STEVILO_TEDNOV_ZAS);
   const jeTaTeden = zacetek === mondayOf(danes);
+  /** Vrstice oddelkov, skrite v pregledu po tednih (npr. samo Montaža) - zapomni si brskalnik. */
+  const [skritiOddelki, setSkritiOddelki] = useSkritiOddelki("prioritete-zasedenost");
+  const prikazaniOddelki = oddelki.filter((o) => !skritiOddelki.has(o.koda));
 
   const potrebno = new Map<string, number>();
   for (const u of vse) {
@@ -1510,6 +1515,7 @@ function ZasedenostNarocil({
           <Button hint="Začni pregled s tekočim tednom" variant="neutral" disabled={jeTaTeden} onClick={() => onZacetek(mondayOf(danes))}>
             Ta teden
           </Button>
+          <PrikazOddelkov oddelki={oddelki} skriti={skritiOddelki} onSkriti={setSkritiOddelki} />
           <span className="ml-auto text-xs text-ink-500">
             Ure za del naročil, ki ni na zalogi ali v odpremi · razpoložljivost iz Zasedenosti
           </span>
@@ -1548,7 +1554,7 @@ function ZasedenostNarocil({
                 </tr>
               </thead>
               <tbody>
-                {oddelki.map((o) => (
+                {prikazaniOddelki.map((o) => (
                   <tr key={o.id}>
                     <th className="pr-2 text-right align-middle">
                       <div className="text-sm font-bold text-ink-800">{o.naziv}</div>
@@ -1571,7 +1577,7 @@ function ZasedenostNarocil({
                     })}
                   </tr>
                 ))}
-                <SkupajVrstica oddelki={oddelki} tedni={prikazaniTedni} potrebno={potrebno} kapaciteta={kapaciteta} />
+                <SkupajVrstica oddelki={prikazaniOddelki} tedni={prikazaniTedni} potrebno={potrebno} kapaciteta={kapaciteta} />
               </tbody>
             </table>
           </div>

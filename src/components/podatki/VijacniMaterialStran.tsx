@@ -18,7 +18,7 @@ import {
   type VijacniMaterial,
 } from "@/lib/vijacniMaterial";
 import { Button } from "@/components/ui/Button";
-import { FilterIskanje, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
+import { FilterIskanje, FilterIzbira, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
 import { Modal } from "@/components/ui/Modal";
 import { ConfigMissing, ErrorText, Loading, WarningText } from "@/components/ui/Notice";
 import { SortTh, TabelaOkvir, useRazvrscanje, type Razvrscanje } from "@/components/ui/Tabela";
@@ -28,6 +28,8 @@ import { Zavihki } from "@/components/ui/Zavihki";
 type Pogled = "zaloga" | "zgodovina";
 type StolpecMat = "sifra" | "naziv" | "lokacija" | "zaloga" | "spremenjeno" | "spremenil";
 const BREZ = "__brez__";
+/** Višina lepljive glave aplikacije (64 px + 4 px oranžna črta). */
+const GLAVA_PX = 68;
 const VSE = "__vse__";
 
 const fmtCas = new Intl.DateTimeFormat("sl-SI", { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -58,6 +60,23 @@ export function VijacniMaterialStran() {
   const [okno, setOkno] = useState<"zaloga" | "lokacija" | null>(null);
 
   const [log, setLog] = useState<VijacniLog[] | null>(null);
+
+  // Telefon: med tipkanjem v filter je tipkovnica odprta - spodnja vrstica se skrije, filter pride na vrh
+  const [tipkam, setTipkam] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const seznamRef = useRef<HTMLDivElement>(null);
+
+  function obFokusuFiltra(e: React.FocusEvent) {
+    if (!(e.target instanceof HTMLInputElement)) return;
+    setTipkam(true);
+    if (!window.matchMedia("(max-width: 639px)").matches) return;
+    // Pomakni stran tako, da je seznam takoj pod lepljivim filtrom (rezultat je viden nad tipkovnico)
+    const filter = filterRef.current;
+    const seznam = seznamRef.current;
+    if (!filter || !seznam) return;
+    const cilj = window.scrollY + seznam.getBoundingClientRect().top - filter.getBoundingClientRect().height - GLAVA_PX - 8;
+    if (window.scrollY < cilj) window.scrollTo({ top: cilj, behavior: "smooth" });
+  }
 
   const nalozi = useCallback(async () => {
     try {
@@ -180,14 +199,20 @@ export function VijacniMaterialStran() {
   if (!material) return <Loading />;
 
   const filtrirano = sifra || naziv || lokacija !== VSE;
+  const steviloZadetkov = material.filter(ustreza).length;
+  const ponastavi = () => {
+    setSifra("");
+    setNaziv("");
+    setLokacija(VSE);
+  };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3 sm:gap-4">
       {/* ============ GLAVA ============ */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto min-w-[min(100%,18rem)] flex-1">
           <h2 className="text-xl font-bold text-ink-900">Vijačni material</h2>
-          <p className="text-sm text-ink-500">
+          <p className="hidden text-sm text-ink-500 sm:block">
             Zaloga in lokacije vijačnega in pomožnega materiala · tapni material in spremeni zalogo ali lokacijo
           </p>
         </div>
@@ -201,7 +226,8 @@ export function VijacniMaterialStran() {
       )}
 
       {/* ============ ZAVIHKI + FILTRI ============ */}
-      <div>
+      {/* Telefon: kartica s filtri se prilepi pod glavo aplikacije (contents = zavihki in kartica sta v glavnem stolpcu strani) */}
+      <div className="max-sm:contents">
         <Zavihki<Pogled>
           label="Pogled"
           value={pogled}
@@ -214,60 +240,96 @@ export function VijacniMaterialStran() {
             { koda: "zgodovina", label: "Zgodovina", hint: "Kdo je kdaj spremenil zalogo ali lokacijo", icon: History },
           ]}
         />
-        <div className="fp-card rounded-tl-none p-3 sm:p-4">
+        <div
+          ref={filterRef}
+          onFocus={obFokusuFiltra}
+          onBlur={() => setTipkam(false)}
+          className="fp-card rounded-tl-none p-2 max-sm:sticky max-sm:top-[68px] max-sm:z-20 max-sm:-mt-3 max-sm:shadow-md sm:p-4"
+        >
           {pogled === "zaloga" ? (
-            <FilterVrstica>
-              <FilterIskanje
-                label="Šifra"
-                value={sifra}
-                onChange={setSifra}
-                placeholder="npr. 060-10020"
-                hint="Poišči material po šifri"
-                telefon
-                className="w-[calc(40%-0.375rem)] sm:w-44"
-              />
-              <FilterIskanje
-                label="Naziv"
-                value={naziv}
-                onChange={setNaziv}
-                placeholder="npr. vijak M5 A2"
-                hint="Poišči material po besedah v nazivu"
-                telefon
-                className="w-[calc(60%-0.375rem)] sm:w-72"
-              />
-              <FilterPreklopnik
-                label="Lokacija"
-                value={lokacija}
-                onChange={setLokacija}
-                options={[
-                  { value: VSE, label: "Vse", hint: "Pokaži material na vseh lokacijah" },
-                  ...lokacije.map(([l, n]) => ({ value: l, label: l, hint: `Pokaži samo material na lokaciji ${l}`, stevilo: n })),
-                  { value: BREZ, label: "Brez", hint: "Pokaži material brez vpisane lokacije", stevilo: brezLokacije },
-                ]}
-              />
+            <>
+              <FilterVrstica className="max-sm:flex-nowrap max-sm:gap-2">
+                <FilterIskanje
+                  label="Šifra"
+                  value={sifra}
+                  onChange={setSifra}
+                  placeholder="Šifra"
+                  hint="Poišči material po šifri"
+                  telefon
+                  skrijNaslovTelefon
+                  className="w-[34%] min-w-0 shrink-0 sm:w-44"
+                />
+                <FilterIskanje
+                  label="Naziv"
+                  value={naziv}
+                  onChange={setNaziv}
+                  placeholder="Naziv"
+                  hint="Poišči material po besedah v nazivu"
+                  telefon
+                  skrijNaslovTelefon
+                  className="min-w-0 flex-1 sm:w-72 sm:flex-none"
+                />
+                {/* Telefon: lokacija kot spustni seznam (vse v eni vrstici), tablica / računalnik: gumbi */}
+                <FilterIzbira
+                  label="Lokacija"
+                  value={lokacija}
+                  onChange={setLokacija}
+                  hint="Pokaži samo material na izbrani lokaciji"
+                  telefon
+                  skrijNaslovTelefon
+                  className={`w-[5.75rem] shrink-0 sm:hidden ${lokacija !== VSE ? "[&_select]:border-fines-500 [&_select]:bg-fines-50 [&_select]:font-semibold" : ""}`}
+                  options={[
+                    { value: VSE, label: "Lok.: vse" },
+                    ...lokacije.map(([l, n]) => ({ value: l, label: `${l} (${n})` })),
+                    { value: BREZ, label: `Brez (${brezLokacije})` },
+                  ]}
+                />
+                <div className="contents max-sm:hidden">
+                  <FilterPreklopnik
+                    label="Lokacija"
+                    value={lokacija}
+                    onChange={setLokacija}
+                    options={[
+                      { value: VSE, label: "Vse", hint: "Pokaži material na vseh lokacijah" },
+                      ...lokacije.map(([l, n]) => ({ value: l, label: l, hint: `Pokaži samo material na lokaciji ${l}`, stevilo: n })),
+                      { value: BREZ, label: "Brez", hint: "Pokaži material brez vpisane lokacije", stevilo: brezLokacije },
+                    ]}
+                  />
+                  {filtrirano && (
+                    <Button hint="Počisti iskanje in filter lokacije" variant="neutral" icon={X} onClick={ponastavi}>
+                      Ponastavi
+                    </Button>
+                  )}
+                </div>
+              </FilterVrstica>
+              {/* Telefon: koliko je zadetkov - vidno tudi, ko tipkovnica prekrije spodnji del zaslona */}
               {filtrirano && (
-                <Button
-                  hint="Počisti iskanje in filter lokacije"
-                  variant="neutral"
-                  icon={X}
-                  onClick={() => {
-                    setSifra("");
-                    setNaziv("");
-                    setLokacija(VSE);
-                  }}
-                >
-                  Ponastavi
-                </Button>
+                <div className="mt-1.5 flex items-center justify-between gap-2 px-0.5 text-xs text-ink-600 sm:hidden">
+                  <span>
+                    <strong className="text-ink-900">{formatNum(steviloZadetkov)}</strong> od {formatNum(material.length)} materialov
+                  </span>
+                  <button
+                    type="button"
+                    title="Počisti iskanje in filter lokacije"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={ponastavi}
+                    className="flex h-7 items-center gap-1 rounded-md px-2 font-semibold text-ink-700 hover:bg-ink-100"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                    Ponastavi
+                  </button>
+                </div>
               )}
-            </FilterVrstica>
+            </>
           ) : (
             <FilterVrstica>
               <FilterIskanje
                 value={iskanjeLog}
                 onChange={setIskanjeLog}
-                placeholder="šifra, naziv ali oseba"
+                placeholder="Išči: šifra, naziv ali oseba"
                 hint="Poišči spremembe po materialu ali osebi"
                 telefon
+                skrijNaslovTelefon
               />
             </FilterVrstica>
           )}
@@ -276,10 +338,13 @@ export function VijacniMaterialStran() {
 
       {pogled === "zaloga" ? (
         <>
-          <SeznamMateriala prikazani={prikazani} izbrani={izbrani} preklopi={preklopi} sort={sort} />
+          {/* Telefon: seznam je vsaj višine zaslona, da se filter vedno lahko pomakne na vrh (rezultat nad tipkovnico) */}
+          <div ref={seznamRef} className="max-sm:min-h-[calc(100dvh-8rem)]">
+            <SeznamMateriala prikazani={prikazani} izbrani={izbrani} preklopi={preklopi} sort={sort} />
+          </div>
 
-          {/* ============ SPODNJA VRSTICA: dejanja nad izbranimi ============ */}
-          <div className="sticky bottom-0 z-30 -mx-3 border-t border-ink-200 bg-white/95 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6">
+          {/* ============ SPODNJA VRSTICA: dejanja nad izbranimi (telefon: skrita med tipkanjem v filter) ============ */}
+          <div className={`sticky bottom-0 z-30 ${tipkam ? "max-sm:hidden" : ""} -mx-3 border-t border-ink-200 bg-white/95 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6`}>
             <div className="flex items-center gap-2">
               {izbrani.length > 0 ? (
                 <button
@@ -409,7 +474,7 @@ function SeznamMateriala({
   return (
     <>
       {/* telefon */}
-      <ul className="flex flex-col gap-2 sm:hidden">
+      <ul className="flex flex-col gap-1.5 sm:hidden">
         {prikazani.map((m) => {
           const izbran = izbranSet.has(m.id);
           return (
@@ -419,21 +484,21 @@ function SeznamMateriala({
                 title={izbran ? "Odznači material" : "Označi material za urejanje"}
                 aria-pressed={izbran}
                 onClick={() => preklopi(m.id)}
-                className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left shadow-sm transition-colors active:bg-ink-100 ${
+                className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border-2 px-2.5 py-2 text-left shadow-sm transition-colors active:bg-ink-100 ${
                   izbran ? "border-fines-500 bg-fines-50" : "border-transparent bg-white ring-1 ring-ink-200"
                 }`}
               >
                 <Kljukica izbran={izbran} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-mono text-xs text-ink-500">{m.sifra ?? "brez šifre"}</span>
-                  <span className="block font-semibold leading-snug text-ink-900">{m.naziv}</span>
-                  <span className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${m.lokacija ? "text-ink-700" : "text-ink-400"}`}>
+                  <span className="block font-semibold leading-snug text-ink-900 [overflow-wrap:anywhere]">{m.naziv}</span>
+                  <span className={`mt-0.5 inline-flex items-center gap-1 text-xs font-semibold ${m.lokacija ? "text-ink-700" : "text-ink-400"}`}>
                     <MapPin className="h-3.5 w-3.5" aria-hidden />
                     {m.lokacija ?? "brez lokacije"}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className={`block text-2xl font-bold tabular-nums ${m.zaloga === 0 ? "text-nok-600" : "text-ink-900"}`}>
+                  <span className={`block text-xl font-bold leading-tight tabular-nums ${m.zaloga === 0 ? "text-nok-600" : "text-ink-900"}`}>
                     {formatNum(m.zaloga)}
                   </span>
                   <span className="text-xs text-ink-500">{m.em}</span>
@@ -877,7 +942,7 @@ function Zgodovina({ log, iskanje }: { log: VijacniLog[] | null; iskanje: string
             <div className="flex items-start justify-between gap-2">
               <span className="min-w-0">
                 <span className="block font-mono text-xs text-ink-500">{l.material?.sifra ?? "brez šifre"}</span>
-                <span className="block font-semibold leading-snug text-ink-900">{l.material?.naziv}</span>
+                <span className="block font-semibold leading-snug text-ink-900 [overflow-wrap:anywhere]">{l.material?.naziv}</span>
               </span>
               <Znacka nacin={l.nacin} />
             </div>

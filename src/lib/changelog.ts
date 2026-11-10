@@ -9,6 +9,25 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "30.08",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Vijačni material na telefonu: brez opisa pod naslovom, filtri Šifra, Naziv in Lokacija v eni vrstici (lokacija kot spustni seznam), kartica s filtri se prilepi pod glavo.",
+      "Ob tapu v iskalno polje se seznam pomakne tik pod filter, spodnja vrstica z gumbi se med tipkanjem skrije - zadetki so vidni nad tipkovnico. Pod filtrom piše, koliko materialov ustreza.",
+      "Kartice materiala na telefonu so nižje, dolgi nazivi se prelomijo in ne razširijo strani.",
+      "Vsa iskalna polja imajo gumb × za brisanje, tipka Išči na telefonu zapre tipkovnico.",
+      "Stran ne more biti širša od zaslona tudi v starejših brskalnikih na telefonu (npr. Samsung Internet).",
+    ],
+  },
+  {
+    verzija: "30.07",
+    datum: "10. 11. 2026",
+    spremembe: [
+      "Pregled zasedenosti in Prioritete > Zasedenost naročil: nad pregledom po tednih je izbira prikazanih oddelkov (gumbi z očesom) - posamezne vrstice (npr. Elektro, Testiranje) skriješ in gledaš samo Montažo.",
+      "Vrstica Skupaj sešteje samo prikazane oddelke; z enim prikazanim oddelkom je skrita. Izbiro si brskalnik zapomni za vsako stran posebej.",
+    ],
+  },
+  {
     verzija: "30.06",
     datum: "9. 11. 2026",
     spremembe: ["Usposobljenost: številka stopnje v oranžnem krogcu je večja."],

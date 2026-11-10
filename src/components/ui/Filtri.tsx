@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { InfoNamig } from "./InfoNamig";
 
 /**
@@ -13,20 +13,40 @@ export function FilterVrstica({ children, className = "" }: { children: ReactNod
 }
 
 /** Naslov nad poljem (vedno enak slog). `info` doda ikono "i" s pojasnilom na konec naslova. */
-export function FilterNaslov({ children, info }: { children: ReactNode; info?: ReactNode }) {
+export function FilterNaslov({ children, info, skrijTelefon }: { children: ReactNode; info?: ReactNode; skrijTelefon?: boolean }) {
   return (
-    <span className="mb-1 block text-xs font-semibold leading-tight text-ink-600">
+    <span className={`mb-1 block text-xs font-semibold leading-tight text-ink-600 ${skrijTelefon ? "max-sm:sr-only" : ""}`}>
       {children}
       {info && <> <InfoNamig naslov={String(children)}>{info}</InfoNamig></>}
     </span>
   );
 }
 
-/** Polje filtra z naslovom nad njim. Brez naslova se polje vseeno poravna z ostalimi (spodaj). */
-export function FilterPolje({ label, info, children, className = "" }: { label?: string; info?: ReactNode; children: ReactNode; className?: string }) {
+/**
+ * Polje filtra z naslovom nad njim. Brez naslova se polje vseeno poravna z ostalimi (spodaj).
+ * `skrijNaslovTelefon`: na telefonu je naslov skrit (samo za bralnike zaslona) - stran za telefon, kjer šteje vsaka vrstica;
+ * polje mora imeti placeholder, ki pove, kaj se vpiše.
+ */
+export function FilterPolje({
+  label,
+  info,
+  children,
+  className = "",
+  skrijNaslovTelefon,
+}: {
+  label?: string;
+  info?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  skrijNaslovTelefon?: boolean;
+}) {
   return (
     <div className={`flex flex-col justify-end ${className}`}>
-      {label && <FilterNaslov info={info}>{label}</FilterNaslov>}
+      {label && (
+        <FilterNaslov info={info} skrijTelefon={skrijNaslovTelefon}>
+          {label}
+        </FilterNaslov>
+      )}
       {children}
     </div>
   );
@@ -41,9 +61,12 @@ export function FilterIskanje({
   hint,
   info,
   telefon,
+  skrijNaslovTelefon,
   className = "w-full sm:w-72",
 }: {
   label?: string;
+  /** Na telefonu brez naslova nad poljem (placeholder pove, kaj se vpiše). */
+  skrijNaslovTelefon?: boolean;
   /** Na telefonu 44 px in pisava 16 px (stran za delo na telefonu - iPhone ob vnosu ne poveča strani). */
   telefon?: boolean;
   /** Daljše pojasnilo za ikono "i". */
@@ -55,17 +78,37 @@ export function FilterIskanje({
   className?: string;
 }) {
   return (
-    <FilterPolje label={label} info={info} className={className}>
+    <FilterPolje label={label} info={info} className={className} skrijNaslovTelefon={skrijNaslovTelefon}>
       <span className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
         <input
+          type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          // Tipka "Išči" na tipkovnici telefona zapre tipkovnico, rezultat ostane viden
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          enterKeyHint="search"
+          autoComplete="off"
           placeholder={placeholder}
           title={hint}
           aria-label={label}
-          className={`${telefon ? "h-11 text-base sm:h-10 sm:text-sm" : "h-10 text-sm"} w-full rounded-lg border border-ink-200 bg-white pl-8 pr-2 focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100`}
+          className={`${telefon ? "h-11 text-base sm:h-10 sm:text-sm" : "h-10 text-sm"} w-full min-w-0 rounded-lg border border-ink-200 bg-white pl-8 ${value ? "pr-9" : "pr-2"} focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 [&::-webkit-search-cancel-button]:hidden`}
         />
+        {value && (
+          <button
+            type="button"
+            title={`Počisti polje ${label}`}
+            aria-label={`Počisti ${label}`}
+            // Ne vzame fokusa polju - tipkovnica na telefonu ostane odprta
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange("")}
+            className="absolute right-0.5 top-1/2 flex h-9 w-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        )}
       </span>
     </FilterPolje>
   );
@@ -79,11 +122,17 @@ export function FilterIzbira<V extends string | number>({
   onChange,
   hint,
   info,
+  telefon,
+  skrijNaslovTelefon,
   className = "",
 }: {
   label: string;
   value: V;
   options: { value: V; label: string }[];
+  /** Na telefonu 44 px in pisava 16 px, izbira se raztegne čez širino polja. */
+  telefon?: boolean;
+  /** Na telefonu brez naslova nad poljem. */
+  skrijNaslovTelefon?: boolean;
   /** Daljše pojasnilo za ikono "i". */
   info?: ReactNode;
   onChange: (v: V) => void;
@@ -91,7 +140,7 @@ export function FilterIzbira<V extends string | number>({
   className?: string;
 }) {
   return (
-    <FilterPolje label={label} info={info} className={className}>
+    <FilterPolje label={label} info={info} className={className} skrijNaslovTelefon={skrijNaslovTelefon}>
       <select
         value={value}
         title={hint}
@@ -100,7 +149,7 @@ export function FilterIzbira<V extends string | number>({
           const izbrana = options.find((o) => String(o.value) === e.target.value);
           if (izbrana) onChange(izbrana.value);
         }}
-        className="h-10 rounded-lg border border-ink-200 bg-white px-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
+        className={`${telefon ? "h-11 w-full min-w-0 text-base sm:h-10 sm:text-sm" : "h-10 text-sm"} rounded-lg border border-ink-200 bg-white px-2 focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100`}
       >
         {options.map((o) => (
           <option key={String(o.value)} value={String(o.value)}>

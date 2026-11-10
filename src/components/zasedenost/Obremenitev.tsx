@@ -2,9 +2,99 @@
 
 // Skupni gradniki pregleda zasedenosti po tednih (Zasedenost, Prioritete > Zasedenost naročil).
 
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import type { IsoDate } from "@/lib/dates";
 import { formatUre } from "@/lib/stevila";
 import type { ZasOddelek } from "@/lib/zasedenost";
+
+/**
+ * Skriti oddelki (vrstice) v pregledu po tednih - brskalnik si jih zapomni za vsako stran posebej
+ * (`kljuc`), npr. Prioritete > Zasedenost naročil samo Montaža.
+ */
+export function useSkritiOddelki(kljuc: string): [Set<string>, (s: Set<string>) => void] {
+  const lsKljuc = `fines-skriti-oddelki:${kljuc}`;
+  // Pregled se izriše šele po nalaganju podatkov - branje localStorage ob inicializaciji je varno
+  const [skriti, setSkriti] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const v = JSON.parse(localStorage.getItem(lsKljuc) ?? "[]") as unknown;
+      return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const nastavi = (s: Set<string>) => {
+    setSkriti(s);
+    try {
+      localStorage.setItem(lsKljuc, JSON.stringify([...s]));
+    } catch {
+      /* brez shrambe velja do osvežitve */
+    }
+  };
+  return [skriti, nastavi];
+}
+
+/**
+ * Preklop prikaza vrstic oddelkov: čip z ikono očesa za vsak oddelek (prikazan = oranžen, skrit = siv,
+ * prečrtan). Zadnjega prikazanega ni mogoče skriti. "Prikaži vse", ko je kateri skrit.
+ */
+export function PrikazOddelkov({
+  oddelki,
+  skriti,
+  onSkriti,
+}: {
+  oddelki: ZasOddelek[];
+  skriti: Set<string>;
+  onSkriti: (s: Set<string>) => void;
+}) {
+  if (oddelki.length < 2) return null;
+  const prikazanih = oddelki.filter((o) => !skriti.has(o.koda)).length;
+  const kateriSkrit = oddelki.some((o) => skriti.has(o.koda));
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Prikazani oddelki">
+      <span className="mr-0.5 text-xs font-semibold text-ink-600">Oddelki:</span>
+      {oddelki.map((o) => {
+        const skrit = skriti.has(o.koda);
+        const zadnji = !skrit && prikazanih === 1;
+        const Ikona = skrit ? EyeOff : Eye;
+        return (
+          <button
+            key={o.koda}
+            type="button"
+            aria-pressed={!skrit}
+            disabled={zadnji}
+            title={zadnji ? "Vsaj en oddelek mora biti prikazan" : skrit ? `Prikaži vrstico ${o.naziv}` : `Skrij vrstico ${o.naziv}`}
+            onClick={() => {
+              const n = new Set(skriti);
+              if (skrit) n.delete(o.koda);
+              else n.add(o.koda);
+              onSkriti(n);
+            }}
+            className={`inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-sm transition-colors disabled:cursor-not-allowed ${
+              skrit
+                ? "border-ink-200 bg-white text-ink-400 hover:border-ink-400 hover:bg-ink-100"
+                : "border-fines-500 bg-fines-50 font-semibold text-ink-900 hover:bg-fines-100"
+            }`}
+          >
+            <Ikona className={`h-4 w-4 ${skrit ? "text-ink-400" : "text-fines-600"}`} aria-hidden />
+            <span className={skrit ? "line-through" : ""}>{o.naziv}</span>
+          </button>
+        );
+      })}
+      {kateriSkrit && (
+        <button
+          type="button"
+          title="Prikaži vse oddelke v pregledu"
+          onClick={() => onSkriti(new Set())}
+          className="inline-flex h-10 items-center rounded-lg border border-ink-200 bg-white px-3 text-sm font-semibold text-ink-700 hover:bg-ink-100"
+        >
+          Prikaži vse
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** Barva obremenitve: do 85 % zelena, do 100 % rumena, nad 100 % rdeča. */
 export function obremenitev(potrebno: number, naVoljo: number) {
@@ -99,10 +189,14 @@ export function SkupajVrstica({
   potrebno: Map<string, number>;
   kapaciteta: (o: ZasOddelek, t: IsoDate) => { ure: number };
 }) {
+  // Ena vrstica - Skupaj bi samo ponovila isto
+  if (oddelki.length < 2) return null;
   const zap = oddelki.reduce((s, o) => s + (potrebno.get(`${o.koda}|zapadlo`) ?? 0), 0);
   return (
     <tr>
-      <th className="pr-2 text-right text-sm font-bold text-ink-900">Skupaj</th>
+      <th className="pr-2 text-right text-sm font-bold text-ink-900" title={`Skupaj: ${oddelki.map((o) => o.naziv).join(", ")}`}>
+        Skupaj
+      </th>
       <td className="rounded-lg bg-ink-800 p-2 text-center text-sm font-bold tabular-nums text-white">{formatUre(zap)} h</td>
       {tedni.map((t) => {
         const pot = oddelki.reduce((s, o) => s + (potrebno.get(`${o.koda}|${t}`) ?? 0), 0);

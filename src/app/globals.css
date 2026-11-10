@@ -54,6 +54,14 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Starejši brskalniki na telefonu (npr. Samsung Internet pred v15) ne poznajo overflow-x: clip -
+   brez tega bi stran postala širša od zaslona in se pomanjšala. Rezerva: hidden (lepljiva glava tam ne drži). */
+@supports not (overflow-x: clip) {
+  .overflow-x-clip {
+    overflow-x: hidden;
+  }
+}
+
 /* Enotno osenčenje komponent */
 .fp-card {
   background: #fff;

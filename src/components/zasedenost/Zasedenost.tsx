@@ -35,7 +35,15 @@ import { FilterIskanje, FilterPolje, FilterPreklopnik, FilterVrstica } from "@/c
 import { SortTh, TabelaOkvir, useRazvrscanje } from "@/components/ui/Tabela";
 import { PodatkiVir } from "@/components/PodatkiVir";
 import { usePoSyncu } from "@/components/SyncProvider";
-import { LegendaObremenitve, ObremenitevVsebina, SkupajVrstica, TedenGlava, ZapadloCelica } from "./Obremenitev";
+import {
+  LegendaObremenitve,
+  ObremenitevVsebina,
+  PrikazOddelkov,
+  SkupajVrstica,
+  TedenGlava,
+  useSkritiOddelki,
+  ZapadloCelica,
+} from "./Obremenitev";
 
 const STEVILO_TEDNOV = 8;
 
@@ -75,6 +83,8 @@ function ZasedenostInner() {
   const [nastavitveOdprte, setNastavitveOdprte] = useState(false);
   // Filtri tabele nalogov (ostanejo ob menjavi tedna)
   const [filterOddelkov, setFilterOddelkov] = useState<OddelekKoda[]>([]);
+  /** Vrstice oddelkov, skrite v tedenskem pregledu (zapomni si brskalnik). */
+  const [skritiOddelki, setSkritiOddelki] = useSkritiOddelki("zasedenost");
   const [iskanje, setIskanje] = useState("");
   const [filterNormativ, setFilterNormativ] = useState<NormativFilter>("vsi");
 
@@ -176,6 +186,7 @@ function ZasedenostInner() {
   if (!oddelki) return <Loading />;
 
   const jeTaTeden = zacetek === mondayOf(danes);
+  const prikazaniOddelki = oddelki.filter((o) => !skritiOddelki.has(o.koda));
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,6 +233,7 @@ function ZasedenostInner() {
               >
                 Ta teden
               </Button>
+              <PrikazOddelkov oddelki={oddelki} skriti={skritiOddelki} onSkriti={setSkritiOddelki} />
               <span className="ml-auto flex items-center gap-1 text-xs text-ink-500">
                 <Users className="h-4 w-4" aria-hidden />
                 Število zaposlenih vpiši za vsak teden posebej
@@ -283,7 +295,7 @@ function ZasedenostInner() {
                   </tr>
                 </thead>
                 <tbody>
-                  {oddelki.map((o) => {
+                  {prikazaniOddelki.map((o) => {
                     const zap = potrebno.get(`${o.koda}|zapadlo`) ?? 0;
                     return (
                       <tr key={o.id}>
@@ -316,7 +328,7 @@ function ZasedenostInner() {
                     );
                   })}
                   <SkupajVrstica
-                    oddelki={oddelki}
+                    oddelki={prikazaniOddelki}
                     tedni={prikazaniTedni}
                     potrebno={potrebno}
                     kapaciteta={kapaciteta}
