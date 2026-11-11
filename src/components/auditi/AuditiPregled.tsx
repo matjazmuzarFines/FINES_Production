@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChartLine, Download, ListChecks, Plus, Settings, ShieldCheck } from "lucide-react";
+import { vTekst } from "@/lib/obogatenoBesedilo";
 import { nazivOddelka, nazivTeme, oddelekPoKodi } from "@/lib/auditSifranti";
 import {
   VRSTA,
@@ -119,7 +120,7 @@ export function AuditiPregled() {
     (a) =>
       vOddelku(a.oddelek) &&
       (status === "VSI" || a.status === status) &&
-      ujemaIskanje(iskanje, [nazivOddelka(s, a.oddelek), nazivTeme(s, a.oddelek, a.tema), a.lokacija, a.izvajalec, a.udelezenci, a.zapisnik]),
+      ujemaIskanje(iskanje, [nazivOddelka(s, a.oddelek), nazivTeme(s, a.oddelek, a.tema), a.lokacija, a.izvajalec, a.udelezenci, vTekst(a.zapisnik)]),
   );
   const razvrsceni = sort.razvrsti(prikazani);
 

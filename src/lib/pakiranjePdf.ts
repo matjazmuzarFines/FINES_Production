@@ -13,15 +13,12 @@ import {
   type OdpremaPak,
   type PostavkaPak,
 } from "./pakiranje";
-import { A4, ROB, SIRINA, SIVA, TEMNA, asciiIme, novDokument, prelomi, prenesiDatoteko } from "./porociloPdf";
+import { A4, BELA, CRTA, ORANZNA, ROB, SIRINA, SIVA, TEMNA, asciiIme, noga, novDokument, prelomi, preliv, prenesiDatoteko, zaobljen } from "./porociloPdf";
 import { formatNum } from "./stevila";
 
-const ORANZNA = rgb(202 / 255, 80 / 255, 16 / 255);
 const RDECA = rgb(185 / 255, 28 / 255, 28 / 255);
 const ZELENA = rgb(21 / 255, 128 / 255, 61 / 255);
-const CRTA = rgb(0.86, 0.86, 0.87);
-const GLAVA_TABELE = rgb(0.17, 0.17, 0.18);
-const SKUPINA = rgb(0.9, 0.9, 0.91);
+const SKUPINA = rgb(0.925, 0.933, 0.945);
 const LEZECE: [number, number] = [A4[1], A4[0]];
 const NI_LOKACIJE = "LOKACIJA NI VPISANA";
 
@@ -31,7 +28,7 @@ const hexRgb = (hex: string): RGB => {
 };
 const jeBela = (hex: string) => hex.toUpperCase() === "#FFFFFF";
 
-type Pisave = { navadna: PDFFont; krepka: PDFFont; logo: PDFImage | null };
+type Pisave = { navadna: PDFFont; polkrepka: PDFFont; krepka: PDFFont; logo: PDFImage | null };
 
 /** Največja velikost pisave, pri kateri besedilo (do `maxVrstic` vrstic) ustreza okvirju. */
 function prilagodi(t: string, font: PDFFont, sirina: number, visina: number, max: number, min: number, maxVrstic = 3) {
@@ -61,7 +58,7 @@ const STOLPCI = [
   { naslov: "Kol", sirina: 40, desno: true },
   { naslov: "EM", sirina: 30 },
   { naslov: "Ident", sirina: 86 },
-  { naslov: "Naziv", sirina: 229 },
+  { naslov: "Naziv", sirina: 241 },
   { naslov: "Opomba", sirina: 100 },
 ];
 
@@ -109,18 +106,19 @@ class Checklista {
     this.stran = this.pdf.addPage(A4);
     this.strani.push(this.stran);
     this.y = A4[1] - ROB;
-    const { logo, krepka, navadna } = this.f;
+    const { logo, polkrepka, navadna } = this.f;
+    // kompaktna glava (kot glavaStrani v porociloPdf), podnaslov z odpremo
     if (logo) {
-      const s = logo.scaleToFit(110, 28);
+      const s = logo.scaleToFit(84, 22);
       this.stran.drawImage(logo, { x: ROB, y: this.y - s.height, width: s.width, height: s.height });
     }
-    const naslov = "NAVODILO ZA PAKIRANJE";
-    this.stran.drawText(naslov, { x: A4[0] - ROB - krepka.widthOfTextAtSize(naslov, 15), y: this.y - 13, size: 15, font: krepka, color: TEMNA });
+    const naslov = "Navodilo za pakiranje";
+    this.stran.drawText(naslov, { x: A4[0] - ROB - polkrepka.widthOfTextAtSize(naslov, 9.5), y: this.y - 9, size: 9.5, font: polkrepka, color: TEMNA });
     const pod = `Odprema ${this.d.stevilka}${nadaljevanje ? " (nadaljevanje)" : ""} · natisnjeno ${formatShort(toIso(new Date()))}`;
-    this.stran.drawText(pod, { x: A4[0] - ROB - navadna.widthOfTextAtSize(pod, 8.5), y: this.y - 26, size: 8.5, font: navadna, color: SIVA });
-    this.y -= 36;
-    this.stran.drawRectangle({ x: ROB, y: this.y - 2, width: SIRINA, height: 2, color: ORANZNA });
-    this.y -= 16;
+    this.stran.drawText(pod, { x: A4[0] - ROB - navadna.widthOfTextAtSize(pod, 7), y: this.y - 19, size: 7, font: navadna, color: SIVA });
+    this.y -= 28;
+    this.stran.drawRectangle({ x: ROB, y: this.y, width: SIRINA, height: 1.5, color: ORANZNA });
+    this.y -= 12;
     this.vrhStrani = this.y;
   }
 
@@ -207,22 +205,23 @@ class Checklista {
 
   glavaTabele() {
     const h = this.visGlave;
-    this.stran.drawRectangle({ x: ROB, y: this.y - h, width: SIRINA, height: h, color: GLAVA_TABELE });
+    preliv(this.stran, ROB, this.y - h, SIRINA, h, undefined, 3);
+    this.stran.drawRectangle({ x: ROB, y: this.y - h - 1, width: SIRINA, height: 1, color: ORANZNA });
     let x = ROB;
     for (const s of STOLPCI) {
-      const t = s.naslov.toUpperCase();
-      const w = this.f.krepka.widthOfTextAtSize(t, 7);
-      this.stran.drawText(t, { x: s.desno ? x + s.sirina - 4 - w : x + 4, y: this.y - h / 2 - 2.5, size: 7, font: this.f.krepka, color: rgb(1, 1, 1) });
+      const t = s.naslov;
+      const w = this.f.polkrepka.widthOfTextAtSize(t, 7.5);
+      this.stran.drawText(t, { x: s.desno ? x + s.sirina - 4 - w : x + 4, y: this.y - h / 2 - 2.6, size: 7.5, font: this.f.polkrepka, color: BELA });
       x += s.sirina;
     }
-    this.y -= h;
+    this.y -= h + 1;
   }
 
   skupina(naslov: string, peci: number) {
     const h = this.visSkupine;
     this.prostor(h + this.visGlave);
     this.stran.drawRectangle({ x: ROB, y: this.y - h, width: SIRINA, height: h, color: SKUPINA });
-    this.stran.drawRectangle({ x: ROB, y: this.y - h, width: 3, height: h, color: GLAVA_TABELE });
+    this.stran.drawRectangle({ x: ROB, y: this.y - h, width: 3, height: h, color: ORANZNA });
     this.stran.drawText(naslov, { x: ROB + 9, y: this.y - h / 2 - 3.3, size: this.pisava + 0.5, font: this.f.krepka, color: TEMNA });
     if (peci > 0) {
       const t = `${formatNum(peci)} ${peci === 1 ? "peč" : "peči"}`;
@@ -248,7 +247,7 @@ class Checklista {
     const sredinaVrste = vrh - h / 2;
     const kv = 13 * Math.min(1, this.k + 0.1);
     // Okvirček za kljukico - na sredini vrstice
-    this.stran.drawRectangle({ x: ROB + 7, y: sredinaVrste - kv / 2, width: kv, height: kv, borderColor: TEMNA, borderWidth: 1.2 });
+    zaobljen(this.stran, ROB + 7, sredinaVrste - kv / 2, kv, kv, 2, undefined, TEMNA, 1.1);
     let x = ROB;
     vr.forEach((vrstice, i) => {
       const s = STOLPCI[i];
@@ -338,7 +337,7 @@ class Checklista {
 
   /** Storitve (se ne pakirajo) in prazno polje za ročno opombo po tisku. */
   noga() {
-    const { navadna, krepka } = this.f;
+    const { navadna } = this.f;
     const storitve = this.d.postavke.filter((p) => p.kategorija === "storitev");
     if (storitve.length) {
       this.y -= 6;
@@ -352,8 +351,8 @@ class Checklista {
     this.y -= 12;
     const h = 62;
     this.prostor(h + 4);
-    this.stran.drawRectangle({ x: ROB, y: this.y - h, width: SIRINA, height: h, borderColor: TEMNA, borderWidth: 0.8 });
-    this.stran.drawText("Opomba", { x: ROB + 6, y: this.y - 12, size: 8.5, font: krepka, color: SIVA });
+    zaobljen(this.stran, ROB, this.y - h, SIRINA, h, 5, rgb(0.961, 0.965, 0.973), CRTA, 0.8);
+    this.stran.drawText("Opomba", { x: ROB + 8, y: this.y - 13, size: 8.5, font: this.f.polkrepka, color: SIVA });
     for (const k of [1, 2]) this.stran.drawRectangle({ x: ROB + 6, y: this.y - 14 - k * 16, width: SIRINA - 12, height: 0.4, color: CRTA });
     this.y -= h;
   }
@@ -448,8 +447,8 @@ function narisiChecklisto(pdf: PDFDocument, f: Pisave, d: OdpremaPak, b: BarvaLi
 
 /** PDF za izbrane odpreme: po vrsti checklista in listi z lokacijo (vsaka odprema skupaj). */
 export async function prenesiNavodilaPdf(odpreme: OdpremaPak[], n: NastavitvePdf, barva: (d: OdpremaPak) => BarvaLista, ime: string) {
-  const { pdf, navadna, krepka, logo } = await novDokument("Navodila za pakiranje");
-  const f = { navadna, krepka, logo };
+  const { pdf, navadna, polkrepka, krepka, logo } = await novDokument("Navodila za pakiranje");
+  const f = { navadna, polkrepka, krepka, logo };
   const checkliste: PDFPage[] = [];
 
   for (const d of odpreme) {
@@ -463,14 +462,7 @@ export async function prenesiNavodilaPdf(odpreme: OdpremaPak[], n: NastavitvePdf
   }
 
   // Noga samo na checklistah (list z lokacijo ostane čist)
-  checkliste.forEach((s, i) => {
-    const levo = "FINES d.o.o. | Production | Navodilo za pakiranje";
-    const desno = `Stran ${i + 1} / ${checkliste.length}`;
-    s.drawRectangle({ x: ROB, y: ROB - 2, width: SIRINA, height: 0.5, color: CRTA });
-    s.drawText(levo, { x: ROB, y: ROB - 16, size: 8, font: navadna, color: SIVA });
-    s.drawText(desno, { x: A4[0] - ROB - navadna.widthOfTextAtSize(desno, 8), y: ROB - 16, size: 8, font: navadna, color: SIVA });
-  });
-
+  noga(pdf, navadna, "FINES d.o.o. | Production | Navodilo za pakiranje", ROB, checkliste);
   const bajti = await pdf.save();
   prenesiDatoteko(new Blob([bajti as BlobPart], { type: "application/pdf" }), `${asciiIme(ime)}.pdf`);
 }

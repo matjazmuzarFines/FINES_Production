@@ -426,7 +426,7 @@ function razporeditev(f: Pisave, koraki: WorkflowKorak[], vrh: number) {
 
 export async function ustvariPlanPdf(plan: WorkflowPlan): Promise<Blob> {
   if (plan.celice.length === 0) throw new Error("V prikazanem obdobju ni postavitev.");
-  const { pdf, navadna, krepka, logo } = await novDokument(`Delovni plan ${plan.oddelek}`);
+  const { pdf, navadna, krepka, logo } = await novDokument(`Delovni plan ${plan.oddelek}`, "dejavu");
   const f = { navadna, krepka };
 
   const novaStran = () => {

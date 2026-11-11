@@ -270,7 +270,7 @@ export const KORAKI: KorakVodica[] = [
     cas: "5 min, pred gembo",
     tocke: [
       "Izberi celico / družino izdelkov in temo tedna (ena tema!).",
-      "Preglej odprte akcije prejšnjih tednov (spodaj na strani).",
+      "Preglej odprte akcije prejšnjih tednov (tabla izboljšav na koledarju gemb).",
       "Zagotovi zaščiten čas - gembe ne prekine operativno delo, razen nujnih primerov.",
       "Vzemi tablico / telefon: zapisnik, štoparica, števci, slike.",
     ],

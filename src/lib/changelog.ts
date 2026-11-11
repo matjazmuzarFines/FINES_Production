@@ -9,6 +9,27 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "33.01",
+    datum: "11. 11. 2026",
+    spremembe: [
+      "Prenovljeni PDF-ji (Gemba walk, Audit, Matrika usposobljenosti, Navodilo za pakiranje): sodobna pisava Inter, manjša glava, razdelki z glavo v prelivu in ikono, vsebina v osenčenem okvirju, manjše besedilo (naslovi razdelkov 10,5 pt, poudarki 9 pt, besedilo 8,25 pt). Ležeče besedilo v zapisniku je pravo ležeče.",
+    ],
+  },
+  {
+    verzija: "32.02",
+    datum: "11. 11. 2026",
+    spremembe: [
+      "Gemba walk: v tednu (in v PDF / e-mailu) so samo akcije tega tedna - odprte akcije prejšnjih tednov so samo na tabli izboljšav na koledarju gemb.",
+    ],
+  },
+  {
+    verzija: "32.01",
+    datum: "11. 11. 2026",
+    spremembe: [
+      "Zapisnik gembe in audita: urejevalnik besedila z orodno vrstico - krepko, ležeče, podčrtano, prečrtano, naslov, alineje, številčenje, zamik, razveljavi. Oblikovanje se prenese tudi v PDF. Stari zapisniki se prikažejo z alinejami in naslovi.",
+    ],
+  },
+  {
     verzija: "31.09",
     datum: "10. 11. 2026",
     spremembe: [

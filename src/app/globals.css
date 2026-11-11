@@ -70,6 +70,50 @@ body {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
 
+/* Urejevalnik besedila (UrejevalnikBesedila - zapisniki): odstavki, naslovi, alineje, številčenje */
+.fp-rich p,
+.fp-rich h3 {
+  margin: 0;
+  min-height: 1lh;
+}
+.fp-rich h3 {
+  margin-top: 0.75rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-ink-900);
+}
+.fp-rich > h3:first-child {
+  margin-top: 0;
+}
+.fp-rich ul,
+.fp-rich ol {
+  margin: 0.125rem 0;
+  padding-left: 1.5rem;
+}
+.fp-rich ul {
+  list-style: disc;
+}
+.fp-rich ul ul {
+  list-style: circle;
+}
+.fp-rich ol {
+  list-style: decimal;
+}
+.fp-rich li::marker {
+  color: var(--color-fines-600);
+}
+.fp-rich strong {
+  font-weight: 700;
+}
+.fp-rich p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  white-space: pre-line;
+  color: var(--color-ink-400);
+}
+
 /* Standardna glava tabele: temno siva z oranžno črto spodaj, ločila med stolpci, zaobljena zgornja kota.
    Prilepi se pod glavo aplikacije (glej TabelaOkvir). Barve so na celicah, da zaobljenost deluje. */
 .fp-thead {

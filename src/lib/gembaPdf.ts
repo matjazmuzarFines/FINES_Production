@@ -1,6 +1,7 @@
 // Poročilo gemba walka: PDF (ustvari se v brskalniku) in e-mail za Outlook (.eml s PDF priponko).
-// Enak način kot v projektu Rabljena oprema: pdf-lib + pisava DejaVu Sans (č, š, ž).
+// Skupna oblika PDF (pisava Inter, razdelki, tabele) je v porociloPdf.ts.
 // Knjižnica se naloži šele ob kliku na gumb (dinamičen import).
+import { vTekst } from "./obogatenoBesedilo";
 import { formatShort, isoWeek, toIso, type IsoDate } from "./dates";
 import { izgubaPoKodi } from "./gembaVodic";
 import {
@@ -25,7 +26,7 @@ import {
   type PovpStatus,
   type Priloga,
 } from "./produktivnost";
-import { ROB, SIRINA, SIVA, Pisec, URL_APLIKACIJE, PISAVA, PISAVA_NASLOV, asciiIme, emailPari, esc, prenesiDatoteko, prenesiEmail, vgradiSliko, type Vrstica } from "./porociloPdf";
+import { SIRINA, SIVA, Pisec, URL_APLIKACIJE, PISAVA, PISAVA_NASLOV, asciiIme, emailPari, esc, prenesiDatoteko, prenesiEmail, vgradiSliko, type Vrstica } from "./porociloPdf";
 import { formatNum } from "./stevila";
 
 export type GembaPorocilo = {
@@ -33,7 +34,6 @@ export type GembaPorocilo = {
   status: GembaStatus | null;
   polja: GembaPolja;
   akcijeTedna: Akcija[];
-  odprtePrej: Akcija[];
   priloge: Priloga[];
   nastavitve: Nastavitve;
 };
@@ -113,19 +113,16 @@ export async function ustvariPdf(p: GembaPorocilo): Promise<Blob> {
   ]);
 
   w.glava("Gemba walk - zapisnik");
-  w.tekst(naslovGembe(p), ROB, 18, w.krepka);
-  w.y -= 22;
-  w.tekst("Produktivnost - tedenski sprehod po proizvodnji", ROB, 10, w.navadna, SIVA);
-  w.y -= 16;
+  w.naslov(naslovGembe(p), "Produktivnost - tedenski sprehod po proizvodnji");
 
   // 1. Osnovni podatki
-  w.podnaslov("Osnovni podatki");
+  w.razdelek("Osnovni podatki", "podatki");
   w.pari(osnovniPodatki(p));
 
   // 2. Zapisnik + orodja
-  w.podnaslov("Zapisnik");
-  if (p.polja.zapisnik.trim()) w.besedilo(p.polja.zapisnik.trim());
-  else w.besedilo("Ni zapisa.", 10, SIVA);
+  w.razdelek("Zapisnik", "zapisnik");
+  if (vTekst(p.polja.zapisnik).trim()) w.obogateno(p.polja.zapisnik);
+  else w.besedilo("Ni zapisa.", undefined, SIVA);
 
   const o = p.polja.orodja;
   const meritve = o.meritve.filter((m) => m.casi.length);
@@ -174,7 +171,7 @@ export async function ustvariPdf(p: GembaPorocilo): Promise<Blob> {
   }
 
   // 3. Tabla izboljšav
-  w.podnaslov("Tabla izboljšav", 80);
+  w.razdelek("Akcije tega tedna", "akcije", 80, p.akcijeTedna.length ? `${p.akcijeTedna.length}` : undefined);
   const vrsticeAkcij = (akcije: Akcija[]): Vrstica[] =>
     akcije.map((a) => ({
       celice: [
@@ -189,8 +186,7 @@ export async function ustvariPdf(p: GembaPorocilo): Promise<Blob> {
       poudari: [5],
     }));
   const vrstice: Vrstica[] = [];
-  if (p.akcijeTedna.length) vrstice.push({ skupina: `Nove akcije tega tedna (${p.akcijeTedna.length})` }, ...vrsticeAkcij(p.akcijeTedna));
-  if (p.odprtePrej.length) vrstice.push({ skupina: `Odprte iz prejšnjih tednov (${p.odprtePrej.length})` }, ...vrsticeAkcij(p.odprtePrej));
+  vrstice.push(...vrsticeAkcij(p.akcijeTedna));
   if (vrstice.length) {
     w.tabela(
       [
@@ -205,35 +201,21 @@ export async function ustvariPdf(p: GembaPorocilo): Promise<Blob> {
       vrstice,
     );
   } else {
-    w.besedilo("Ni akcij.", 10, SIVA);
+    w.besedilo("Ni akcij.", undefined, SIVA);
   }
 
   // 4. Priloge
-  if (vSlike.length || vSkice.length || povp.length) {
-    w.podnaslov("Priloge", 80);
-    if (vSlike.length) {
-      w.oznaka(`Slike (${vSlike.length})`, 220);
-      w.mrezaSlik(vSlike, 2);
-    }
-    if (vSkice.length) {
-      w.oznaka(`Skice (${vSkice.length})`, 300);
-      w.mrezaSlik(vSkice, 1);
-    }
-    if (povp.length) {
-      w.oznaka(`Povpraševanja (${povp.length})`, 50);
-      w.tabela(
-        [
-          { naslov: "Datoteka", sirina: 170 },
-          { naslov: "Opis", sirina: 190 },
-          { naslov: "Status", sirina: 85 },
-          { naslov: "Dodano", sirina: SIRINA - 445 },
-        ],
-        povp.map((x) => ({
-          celice: [x.ime ?? "", x.opis ?? "", x.status ? STATUS_POVP[x.status] : "", formatShort(toIso(new Date(x.created_at)))],
-        })),
-      );
-    }
-  }
+  w.priloge(vSlike, vSkice, {
+    stolpci: [
+      { naslov: "Datoteka", sirina: 170 },
+      { naslov: "Opis", sirina: 190 },
+      { naslov: "Status", sirina: 85 },
+      { naslov: "Dodano", sirina: SIRINA - 445 },
+    ],
+    vrstice: povp.map((x) => ({
+      celice: [x.ime ?? "", x.opis ?? "", x.status ? STATUS_POVP[x.status] : "", formatShort(toIso(new Date(x.created_at)))],
+    })),
+  });
 
   return w.koncaj(`FINES d.o.o. | Production | Gemba walk T${isoWeek(p.teden)} ${letoTedna(p.teden)}`);
 }
@@ -255,7 +237,6 @@ function teloEmaila(p: GembaPorocilo) {
   const pari: [string, string][] = [
     ...osnovniPodatki(p).filter(([o]) => o !== "Status"),
     ["Nove akcije", String(p.akcijeTedna.length)],
-    ["Odprte iz prejšnjih tednov", String(p.odprtePrej.length)],
     ...(pt.st > 0
       ? ([["Ocena prihranka", `${formatEur(pt.eurLeto)} / leto · ${formatH(pt.hLeto)} dela / leto`]] as [string, string][])
       : []),

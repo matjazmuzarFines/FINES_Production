@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BookOpen, ChevronDown, CircleHelp, Plus, Wrench } from "lucide-react";
+import { vTekst } from "@/lib/obogatenoBesedilo";
 import { KORAKI, PRAVILA, PREDLOGA_ZAPISNIKA } from "@/lib/auditVodic";
 import {
   BREZ_MIGRACIJE_016,
@@ -54,7 +55,7 @@ export function AuditVodic({
       />
       <div className="fp-card min-h-0 overflow-y-auto rounded-tl-none p-3 lg:max-h-[calc(100dvh-10rem)]">
         <div className={pogled === "VODIC" ? "" : "hidden"}>
-          <Vodic onVstavi={onVstavi} prazenZapisnik={!polja.zapisnik.trim()} pravila={PRAVILA} koraki={KORAKI} predloga={PREDLOGA_ZAPISNIKA} />
+          <Vodic onVstavi={onVstavi} prazenZapisnik={!vTekst(polja.zapisnik).trim()} pravila={PRAVILA} koraki={KORAKI} predloga={PREDLOGA_ZAPISNIKA} />
         </div>
         <div className={pogled === "VPRASANJA" ? "" : "hidden"}>
           <Vprasanja oddelek={polja.oddelek} tema={polja.tema} onVstavi={onVstavi} onUkrep={onUkrep} />

@@ -30,6 +30,8 @@ import {
 } from "@/lib/produktivnost";
 import { supabaseConfigured } from "@/lib/supabase";
 import { Button, IconButton } from "@/components/ui/Button";
+import { UrejevalnikBesedila, type UrejevalnikRef } from "@/components/ui/UrejevalnikBesedila";
+import { vTekst } from "@/lib/obogatenoBesedilo";
 import { FilterIzbira, FilterPolje, FilterVrstica } from "@/components/ui/Filtri";
 import { Izvoz } from "@/components/ui/Izvoz";
 import { ConfigMissing, Loading, WarningText } from "@/components/ui/Notice";
@@ -67,8 +69,7 @@ export function GembaZapisnik({ teden }: { teden: IsoDate }) {
 function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
   const router = useRouter();
   const notify = useToast();
-  const zapisnikRef = useRef<HTMLTextAreaElement>(null);
-  const kursorRef = useRef<number | null>(null);
+  const zapisnikRef = useRef<UrejevalnikRef>(null);
   const ustvarjanje = useRef<Promise<number> | null>(null);
 
   const [gemba, setGemba] = useState<Gemba | null>(null);
@@ -126,23 +127,9 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
   const nastavi = (p: Partial<GembaPolja>) => setPolja((s) => ({ ...s, ...p }));
 
   function vstavi(tekst: string) {
-    const el = zapisnikRef.current;
-    const t = polja.zapisnik;
-    // Klik na gumb vzame fokus polju - vstavimo na zadnji položaj kurzorja (privzeto na konec).
-    const poz = Math.min(kursorRef.current ?? t.length, t.length);
-    const pred = t.slice(0, poz);
-    const za = t.slice(poz);
-    const zacetek = pred && !pred.endsWith("\n") ? "\n" : "";
-    const nov = `${pred}${zacetek}${tekst}${za.startsWith("\n") || !za ? "" : "\n"}`;
-    nastavi({ zapisnik: nov + za });
-    const kursor = (pred + zacetek + tekst).length;
-    kursorRef.current = kursor;
-    requestAnimationFrame(() => {
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(kursor, kursor);
-    });
+    zapisnikRef.current?.vstavi(tekst);
   }
+
 
   async function shrani(status?: Gemba["status"]) {
     setShranjujem(true);
@@ -182,7 +169,6 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
   if (!nastavitve) return <Loading />;
 
   const tegaTedna = gemba ? akcije.filter((a) => a.gemba_id === gemba.id) : [];
-  const odprtePrej = akcije.filter((a) => a.teden < teden && akcijaOdprta(a));
   const odprtih = akcije.filter(akcijaOdprta).length;
   const prihranekTedna = tegaTedna
     .filter((a) => a.status !== "OPUSCENO")
@@ -195,7 +181,6 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
     status: gemba?.status ?? null,
     polja,
     akcijeTedna: tegaTedna,
-    odprtePrej,
     priloge,
     nastavitve,
   });
@@ -339,18 +324,15 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
               Ura
             </Button>
           </div>
-          <textarea
+          <UrejevalnikBesedila
             ref={zapisnikRef}
             value={polja.zapisnik}
-            onChange={(e) => nastavi({ zapisnik: e.target.value })}
-            onSelect={(e) => (kursorRef.current = e.currentTarget.selectionStart)}
-            placeholder={
-              "Zapisuj dejstva: kaj, kolikokrat, koliko časa.\n\nDesno so vodič, vprašanja (klik na + jih vstavi sem) in orodja (štoparica, števci, kalkulator prihranka).\nTabla za skiciranje, slike in povpraševanja so spodaj."
-            }
-            title="Zapisnik gembe"
-            className="min-h-[28rem] w-full resize-y rounded-lg border border-ink-200 p-3 font-[inherit] text-sm leading-relaxed focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 lg:min-h-[calc(100dvh-16rem)]"
+            onChange={(html) => nastavi({ zapisnik: html })}
+            placeholder={"Zapisuj dejstva: kaj, kolikokrat, koliko časa.\n\nDesno so vodič, vprašanja (klik na + jih vstavi sem) in orodja (štoparica, števci, kalkulator prihranka).\nTabla za skiciranje, slike in povpraševanja so spodaj."}
+            hint="Zapisnik gembe"
+            visina="min-h-[28rem] lg:min-h-[calc(100dvh-20rem)]"
           />
-          <p className="text-right text-xs text-ink-400">{polja.zapisnik.length} znakov</p>
+          <p className="text-right text-xs text-ink-400">{vTekst(polja.zapisnik).length} znakov</p>
         </section>
 
         <aside className="lg:sticky lg:top-20">
@@ -366,13 +348,13 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
         </aside>
       </div>
 
-      {/* tabla izboljšav */}
+      {/* akcije tega tedna */}
       <section className="fp-card flex flex-col gap-3 p-3 sm:p-4">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-bold text-ink-900">Tabla izboljšav</h3>
+            <h3 className="text-lg font-bold text-ink-900">Akcije tega tedna</h3>
             <p className="text-sm text-ink-500">
-              Nove akcije tega tedna in odprte akcije prejšnjih tednov (preveri jih na gembi).
+              Akcije, zapisane na tej gembi. Vse akcije (tudi odprte iz prejšnjih tednov) so na tabli izboljšav na koledarju.
               {prihranekTedna > 0 && (
                 <>
                   {" "}Ocena prihranka akcij tega tedna: <strong className="text-ink-800">{formatEur(prihranekTedna)} / leto</strong>.
@@ -381,7 +363,7 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
             </p>
           </div>
           <Button
-            hint="Dodaj novo akcijo na tablo izboljšav"
+            hint="Dodaj novo akcijo k tej gembi"
             variant="success"
             icon={Plus}
             onClick={() => setOkno({ akcija: null, predlog: { kategorija: polja.tema || null } })}
@@ -397,7 +379,6 @@ function GembaZapisnikInner({ teden }: { teden: IsoDate }) {
         <AkcijeTabela
           skupine={[
             { naslov: "Nove akcije tega tedna", opis: `zapisane na gembi T${stTedna}`, akcije: tegaTedna },
-            { naslov: "Odprte iz prejšnjih tednov", opis: "preveri stanje na gembi", akcije: odprtePrej },
           ]}
           danes={danes}
           nastavitve={nastavitve}

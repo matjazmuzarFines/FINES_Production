@@ -27,6 +27,8 @@ import { compressImage } from "@/lib/images";
 import { lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import type { Priloga } from "@/lib/priloge";
 import { Button } from "@/components/ui/Button";
+import { UrejevalnikBesedila, type UrejevalnikRef } from "@/components/ui/UrejevalnikBesedila";
+import { vTekst } from "@/lib/obogatenoBesedilo";
 import { FilterIzbira, FilterPolje } from "@/components/ui/Filtri";
 import { ErrorText, Loading, WarningText } from "@/components/ui/Notice";
 import { Izvoz, type IzvozFormat } from "@/components/ui/Izvoz";
@@ -85,8 +87,7 @@ export function AuditZapisnik({ id }: { id: number | null }) {
   const router = useRouter();
   const notify = useToast();
   const { s } = useSifranti();
-  const zapisnikRef = useRef<HTMLTextAreaElement>(null);
-  const kursorRef = useRef<number | null>(null);
+  const zapisnikRef = useRef<UrejevalnikRef>(null);
   const kameraRef = useRef<HTMLInputElement>(null);
   const ustvarjanje = useRef<Promise<number> | null>(null);
   const danes = toIso(new Date());
@@ -177,25 +178,12 @@ export function AuditZapisnik({ id }: { id: number | null }) {
   const nastavi = (p: Partial<AuditPolja>) => setPolja((x) => ({ ...x, ...p }));
 
   function vstavi(tekst: string) {
-    const el = zapisnikRef.current;
-    const t = polja.zapisnik;
-    // Klik na gumb vzame fokus polju - vstavimo na zadnji položaj kurzorja (privzeto na konec).
-    const poz = Math.min(kursorRef.current ?? t.length, t.length);
-    const pred = t.slice(0, poz);
-    const za = t.slice(poz);
-    const zacetek = pred && !pred.endsWith("\n") ? "\n" : "";
-    const nov = `${pred}${zacetek}${tekst}${za.startsWith("\n") || !za ? "" : "\n"}`;
-    nastavi({ zapisnik: nov + za });
-    const kursor = (pred + zacetek + tekst).length;
-    kursorRef.current = kursor;
     // na telefonu je zapisnik na drugem zavihku - samo obvestilo
-    if (window.matchMedia("(max-width: 1023px)").matches && odsek !== "ZAPISNIK") return notify("success", "Vstavljeno v zapisnik.");
-    requestAnimationFrame(() => {
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(kursor, kursor);
-    });
+    const skrit = window.matchMedia("(max-width: 1023px)").matches && odsek !== "ZAPISNIK";
+    zapisnikRef.current?.vstavi(tekst, !skrit);
+    if (skrit) notify("success", "Vstavljeno v zapisnik.");
   }
+
 
   async function shrani(status?: Audit["status"]) {
     const manjka = manjkaZaShranjevanje(polja);
@@ -537,16 +525,15 @@ export function AuditZapisnik({ id }: { id: number | null }) {
               Ura
             </Button>
           </div>
-          <textarea
+          <UrejevalnikBesedila
             ref={zapisnikRef}
             value={polja.zapisnik}
-            onChange={(e) => nastavi({ zapisnik: e.target.value })}
-            onSelect={(e) => (kursorRef.current = e.currentTarget.selectionStart)}
+            onChange={(html) => nastavi({ zapisnik: html })}
             placeholder={"Zapisuj dejstva: kaj, kje, kolikokrat.\n\nUgotovitve, ki potrebujejo ukrep, dodaj z gumbom + Ugotovitev.\nVprašanja (klik na + jih vstavi sem), vodič in orodja so na zavihku Vprašanja."}
-            title="Zapisnik audita"
-            className="min-h-[50dvh] w-full resize-y rounded-lg border border-ink-200 p-3 font-[inherit] text-base leading-relaxed focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 sm:text-sm lg:min-h-[calc(100dvh-16rem)]"
+            hint="Zapisnik audita"
+            visina="min-h-[50dvh] lg:min-h-[calc(100dvh-20rem)]"
           />
-          <p className="text-right text-xs text-ink-400">{polja.zapisnik.length} znakov</p>
+          <p className="text-right text-xs text-ink-400">{vTekst(polja.zapisnik).length} znakov</p>
         </section>
 
         <aside className={`lg:sticky lg:top-20 ${vidno("VPRASANJA")}`}>

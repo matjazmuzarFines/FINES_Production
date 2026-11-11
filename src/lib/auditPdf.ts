@@ -1,5 +1,6 @@
 // Poročilo audita (Management): PDF (ustvari se v brskalniku) in e-mail za Outlook (.eml s PDF priponko).
 // Isti gradniki kot Gemba walk (porociloPdf.ts). Knjižnica se naloži šele ob kliku na gumb (dinamičen import).
+import { vTekst } from "./obogatenoBesedilo";
 import { formatShort, toIso, type IsoDate } from "./dates";
 import { nazivOddelka, nazivTeme, oddelekPoKodi, type Sifranti } from "./auditSifranti";
 import { VRSTA, pomenAkcije, zamuja, type AuditAkcija, type AuditPolja } from "./auditi";
@@ -8,7 +9,6 @@ import {
   PISAVA,
   PISAVA_NASLOV,
   Pisec,
-  ROB,
   SIRINA,
   SIVA,
   URL_APLIKACIJE,
@@ -100,19 +100,16 @@ export async function ustvariPdf(p: AuditPorocilo): Promise<Blob> {
   ]);
 
   w.glava("Audit - zapisnik");
-  w.tekst(naslovAudita(p), ROB, 18, w.krepka);
-  w.y -= 22;
-  w.tekst("Management - gemba walk vodstva", ROB, 10, w.navadna, SIVA);
-  w.y -= 16;
+  w.naslov(naslovAudita(p), "Management - gemba walk vodstva");
 
   // 1. Osnovni podatki
-  w.podnaslov("Osnovni podatki");
+  w.razdelek("Osnovni podatki", "podatki");
   w.pari(osnovniPodatki(p));
 
   // 2. Zapisnik + števci
-  w.podnaslov("Zapisnik");
-  if (p.polja.zapisnik.trim()) w.besedilo(p.polja.zapisnik.trim());
-  else w.besedilo("Ni zapisa.", 10, SIVA);
+  w.razdelek("Zapisnik", "zapisnik");
+  if (vTekst(p.polja.zapisnik).trim()) w.obogateno(p.polja.zapisnik);
+  else w.besedilo("Ni zapisa.", undefined, SIVA);
 
   const stevci = p.polja.orodja.stevci;
   if (stevci.length) {
@@ -127,7 +124,7 @@ export async function ustvariPdf(p: AuditPorocilo): Promise<Blob> {
   }
 
   // 3. Ugotovitve in akcije
-  w.podnaslov("Ugotovitve in akcije", 80);
+  w.razdelek("Ugotovitve in akcije", "ugotovitve", 80);
   const vrsticeAkcij = (akcije: AuditAkcija[]): Vrstica[] =>
     akcije.map((a) => ({
       celice: [
@@ -158,39 +155,25 @@ export async function ustvariPdf(p: AuditPorocilo): Promise<Blob> {
       vrstice,
     );
   } else {
-    w.besedilo("Ni akcij.", 10, SIVA);
+    w.besedilo("Ni akcij.", undefined, SIVA);
   }
 
   // 4. Priloge
   if (vSlikeAkcij.length) {
-    w.podnaslov(`Slike ugotovitev (${vSlikeAkcij.length})`, 220);
+    w.razdelek("Slike ugotovitev", "slike", w.visinaMrezeSlik(vSlikeAkcij.length, 2), `${vSlikeAkcij.length}`);
     w.mrezaSlik(vSlikeAkcij, 2);
   }
-  if (vSlike.length || vSkice.length || povp.length) {
-    w.podnaslov("Priloge", 80);
-    if (vSlike.length) {
-      w.oznaka(`Slike (${vSlike.length})`, 220);
-      w.mrezaSlik(vSlike, 2);
-    }
-    if (vSkice.length) {
-      w.oznaka(`Skice (${vSkice.length})`, 300);
-      w.mrezaSlik(vSkice, 1);
-    }
-    if (povp.length) {
-      w.oznaka(`Povpraševanja (${povp.length})`, 50);
-      w.tabela(
-        [
-          { naslov: "Datoteka", sirina: 170 },
-          { naslov: "Opis", sirina: 190 },
-          { naslov: "Status", sirina: 85 },
-          { naslov: "Dodano", sirina: SIRINA - 445 },
-        ],
-        povp.map((x) => ({
-          celice: [x.ime ?? "", x.opis ?? "", x.status ? STATUS_POVP[x.status] : "", formatShort(toIso(new Date(x.created_at)))],
-        })),
-      );
-    }
-  }
+  w.priloge(vSlike, vSkice, {
+    stolpci: [
+      { naslov: "Datoteka", sirina: 170 },
+      { naslov: "Opis", sirina: 190 },
+      { naslov: "Status", sirina: 85 },
+      { naslov: "Dodano", sirina: SIRINA - 445 },
+    ],
+    vrstice: povp.map((x) => ({
+      celice: [x.ime ?? "", x.opis ?? "", x.status ? STATUS_POVP[x.status] : "", formatShort(toIso(new Date(x.created_at)))],
+    })),
+  });
 
   return w.koncaj(`FINES d.o.o. | Production | ${naslovAudita(p)}`);
 }

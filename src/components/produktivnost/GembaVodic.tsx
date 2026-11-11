@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BookOpen, Check, ChevronDown, CircleHelp, FileText, Plus, Trash2, Wrench, X } from "lucide-react";
+import { vTekst } from "@/lib/obogatenoBesedilo";
 import { IZGUBE, KORAKI, PRAVILA, PREDLOGA_ZAPISNIKA, SPLOSNA_VPRASANJA, izgubaPoKodi, type Izguba, type KorakVodica } from "@/lib/gembaVodic";
 import {
   dodajVprasanje,
@@ -50,7 +51,7 @@ export function GembaVodic({
       />
       <div className="fp-card min-h-0 overflow-y-auto rounded-tl-none p-3 lg:max-h-[calc(100dvh-10rem)]">
         <div className={pogled === "VODIC" ? "" : "hidden"}>
-          <Vodic onVstavi={onVstavi} prazenZapisnik={!polja.zapisnik.trim()} />
+          <Vodic onVstavi={onVstavi} prazenZapisnik={!vTekst(polja.zapisnik).trim()} />
         </div>
         <div className={pogled === "VPRASANJA" ? "" : "hidden"}>
           <Vprasanja tema={polja.tema} onVstavi={onVstavi} />
