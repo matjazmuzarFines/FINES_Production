@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { addDays, formatDatumUra, formatDayMonth, formatShort, isoWeek, mondayOf, toIso, type IsoDate } from "@/lib/dates";
-import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
+import { naloziDruzine, naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { imaNeshranjeno, lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import { PodatkiVir } from "@/components/PodatkiVir";
 import { usePoSyncu } from "@/components/SyncProvider";
@@ -407,6 +407,7 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           celice={podatki.celice.filter((c) => c.oddelek_id === oddelek.id)}
           krovni={krovni}
           nalogi={podatki.nalogi}
+          normativi={podatki.normativi}
           imaUvoz={!!podatki.uvoz}
           postavitve={podatki.postavitve.filter((p) => p.oddelek_id === oddelek.id)}
           zaposleni={podatki.zaposleni}
@@ -438,6 +439,7 @@ function PlanOddelka({
   celice,
   krovni,
   nalogi,
+  normativi,
   imaUvoz,
   postavitve,
   zaposleni,
@@ -463,6 +465,8 @@ function PlanOddelka({
   krovni: Krovni[];
   /** Vsi nalogi zadnjega uvoza (za FIFO dodelitev odprem v workflowu). */
   nalogi: Nalog[];
+  /** Normativi (družina po identu za PDF pregled). */
+  normativi: Normativ[];
   imaUvoz: boolean;
   postavitve: Postavitev[];
   zaposleni: ZaposleniDan[];
@@ -803,6 +807,14 @@ function PlanOddelka({
       odpreme,
     });
   };
+  /** Družine za PDF pregled: ident -> družina iz normativov, stolpci = vse družine (šifrant, sicer iz normativov). */
+  const druzineNormativov = async () => {
+    const sifrant = await naloziDruzine().catch(() => []);
+    return {
+      poIdentu: new Map<string, string>(normativi.filter((n) => n.druzina).map((n) => [n.ident, n.druzina])),
+      vse: sifrant.length ? sifrant.map((d) => d.koda) : [...new Set(normativi.map((n) => n.druzina).filter(Boolean))] as string[],
+    };
+  };
   const vObdobju = efektivne.some((p) => {
     const r = razpored.get(p.id);
     return !!r?.od && !!r.do && r.od <= dnevi[dnevi.length - 1] && r.do >= dnevi[0];
@@ -923,7 +935,7 @@ function PlanOddelka({
                   hint: "Časovnica po celicah: krovni nalogi od začetka do roka (PDF za obešanje / FIN:TV)",
                   disabled: !vObdobju,
                   zakaj: "V prikazanih tednih ni postavitev",
-                  akcija: async () => (await import("@/lib/planPregledPdf")).prenesiPlanPregledPdf(await workflow()),
+                  akcija: async () => (await import("@/lib/planPregledPdf")).prenesiPlanPregledPdf(await workflow(), await druzineNormativov()),
                 },
                 {
                   koda: "docx",

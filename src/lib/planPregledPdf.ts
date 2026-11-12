@@ -1,267 +1,543 @@
-// Delovni plan - PREGLED (PDF za obešanje na celico / FIN:TV): poudarek na ROKIH. Vsaka celica na svojem listu
-// A4 pokončno kot navpičen procesni flow (vzor: data/plan_overview.png): levo velika puščica časa z datumi (rok in
-// začetek vsakega koraka), na sredini krogi s številko koraka, povezani s puščicami, ob krogu pasica s krovnim
-// nalogom in pod njo nalogi in kosi. Če gre, so vse pasice desno (širše); sicer izmenično levo / desno (kot na vzoru),
-// po potrebi manjše; če še vedno ne gre, se celica nadaljuje na naslednjem listu. Oranžna oznaka DANES na puščici.
-// Workflow PDF (planPdf.ts) kaže, KAJ je treba narediti; ta pregled, DO KDAJ. Modul se naloži šele ob kliku.
-import { rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
-import { formatShort, toIso } from "./dates";
-import { barvaCelice, danKratko, ddmm, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
-import { A4, asciiIme, novDokument, prenesiDatoteko } from "./porociloPdf";
-import { formatNum } from "./stevila";
+// Delovni plan - PREGLED (PDF za obešanje na celico / FIN:TV): poudarek na ROKIH. Vsaka celica na svojem listu A4
+// pokončno. Pod naslovom razdelek "Plan po tednih" (tabela: krovni nalog, od - do, kosi po glavnih družinah - stolpci so
+// vedno iste družine v istem vrstnem redu in širini). Nato časovnica: levo stolpec rokov, na sredini moderna puščica
+// čez celotno časovnico z oštevilčenimi vozlišči, desno krovni nalogi kot kartice (oranžna zaobljena glava + osenčen
+// okvir z razdelki: podatki, opozorila, tabela nalogov, opomba). Oranžna črta DANES pred prvim nedokončanim korakom.
+// Oblika po skupnih gradnikih (porociloPdf.ts). Workflow PDF (planPdf.ts) kaže, KAJ je treba narediti; ta pregled,
+// DO KDAJ. Modul se naloži šele ob kliku.
+import {
+  PDFName,
+  drawSvgPath,
+  popGraphicsState,
+  pushGraphicsState,
+  rgb,
+  type PDFArray,
+  type PDFDocument,
+  type PDFFont,
+  type PDFImage,
+  type PDFOperator,
+  type PDFPage,
+  type RGB,
+} from "pdf-lib";
+import { addDays, formatShort, isoWeek, mondayOf, toIso } from "./dates";
+import { barvaCelice, besediloKosov, danKratko, ddmm, oznakaKoraka, type WorkflowCelica, type WorkflowKorak, type WorkflowPlan } from "./plan";
+import {
+  A4,
+  BELA,
+  CRTA,
+  GLAVA_TABELE,
+  ORANZNA,
+  PRELIV,
+  ROB,
+  SIVA,
+  TEMNA,
+  VEL,
+  asciiIme,
+  glavaStrani,
+  ikona,
+  noga,
+  novDokument,
+  potZaobljen,
+  prelomi,
+  prenesiDatoteko,
+  preliv,
+  zaobljen,
+  type Pisave,
+} from "./porociloPdf";
+import { formatNum, formatUre } from "./stevila";
+
+/** Družine iz normativov: ident -> koda družine in seznam vseh kod (za stalne stolpce). */
+export type DruzineNormativov = { poIdentu: Map<string, string>; vse: string[] };
 
 const [W, H] = A4; // pokončno
-const ROB = 30;
-const VRH = H - ROB - 92; // vrh vsebine (pod glavo)
-const DNO = ROB + 22; // nad nogo
-const PUSCICA_X = ROB + 2; // leva puščica časa
-const DATUM_X = ROB + 56;
+const DNO = ROB + 24; // nad nogo
+const SIRINA = W - 2 * ROB;
 
-const ORANZNA = rgb(202 / 255, 80 / 255, 16 / 255);
-const BESEDILO = rgb(0.11, 0.11, 0.12);
-const SIVA = rgb(0.42, 0.42, 0.45);
-const CRTA = rgb(0.2, 0.2, 0.22);
-const RDECA = rgb(0.82, 0.18, 0.18);
-const BELA = rgb(1, 1, 1);
-const SVETLO = rgb(0.95, 0.95, 0.96);
-
-/** Barve korakov (kot vzor: zelena, rumena, modra, oranžna ...). */
-const BARVE_KORAKOV = ["22C55E", "EAB308", "3B82F6", "F97316", "84CC16", "8B5CF6", "EC4899", "0EA5E9", "14B8A6", "F43F5E"];
-
-type Pisave = { navadna: PDFFont; krepka: PDFFont };
-type Strana = "levo" | "desno";
+// Stolpci časovnice: roki | puščica časa | kartice
+const DATUM_DESNO = ROB + 54;
+const OS_X = ROB + 70;
+const KARTICA_X = ROB + 92;
+const KARTICA_W = W - ROB - KARTICA_X;
 
 const hex = (h: string) => rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255);
-const temnejsa = (c: RGB, t = 0.25) => rgb(c.red * (1 - t), c.green * (1 - t), c.blue * (1 - t));
+const mesaj = (a: RGB, b: RGB, t: number) => rgb(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t);
 
-function skrajsaj(t: string, font: PDFFont, velikost: number, sirina: number) {
-  if (sirina <= 0) return "";
-  if (font.widthOfTextAtSize(t, velikost) <= sirina) return t;
-  let n = t.length;
-  while (n > 1 && font.widthOfTextAtSize(`${t.slice(0, n)}…`, velikost) > sirina) n--;
-  return n <= 1 ? "" : `${t.slice(0, n).trimEnd()}…`;
-}
+const RDECA = hex("D12E2E");
+const RDECA_SVETLA = hex("FDECEC");
+const ORANZNA_SVETLA = hex("E8803F");
+const ORANZNA_BLEDA = hex("F6D9C6");
+const OZADJE = hex("F5F6F8");
+const ROB_OKVIRJA = hex("E1E4E8");
+const SKUPINA = hex("ECEEF1");
+const MINULO = hex("B9BEC6");
+const SVETLO_NA_ORANZNI = hex("FDE6D6");
+
+// Kartica
+const GLAVA_MIN = 24;
+const VRSTICA_NASLOVA = 13;
+const VEL_NASLOVA = VEL.razdelek + 0.5;
+const PAD = 9;
+const PODATKI = 24;
+const OPOZORILO = 15;
+const GLAVA_TAB = 13;
+const VRSTICA_TAB = 12.5;
+const VRSTICA_TAB_DODATNA = VEL.tabela * 1.3;
+const NAJVEC_NALOGOV = 12;
+const VRSTICA_OPOMBE = VEL.besedilo * 1.4;
+const RAZMAK = 16; // med karticami (prostor za DANES)
+const DANES_VRH = 16; // DANES nad prvo kartico lista
+const KONICA = 18; // prostor za konico puščice pod zadnjo kartico
+
+const BREZ_DRUZINE = "Brez";
+/** Glavna družina: brez pripone različice (OCB-e, OCB-k, OCB-o -> OCB). */
+const glavnaDruzina = (koda: string) => koda.trim().replace(/-[a-z]+$/, "");
 
 const kosiKoraka = (k: WorkflowKorak) => k.nalogi.reduce((s, n) => s + (n.kos ?? 0), 0);
+const opozorilo = (k: WorkflowKorak) => k.brezKapacitete > 0;
 const besediloNalogov = (n: number) => `${n} ${n === 1 ? "nalog" : n === 2 ? "naloga" : n <= 4 ? "nalogi" : "nalogov"}`;
 
+const desnoPoravnano = (stran: PDFPage, t: string, xDesno: number, y: number, velikost: number, font: PDFFont, barva: RGB) =>
+  stran.drawText(t, { x: xDesno - font.widthOfTextAtSize(t, velikost), y, size: velikost, font, color: barva });
+
+/** Velikost pisave, pri kateri besedilo gre v širino (največ `najvec`). */
+const vSirino = (t: string, font: PDFFont, najvec: number, sirina: number) => Math.min(najvec, (najvec * sirina) / Math.max(1, font.widthOfTextAtSize(t, najvec)));
+
 // ---------------------------------------------------------------------
-// Razporeditev
+// List (stran) z glavo; nov list se doda, ko zmanjka prostora
 // ---------------------------------------------------------------------
-type Nacin = "desno" | "izmenicno";
-type Mere = { s: number; r: number; pas: number; vrstica: number; najvecNalogov: number };
-const mere = (s: number, nacin: Nacin): Mere => ({ s, r: 24 * s, pas: 24 * s, vrstica: 11.5 * s, najvecNalogov: nacin === "desno" ? 8 : 5 });
+type Kontekst = { pdf: PDFDocument; f: Pisave; logo: PDFImage | null; plan: WorkflowPlan };
+type List = { stran: PDFPage; y: number };
 
-type Vrstica = { t: string; krepko?: boolean; rdece?: boolean };
-
-/** Vrstice pod pasico koraka (povzetek, odprema, naročnik, nalogi, več, opomba). */
-function vrsticeKoraka(k: WorkflowKorak, m: Mere): Vrstica[] {
-  const kosi = kosiKoraka(k);
-  const v: Vrstica[] = [];
-  if (!k.prosta) v.push({ t: `${besediloNalogov(k.nalogi.length)}${kosi ? ` · ${formatNum(kosi)} kos` : ""}${k.vseh !== null && k.delni ? ` (od ${k.vseh})` : ""}`, krepko: true });
-  if (k.poOdpremi && k.prvaOdprema) v.push({ t: `Konec po odpremi ${danKratko(k.prvaOdprema)} ${ddmm(k.prvaOdprema)}!`, krepko: true, rdece: true });
-  if (k.narocnik) v.push({ t: k.narocnik });
-  const nalogi = k.nalogi.slice(0, k.nalogi.length > m.najvecNalogov ? m.najvecNalogov - 1 : m.najvecNalogov);
-  nalogi.forEach((n, i) => v.push({ t: `${i + 1}. ${n.st_naloga}${n.naziv ? ` · ${n.naziv}` : ""}${n.kos ? ` · ${formatNum(n.kos)} kos` : ""}` }));
-  if (k.nalogi.length > nalogi.length) v.push({ t: `+ še ${k.nalogi.length - nalogi.length}` });
-  if (k.opomba) v.push({ t: `Opomba: ${k.opomba}` });
-  return v;
-}
-/** Višina bloka pod središčem kroga: polovica pasice + vrstice. */
-const visinaBloka = (k: WorkflowKorak, m: Mere) => m.pas / 2 + 7 * m.s + vrsticeKoraka(k, m).length * m.vrstica;
-
-/** Središča krogov (y) od vrha navzdol; null, če ne gre na list. */
-function postavi(koraki: WorkflowKorak[], m: Mere, nacin: Nacin): number[] | null {
-  const najmanj = 2 * m.r + 26 * m.s; // prostor za puščico med krogoma
-  const y: number[] = [];
-  let dno = VRH;
-  koraki.forEach((k, i) => {
-    let cy = i === 0 ? VRH - m.r - 22 * m.s : y[i - 1] - najmanj;
-    // blok na isti strani (prejšnji oz. predprejšnji korak) se ne sme prekrivati z novo pasico in datumom
-    const prejsnji = nacin === "desno" ? i - 1 : i - 2;
-    if (prejsnji >= 0) cy = Math.min(cy, y[prejsnji] - visinaBloka(koraki[prejsnji], m) - m.pas / 2 - 10 * m.s);
-    // datumi levo: rok nad črto + začetek pod njo (~30 pt na korak)
-    if (i > 0) cy = Math.min(cy, y[i - 1] - 34 * m.s);
-    y.push(cy);
-    dno = Math.min(dno, cy - Math.max(m.r, visinaBloka(k, m)));
-  });
-  return dno >= DNO ? y : null;
+/** Glava strani in naslov celice. Vrne list z y pod naslovom. */
+function novList(kx: Kontekst, c: WorkflowCelica, barva: RGB, nadaljevanje: boolean): List {
+  const { f } = kx;
+  const stran = kx.pdf.addPage([W, H]);
+  let y = glavaStrani(stran, f, kx.logo, `Delovni plan - pregled · ${kx.plan.oddelek}`, H - ROB);
+  y -= 15;
+  zaobljen(stran, ROB, y - 4, 4.5, 20, 2, barva);
+  const naziv = prelomi(c.naziv, f.krepka, 18, SIRINA - 12)[0] ?? "";
+  stran.drawText(naziv, { x: ROB + 12, y, size: 18, font: f.krepka, color: TEMNA });
+  y -= 14;
+  const pod = `Do kdaj? Roki krovnih nalogov · ${formatShort(kx.plan.od)} – ${formatShort(kx.plan.do)}${nadaljevanje ? " (nadaljevanje)" : ""}`;
+  stran.drawText(pod, { x: ROB + 12, y, size: VEL.besedilo, font: f.navadna, color: SIVA });
+  return { stran, y: y - 18 };
 }
 
-/** Najboljša razporeditev za korake na enem listu: vse desno, nato izmenično, nato manjše. */
-function razporedi(koraki: WorkflowKorak[]): { m: Mere; nacin: Nacin; y: number[] } | null {
-  for (const s of [1, 0.92, 0.85, 0.78, 0.72, 0.66]) {
-    for (const nacin of ["desno", "izmenicno"] as Nacin[]) {
-      const m = mere(s, nacin);
-      const y = postavi(koraki, m, nacin);
-      if (y) return { m, nacin, y };
+// ---------------------------------------------------------------------
+// Plan po tednih: krovni nalog | od - do | kosi po glavnih družinah
+// ---------------------------------------------------------------------
+type Teden = { pon: string; vrstice: { k: WorkflowKorak; kosi: Map<string, number> }[]; vsota: Map<string, number> };
+
+/** Kosi koraka po tednih (sorazmerno planiranim uram po dnevih) in po glavnih družinah; zaokroženo kumulativno. */
+function tedniCelice(c: WorkflowCelica, plan: WorkflowPlan, druzinaNaloga: (ident: string) => string): Teden[] {
+  const tedni = new Map<string, Teden>();
+  for (const k of c.koraki) {
+    if (k.prosta) continue;
+    // delež po tednih: planirane osebe (ure) po dnevih; brez ur -> teden začetka
+    const delez = new Map<string, number>();
+    plan.dnevi.forEach((d, i) => {
+      if ((k.osebe[i] ?? 0) > 0) delez.set(mondayOf(d), (delez.get(mondayOf(d)) ?? 0) + k.osebe[i]);
+    });
+    if (!delez.size) delez.set(mondayOf(k.od < plan.od ? plan.od : k.od), 1);
+    const skupaj = [...delez.values()].reduce((s, x) => s + x, 0);
+    const poDruzinah = new Map<string, number>();
+    for (const n of k.nalogi) {
+      const d = druzinaNaloga(n.ident);
+      poDruzinah.set(d, (poDruzinah.get(d) ?? 0) + (n.kos ?? 0));
+    }
+    const ponedeljki = [...delez.keys()].sort();
+    let pred = 0; // kumulativni delež: zaokroževanje brez izgube kosov
+    for (const pon of ponedeljki) {
+      const po = pred + (delez.get(pon) ?? 0) / skupaj;
+      const kosi = new Map<string, number>();
+      for (const [d, vseh] of poDruzinah) {
+        const v = Math.round(vseh * po) - Math.round(vseh * pred);
+        if (v) kosi.set(d, v);
+      }
+      pred = po;
+      const t: Teden = tedni.get(pon) ?? { pon, vrstice: [], vsota: new Map() };
+      t.vrstice.push({ k, kosi });
+      for (const [d, v] of kosi) t.vsota.set(d, (t.vsota.get(d) ?? 0) + v);
+      tedni.set(pon, t);
     }
   }
-  return null;
+  return [...tedni.values()].sort((a, b) => a.pon.localeCompare(b.pon));
 }
 
-// ---------------------------------------------------------------------
-// Risanje
-// ---------------------------------------------------------------------
-function glava(stran: PDFPage, f: Pisave, logo: Awaited<ReturnType<typeof novDokument>>["logo"], plan: WorkflowPlan, c: WorkflowCelica, barva: RGB, nadaljevanje: string) {
-  const vrh = H - ROB;
-  if (logo) {
-    const s = logo.scaleToFit(70, 18);
-    stran.drawImage(logo, { x: ROB, y: vrh - s.height, width: s.width, height: s.height });
-  }
-  const desno = (t: string, y: number, v: number, font: PDFFont, col: RGB) => stran.drawText(t, { x: W - ROB - font.widthOfTextAtSize(t, v), y, size: v, font, color: col });
-  desno(`Delovni plan - pregled · ${plan.oddelek}`, vrh - 8, 9.5, f.krepka, BESEDILO);
-  desno(`${formatShort(plan.od)} – ${formatShort(plan.do)} · natisnjeno ${formatShort(toIso(new Date()))}`, vrh - 18, 7, f.navadna, SIVA);
-  stran.drawRectangle({ x: ROB, y: vrh - 25, width: W - 2 * ROB, height: 1.5, color: ORANZNA });
-  // ime celice
-  const y = vrh - 56;
-  stran.drawRectangle({ x: ROB, y: y - 4, width: 6, height: 26, color: barva });
-  stran.drawText(skrajsaj(c.naziv.toUpperCase(), f.krepka, 22, W - 2 * ROB - 200), { x: ROB + 14, y, size: 22, font: f.krepka, color: BESEDILO });
-  stran.drawText(`DO KDAJ?${nadaljevanje}`, { x: ROB + 14, y: y - 16, size: 8.5, font: f.krepka, color: ORANZNA });
-  const kosov = c.koraki.reduce((s, k) => s + kosiKoraka(k), 0);
-  desno(`${c.koraki.length} ${c.koraki.length === 1 ? "krovni" : "krovnih"} · ${formatNum(kosov)} kos`, y + 6, 11, f.krepka, BESEDILO);
-  desno(`privzeto ${formatNum(c.zaposleni)} oseb na celici`, y - 8, 8, f.navadna, SIVA);
+const STOLPEC_KROVNI = 112;
+const STOLPEC_OD_DO = 56;
+
+function razdelekGlava(stran: PDFPage, f: Pisave, y: number, naslov: string, desno: string, h = 20) {
+  preliv(stran, ROB, y - h, SIRINA, h, PRELIV);
+  stran.drawRectangle({ x: ROB, y: y - h - 1.2, width: SIRINA, height: 1.2, color: ORANZNA });
+  const iv = h * 0.55;
+  ikona(stran, "matrika", ROB + 9, y - (h - iv) / 2, iv);
+  const v = h === 20 ? VEL.razdelek : 8;
+  stran.drawText(naslov, { x: ROB + 15 + iv, y: y - h / 2 - v * 0.36, size: v, font: f.polkrepka, color: BELA });
+  if (desno) desnoPoravnano(stran, desno, ROB + SIRINA - 9, y - h / 2 - 2.7, VEL.besedilo - 0.5, f.navadna, hex("C9CED6"));
 }
 
-/** Velika puščica časa levo (obroba kot na vzoru). */
-function puscicaCasa(stran: PDFPage, od: number, do_: number) {
-  const sirina = 18;
-  const glavaW = 44;
-  const h = od - do_;
-  const glavaH = Math.min(110, h * 0.3);
-  const pot = `M ${(glavaW - sirina) / 2} 0 H ${(glavaW + sirina) / 2} V ${h - glavaH} H ${glavaW} L ${glavaW / 2} ${h} L 0 ${h - glavaH} H ${(glavaW - sirina) / 2} Z`;
-  stran.drawSvgPath(pot, { x: PUSCICA_X, y: od, color: SVETLO, borderColor: CRTA, borderWidth: 1.6 });
-}
+/** Razdelek "Plan po tednih" s tabelo; ob prelomu se tabela nadaljuje na novem listu. Vrne list pod razdelkom. */
+function planPoTednih(kx: Kontekst, c: WorkflowCelica, barva: RGB, l: List, druzine: string[], druzinaNaloga: (ident: string) => string): List {
+  const { f } = kx;
+  const tedni = tedniCelice(c, kx.plan, druzinaNaloga);
+  if (!tedni.length) return l;
+  const notranja = SIRINA - 20;
+  const vt = VEL.tabela;
+  const P = 4;
+  // širine družin: oznaka + odmik, preostanek enakomerno (odvisno samo od seznama družin - povsod enako)
+  const potrebno = druzine.map((d) => f.polkrepka.widthOfTextAtSize(d, vt - 0.5) + 2 * P);
+  const ostanek = Math.max(0, notranja - STOLPEC_KROVNI - STOLPEC_OD_DO - potrebno.reduce((a, b) => a + b, 0));
+  const wD = potrebno.map((w) => w + ostanek / druzine.length);
+  const xD = wD.map((_, i) => ROB + 10 + STOLPEC_KROVNI + STOLPEC_OD_DO + wD.slice(0, i).reduce((a, b) => a + b, 0));
+  const vis = vt * 1.3;
 
-/** Puščica med krogoma: lijak, ki proti dnu postane poln (preliv s prosojnostjo), in konica. */
-function puscicaKoraka(stran: PDFPage, cx: number, y1: number, y2: number, barva: RGB, s: number) {
-  const h = y1 - y2;
-  if (h < 6) return;
-  const konica = Math.min(12 * s, h * 0.45);
-  const telo = h - konica;
-  const deli = 10;
-  for (let i = 0; i < deli; i++) {
-    const t0 = i / deli;
-    const t1 = (i + 1) / deli;
-    const w0 = (26 - 12 * t0) * s;
-    const w1 = (26 - 12 * t1) * s;
-    const ya = y1 - telo * t0;
-    const yb = y1 - telo * t1;
-    stran.drawSvgPath(`M ${-w0 / 2} 0 H ${w0 / 2} L ${w1 / 2} ${ya - yb + 0.4} H ${-w1 / 2} Z`, { x: cx, y: ya, color: barva, opacity: 0.12 + 0.88 * t1 });
-  }
-  stran.drawSvgPath(`M ${-14 * s} 0 H ${14 * s} L 0 ${konica} Z`, { x: cx, y: y2 + konica, color: barva });
-}
+  type Odsek = { stran: PDFPage; vrh: number; dno: number };
+  const odseki: Odsek[] = [];
+  let vrhOdseka = l.y;
+  const glavaTabele = () => {
+    const h = 15;
+    zaobljen(l.stran, ROB + 10, l.y - h, notranja, h, [3, 3, 0, 0], GLAVA_TABELE);
+    const tekst = (t: string, x: number, w: number, desno: boolean) => {
+      const v = vSirino(t, f.polkrepka, vt - 0.5, w - 2 * P);
+      const tx = desno ? x + w - P - f.polkrepka.widthOfTextAtSize(t, v) : x + P;
+      l.stran.drawText(t, { x: tx, y: l.y - h / 2 - v * 0.36, size: v, font: f.polkrepka, color: BELA });
+    };
+    tekst("Krovni nalog", ROB + 10, STOLPEC_KROVNI, false);
+    tekst("Od – do", ROB + 10 + STOLPEC_KROVNI, STOLPEC_OD_DO, false);
+    druzine.forEach((d, i) => tekst(d, xD[i], wD[i], true));
+    l.y -= h;
+  };
+  const zacni = (nadaljevanje: boolean) => {
+    razdelekGlava(l.stran, f, l.y, nadaljevanje ? "Plan po tednih (nadaljevanje)" : "Plan po tednih", nadaljevanje ? "" : "kosi po družinah", nadaljevanje ? 14 : 20);
+    l.y -= (nadaljevanje ? 14 : 20) + 11;
+    glavaTabele();
+  };
+  /** Prostor za vrstico; sicer zapre okvir na tem listu in nadaljuje na novem. */
+  const prostor = (h: number) => {
+    if (l.y - h >= DNO + 10) return;
+    odseki.push({ stran: l.stran, vrh: vrhOdseka, dno: l.y });
+    l = novList(kx, c, barva, true);
+    vrhOdseka = l.y;
+    zacni(true);
+  };
+  const vrednosti = (kosi: Map<string, number>, y: number, font: PDFFont) =>
+    druzine.forEach((d, i) => {
+      const v = kosi.get(d);
+      if (!v) return;
+      const t = formatNum(v);
+      desnoPoravnano(l.stran, t, xD[i] + wD[i] - P, y, vt, font, TEMNA);
+    });
 
-/** Pasica (trak) s krovnim nalogom: desno = konica proti krogu levo, zareza desno; levo = obratno. */
-function pasica(stran: PDFPage, f: Pisave, x: number, cy: number, w: number, h: number, barva: RGB, besedilo: string, s: number, strana: Strana) {
-  const z = 11 * s;
-  const pot =
-    strana === "desno"
-      ? `M 0 ${h / 2} L ${z} 0 H ${w} L ${w - z} ${h / 2} L ${w} ${h} H ${z} Z`
-      : `M 0 0 H ${w - z} L ${w} ${h / 2} L ${w - z} ${h} H 0 L ${z} ${h / 2} Z`;
-  stran.drawSvgPath(pot, { x, y: cy + h / 2, color: barva });
-  const v = 11.5 * s;
-  const t = skrajsaj(besedilo, f.krepka, v, w - 2 * z - 6);
-  stran.drawText(t, { x: x + w / 2 - f.krepka.widthOfTextAtSize(t, v) / 2, y: cy - v * 0.36, size: v, font: f.krepka, color: BELA });
-}
+  // celoten razdelek skupaj z glavo in prvim tednom na isti list
+  const prvi = 20 + 11 + 15 + 15 + tedni[0].vrstice.length * (VRSTICA_TAB + 4);
+  if (l.y - Math.min(prvi, 250) < DNO + 10) l = novList(kx, c, barva, true);
+  vrhOdseka = l.y;
+  zacni(false);
 
-/** `doKroga` = črta datuma do kroga; false = konča se pred stolpcem levih pasic (tam je blok prejšnjega koraka). */
-function korak(stran: PDFPage, f: Pisave, k: WorkflowKorak, st: number, cy: number, m: Mere, strana: Strana, barva: RGB, cx: number, doKroga: boolean) {
-  const { s, r } = m;
-  // datum: črta od puščice časa do kroga, nad njo rok (krepko), pod njo začetek
-  const yCrte = cy + r * 0.55;
-  const levaMeja = DATUM_X + 86 * s; // levo od pasic so datumi
-  stran.drawLine({ start: { x: PUSCICA_X + 31, y: yCrte }, end: { x: doKroga ? cx - r - 4 : levaMeja - 6, y: yCrte }, thickness: 1.3, color: CRTA });
-  const rdec = k.poOdpremi || k.brezKapacitete > 0;
-  stran.drawText(`do ${danKratko(k.do)} ${ddmm(k.do)}`, { x: DATUM_X, y: yCrte + 4, size: 12 * s, font: f.krepka, color: rdec ? RDECA : BESEDILO });
-  stran.drawText(`od ${danKratko(k.od)} ${ddmm(k.od)}`, { x: DATUM_X, y: yCrte - 10 * s, size: 7.5 * s, font: f.navadna, color: SIVA });
-
-  // krog s številko
-  stran.drawCircle({ x: cx, y: cy, size: r, color: barva });
-  const stT = String(st);
-  const vs = 17 * s;
-  stran.drawText(stT, { x: cx - f.krepka.widthOfTextAtSize(stT, vs) / 2, y: cy - vs * 0.36, size: vs, font: f.krepka, color: BELA });
-
-  // pasica in vrstice
-  const xPas = strana === "desno" ? cx + r + 8 * s : levaMeja;
-  const wPas = strana === "desno" ? W - ROB - xPas : cx - r - 8 * s - levaMeja;
-  pasica(stran, f, xPas, cy, wPas, m.pas, barva, k.krovni, s, strana);
-  let y = cy - m.pas / 2 - 7 * s - m.vrstica * 0.75;
-  for (const v of vrsticeKoraka(k, m)) {
-    const font = v.krepko ? f.krepka : f.navadna;
-    const vel = (v.krepko ? 8.8 : 8.2) * s;
-    stran.drawText(skrajsaj(v.t, font, vel, wPas - 14 * s), { x: xPas + 10 * s, y, size: vel, font, color: v.rdece ? RDECA : v.krepko ? temnejsa(barva, 0.35) : SIVA });
-    y -= m.vrstica;
-  }
-}
-
-/** Oznaka DANES na puščici časa: pred prvim korakom, katerega rok še ni minil. */
-function danes(stran: PDFPage, f: Pisave, koraki: WorkflowKorak[], y: number[], m: Mere) {
-  const d = toIso(new Date());
-  const i = koraki.findIndex((k) => k.do >= d);
-  if (i < 0 || koraki[0].od > d) return;
-  const yd = i === 0 ? Math.min(VRH - 8, y[0] + m.r + 10) : (y[i - 1] + y[i]) / 2 + 4;
-  const t = "DANES";
-  const w = f.krepka.widthOfTextAtSize(t, 7) + 8;
-  stran.drawRectangle({ x: PUSCICA_X - 3, y: yd - 1.2, width: 50, height: 2.4, color: ORANZNA });
-  stran.drawRectangle({ x: PUSCICA_X + 22 - w / 2, y: yd + 3, width: w, height: 11, color: ORANZNA });
-  stran.drawText(t, { x: PUSCICA_X + 22 - w / 2 + 4, y: yd + 5.6, size: 7, font: f.krepka, color: BELA });
-}
-
-export async function ustvariPlanPregledPdf(plan: WorkflowPlan): Promise<Blob> {
-  if (plan.celice.length === 0) throw new Error("V prikazanem obdobju ni postavitev.");
-  const { pdf, navadna, krepka, logo } = await novDokument(`Delovni plan - pregled ${plan.oddelek}`, "dejavu");
-  const f: Pisave = { navadna, krepka };
-
-  plan.celice.forEach((c, ci) => {
-    const barvaCel = hex(barvaCelice(ci));
-    // koraki po listih: čim več na list, ostanek na naslednji list
-    const listi: WorkflowKorak[][] = [];
-    let ostalo = c.koraki;
-    while (ostalo.length) {
-      let n = ostalo.length;
-      while (n > 1 && !razporedi(ostalo.slice(0, n))) n--;
-      listi.push(ostalo.slice(0, n));
-      ostalo = ostalo.slice(n);
-    }
-    let zacetek = 0;
-    listi.forEach((koraki, li) => {
-      const stran = pdf.addPage([W, H]);
-      glava(stran, f, logo, plan, c, barvaCel, listi.length > 1 ? `  (${li + 1}/${listi.length})` : "");
-      const m0 = mere(0.66, "izmenicno");
-      const { m, nacin, y } = razporedi(koraki) ?? { m: m0, nacin: "izmenicno" as Nacin, y: [VRH - m0.r - 20] };
-      // vse desno: krogi bolj levo (širše pasice); izmenično: krogi na sredini med pasicama
-      const cx = nacin === "desno" ? DATUM_X + 86 * m.s + m.r + 14 : DATUM_X + 86 * m.s + (W - ROB - DATUM_X - 76 * m.s) / 2;
-      const zadnji = koraki.length - 1;
-      puscicaCasa(stran, VRH - 2, Math.max(DNO, y[zadnji] - Math.max(m.r, visinaBloka(koraki[zadnji], m)) - 4));
-      koraki.forEach((k, i) => {
-        const barva = hex(BARVE_KORAKOV[(zacetek + i) % BARVE_KORAKOV.length]);
-        if (i < zadnji) puscicaKoraka(stran, cx, y[i] - m.r - 3, y[i + 1] + m.r + 3, barva, m.s);
-        // izmenično: blok prejšnjega (levega) koraka lahko sega do višine te črte datuma
-        const levi = nacin === "izmenicno" && i % 2 === 0 && i > 0 ? i - 1 : -1;
-        const yCrte = y[i] + m.r * 0.55;
-        const doKroga = levi < 0 || yCrte + 4 < y[levi] - visinaBloka(koraki[levi], m) - 2;
-        korak(stran, f, k, zacetek + i + 1, y[i], m, nacin === "desno" || i % 2 === 0 ? "desno" : "levo", barva, cx, doKroga);
-      });
-      danes(stran, f, koraki, y, m);
-      zacetek += koraki.length;
+  const skupaj = new Map<string, number>();
+  tedni.forEach((t) => {
+    // vrstica tedna: oznaka + vsote po družinah
+    prostor(15 + VRSTICA_TAB);
+    const h = 15;
+    l.stran.drawRectangle({ x: ROB + 10, y: l.y - h, width: notranja, height: h, color: SKUPINA });
+    l.stran.drawRectangle({ x: ROB + 10, y: l.y - h, width: 2.5, height: h, color: ORANZNA });
+    l.stran.drawText(`Teden ${isoWeek(t.pon)} · ${ddmm(t.pon)} – ${ddmm(addDays(t.pon, 4))}`, { x: ROB + 18, y: l.y - h / 2 - 2.8, size: vt + 0.25, font: f.polkrepka, color: TEMNA });
+    vrednosti(t.vsota, l.y - h / 2 - 2.8, f.polkrepka);
+    for (const [d, v] of t.vsota) skupaj.set(d, (skupaj.get(d) ?? 0) + v);
+    l.y -= h;
+    t.vrstice.forEach((v) => {
+      const krovni = prelomi(v.k.krovni, f.polkrepka, vt, STOLPEC_KROVNI - 2 * P);
+      const hv = (krovni.length - 1) * vis + VRSTICA_TAB;
+      prostor(hv);
+      l.stran.drawRectangle({ x: ROB + 10, y: l.y - hv, width: notranja, height: hv, color: BELA });
+      const y0 = l.y - VRSTICA_TAB / 2 - vt * 0.36;
+      krovni.forEach((t2, j) => l.stran.drawText(t2, { x: ROB + 10 + P, y: y0 - j * vis, size: vt, font: f.polkrepka, color: TEMNA }));
+      l.stran.drawText(`${ddmm(v.k.od)} – ${ddmm(v.k.do)}`, { x: ROB + 10 + STOLPEC_KROVNI + P, y: y0, size: vt, font: f.navadna, color: SIVA });
+      vrednosti(v.kosi, y0, f.navadna);
+      l.y -= hv;
+      l.stran.drawRectangle({ x: ROB + 10, y: l.y, width: notranja, height: 0.5, color: CRTA });
     });
   });
-
-  // noga
-  const strani = pdf.getPages();
-  const noga = `FINES d.o.o. | Production | Delovni plan - pregled ${plan.oddelek} | levo: rok (do) in začetek (od) koraka`;
-  strani.forEach((st, i) => {
-    const t = `Stran ${i + 1} / ${strani.length}`;
-    st.drawText(noga, { x: ROB, y: ROB - 10, size: 6.5, font: navadna, color: SIVA });
-    st.drawText(t, { x: W - ROB - navadna.widthOfTextAtSize(t, 6.5), y: ROB - 10, size: 6.5, font: navadna, color: SIVA });
+  // skupaj
+  prostor(16);
+  const h = 15;
+  zaobljen(l.stran, ROB + 10, l.y - h, notranja, h, [0, 0, 3, 3], GLAVA_TABELE);
+  l.stran.drawText("Skupaj", { x: ROB + 10 + P, y: l.y - h / 2 - vt * 0.36, size: vt, font: f.polkrepka, color: BELA });
+  druzine.forEach((d, i) => {
+    const v = skupaj.get(d);
+    if (!v) return;
+    desnoPoravnano(l.stran, formatNum(v), xD[i] + wD[i] - P, l.y - h / 2 - vt * 0.36, vt, f.polkrepka, BELA);
   });
+  l.y -= h;
+
+  // osenčeni okvirji pod tabelo (na vsakem listu, čez katerega sega)
+  odseki.push({ stran: l.stran, vrh: vrhOdseka, dno: l.y });
+  for (const o of odseki) {
+    const ops = drawSvgPath(potZaobljen(SIRINA, o.vrh - (o.dno - 10), 5), { x: ROB, y: o.vrh, scale: 1, color: OZADJE, borderColor: ROB_OKVIRJA, borderWidth: 0.6 });
+    podlaga(kx.pdf, o.stran, ops);
+  }
+  l.y -= 10 + 18;
+  return l;
+}
+
+/** Nariše pod obstoječo vsebino strani (svoj tok vsebine na začetku strani) - kot Pisec.podlaga. */
+function podlaga(pdf: PDFDocument, stran: PDFPage, ops: PDFOperator[]) {
+  const ctx = pdf.context;
+  const ref = ctx.register(ctx.contentStream([pushGraphicsState(), ...ops, popGraphicsState()]));
+  const vsebina = stran.node.normalizedEntries().Contents ?? ctx.obj([]);
+  stran.node.set(PDFName.of("Contents"), vsebina);
+  (vsebina as PDFArray).insert(0, ref);
+}
+
+// ---------------------------------------------------------------------
+// Kartica krovnega naloga
+// ---------------------------------------------------------------------
+type Postavitev = {
+  naslov: string[];
+  glava: number;
+  desno: string;
+  nalogi: { n: WorkflowKorak["nalogi"][number]; naziv: string[]; druzina: string; h: number }[];
+  vec: number;
+  opomba: string[];
+  opozorila: string[];
+  h: number;
+};
+
+const ST_NALOGI = { st: 22, nalog: 64, druzina: 56, kos: 62 };
+const sirinaNaziva = (wn: number) => wn - ST_NALOGI.st - ST_NALOGI.nalog - ST_NALOGI.druzina - ST_NALOGI.kos;
+
+/** Vsebina in višina kartice (kartica se ne deli med listi, zato je število nalogov omejeno). */
+function postaviKartico(k: WorkflowKorak, f: Pisave, druzinaNaloga: (ident: string) => string): Postavitev {
+  const wn = KARTICA_W - 2 * PAD;
+  const desno = oznakaKoraka(k);
+  const naslov = prelomi(k.krovni, f.polkrepka, VEL_NASLOVA, KARTICA_W - 20 - f.navadna.widthOfTextAtSize(desno, VEL.besedilo) - 12);
+  const glava = Math.max(GLAVA_MIN, 11 + naslov.length * VRSTICA_NASLOVA);
+  const vec = k.nalogi.length > NAJVEC_NALOGOV ? k.nalogi.length - (NAJVEC_NALOGOV - 1) : 0;
+  const nalogi = (vec ? k.nalogi.slice(0, NAJVEC_NALOGOV - 1) : k.nalogi).map((n) => {
+    const naziv = prelomi(n.naziv ?? "", f.navadna, VEL.tabela, sirinaNaziva(wn) - 10);
+    return { n, naziv, druzina: n.ident ? druzinaNaloga(n.ident) : "", h: VRSTICA_TAB + (naziv.length - 1) * VRSTICA_TAB_DODATNA };
+  });
+  const opomba = k.opomba ? prelomi(`Opomba: ${k.opomba}`, f.lezeca, VEL.besedilo, wn) : [];
+  const opozorila = k.brezKapacitete > 0 ? [`${formatUre(k.brezKapacitete)} h brez kapacitete v planu`] : [];
+  let h = glava + PAD + PODATKI;
+  if (opozorila.length) h += 4 + opozorila.length * OPOZORILO;
+  if (nalogi.length) h += 8 + GLAVA_TAB + nalogi.reduce((s, x) => s + x.h, 0) + (vec ? VRSTICA_TAB : 0);
+  if (opomba.length) h += 8 + opomba.length * VRSTICA_OPOMBE;
+  return { naslov, glava, desno, nalogi, vec, opomba, opozorila, h: h + PAD };
+}
+
+/** Moderna puščica časa: tanek trak s prelivom (bled -> oranžen) in konica v obliki puščice. */
+function puscicaCasa(stran: PDFPage, od: number, do_: number) {
+  const sir = 5;
+  const konica = 16;
+  const telo = od - do_ - konica + 4;
+  if (telo <= 0) return;
+  stran.drawCircle({ x: OS_X, y: od - sir / 2, size: sir / 2, color: ORANZNA_BLEDA });
+  const korak = 3;
+  for (let d = sir / 2; d < telo; d += korak) {
+    const h = Math.min(korak + 0.4, telo - d);
+    stran.drawRectangle({ x: OS_X - sir / 2, y: od - d - h, width: sir, height: h, color: mesaj(ORANZNA_BLEDA, ORANZNA, d / telo) });
+  }
+  stran.drawSvgPath(`M -10 0 L 0 4 L 10 0 L 0 ${konica + 4} Z`, { x: OS_X, y: od - telo + 4, color: ORANZNA });
+}
+
+/** Rok levo od puščice: dan, velik datum, začetek. */
+function datumKoraka(stran: PDFPage, f: Pisave, k: WorkflowKorak, yS: number, minulo: boolean) {
+  const barva = opozorilo(k) ? RDECA : minulo ? SIVA : TEMNA;
+  desnoPoravnano(stran, `rok · ${danKratko(k.do)}`, DATUM_DESNO, yS + 8, VEL.majhno, f.navadna, SIVA);
+  desnoPoravnano(stran, ddmm(k.do), DATUM_DESNO, yS - 5, 14, f.krepka, barva);
+  desnoPoravnano(stran, `od ${danKratko(k.od)} ${ddmm(k.od)}`, DATUM_DESNO, yS - 15, VEL.majhno, f.navadna, SIVA);
+}
+
+/** Vozlišče na puščici: krog s številko koraka (minuli koraki sivi, opozorila rdeča). */
+function vozlisce(stran: PDFPage, f: Pisave, st: number, yS: number, barva: RGB) {
+  stran.drawLine({ start: { x: OS_X + 10, y: yS }, end: { x: KARTICA_X, y: yS }, thickness: 1, color: ROB_OKVIRJA });
+  stran.drawCircle({ x: OS_X, y: yS, size: 12.5, color: BELA });
+  stran.drawCircle({ x: OS_X, y: yS, size: 10.5, color: barva });
+  const t = String(st);
+  const v = st > 99 ? 7.5 : 9;
+  stran.drawText(t, { x: OS_X - f.krepka.widthOfTextAtSize(t, v) / 2, y: yS - v * 0.36, size: v, font: f.krepka, color: BELA });
+}
+
+function kartica(stran: PDFPage, f: Pisave, k: WorkflowKorak, p: Postavitev, vrh: number) {
+  const x = KARTICA_X;
+  const w = KARTICA_W;
+  const rdeca = opozorilo(k);
+  zaobljen(stran, x, vrh - p.h, w, p.h, 6, OZADJE, rdeca ? RDECA : ROB_OKVIRJA, rdeca ? 1.2 : 0.6);
+  preliv(stran, x, vrh - p.glava, w, p.glava, [ORANZNA, ORANZNA_SVETLA], 6);
+  const yPrve = vrh - GLAVA_MIN / 2 - VEL_NASLOVA * 0.36;
+  desnoPoravnano(stran, p.desno, x + w - 10, vrh - GLAVA_MIN / 2 - VEL.besedilo * 0.36, VEL.besedilo, f.navadna, SVETLO_NA_ORANZNI);
+  p.naslov.forEach((t, i) => stran.drawText(t, { x: x + 10, y: yPrve - i * VRSTICA_NASLOVA, size: VEL_NASLOVA, font: f.polkrepka, color: BELA }));
+
+  // podatki
+  let y = vrh - p.glava - PAD;
+  const xn = x + PAD;
+  const wn = w - 2 * PAD;
+  const kosov = kosiKoraka(k);
+  const podatki: [string, string, RGB?][] = [
+    ...(k.prosta ? ([["Vrsta", "Dodatno delo"]] as [string, string][]) : []),
+    ["Začetek", `${danKratko(k.od)} ${ddmm(k.od)}`],
+    ["Rok", `${danKratko(k.do)} ${ddmm(k.do)}`, rdeca ? RDECA : undefined],
+    ["Planirano delo", `${formatUre(k.ure)} h`],
+    ...(k.prosta ? [] : ([["Nalogi", besediloNalogov(k.nalogi.length)], ["Kosov", kosov ? formatNum(kosov) : "–"]] as [string, string][])),
+  ];
+  const wc = wn / 5;
+  podatki.forEach(([o, v, b], i) => {
+    const xp = xn + i * wc;
+    stran.drawText(o, { x: xp, y: y - 7, size: VEL.majhno, font: f.navadna, color: SIVA });
+    stran.drawText(v, { x: xp, y: y - 19, size: VEL.poudarek, font: f.polkrepka, color: b ?? TEMNA });
+  });
+  y -= PODATKI;
+
+  // opozorila
+  if (p.opozorila.length) {
+    y -= 4;
+    for (const o of p.opozorila) {
+      const tw = f.polkrepka.widthOfTextAtSize(o, VEL.besedilo);
+      zaobljen(stran, xn, y - 12, tw + 26, 12, 6, RDECA_SVETLA, RDECA, 0.6);
+      stran.drawCircle({ x: xn + 8, y: y - 6, size: 2.2, color: RDECA });
+      stran.drawText(o, { x: xn + 15, y: y - 9, size: VEL.besedilo, font: f.polkrepka, color: RDECA });
+      y -= OPOZORILO;
+    }
+  }
+
+  // tabela nalogov
+  if (p.nalogi.length) {
+    y -= 8;
+    const st = [
+      { n: "#", w: ST_NALOGI.st, desno: false },
+      { n: "Nalog", w: ST_NALOGI.nalog, desno: false },
+      { n: "Naziv", w: sirinaNaziva(wn), desno: false },
+      { n: "Družina", w: ST_NALOGI.druzina, desno: false },
+      { n: "Kos", w: ST_NALOGI.kos, desno: true },
+    ];
+    const P = 5;
+    const vt = VEL.tabela;
+    zaobljen(stran, xn, y - GLAVA_TAB, wn, GLAVA_TAB, [3, 3, 0, 0], GLAVA_TABELE);
+    let xc = xn;
+    for (const s of st) {
+      const tx = s.desno ? xc + s.w - P - f.polkrepka.widthOfTextAtSize(s.n, vt - 0.5) : xc + P;
+      stran.drawText(s.n, { x: tx, y: y - GLAVA_TAB / 2 - (vt - 0.5) * 0.36, size: vt - 0.5, font: f.polkrepka, color: BELA });
+      xc += s.w;
+    }
+    y -= GLAVA_TAB;
+    const vrstic = p.nalogi.length + (p.vec ? 1 : 0);
+    p.nalogi.forEach(({ n, naziv, druzina, h }, i) => {
+      const zadnja = i === vrstic - 1;
+      zaobljen(stran, xn, y - h, wn, h, zadnja ? [0, 0, 3, 3] : 0, BELA);
+      const y0 = y - VRSTICA_TAB / 2 - vt * 0.36;
+      const celice: [string, PDFFont, RGB][] = [
+        [String(i + 1), f.navadna, SIVA],
+        [n.st_naloga, f.polkrepka, TEMNA],
+        ["", f.navadna, TEMNA],
+        [druzina, f.navadna, SIVA],
+        [besediloKosov(n) || "–", f.navadna, TEMNA],
+      ];
+      let x2 = xn;
+      celice.forEach(([t, font, barva], j) => {
+        const s = st[j];
+        if (j === 2) naziv.forEach((v, r) => stran.drawText(v, { x: x2 + P, y: y0 - r * VRSTICA_TAB_DODATNA, size: vt, font, color: barva }));
+        else {
+          const v = vSirino(t, font, vt, s.w - 2 * P);
+          stran.drawText(t, { x: s.desno ? x2 + s.w - P - font.widthOfTextAtSize(t, v) : x2 + P, y: y0, size: v, font, color: barva });
+        }
+        x2 += s.w;
+      });
+      y -= h;
+      if (!zadnja) stran.drawRectangle({ x: xn, y, width: wn, height: 0.5, color: CRTA });
+    });
+    if (p.vec) {
+      zaobljen(stran, xn, y - VRSTICA_TAB, wn, VRSTICA_TAB, [0, 0, 3, 3], BELA);
+      stran.drawText(`+ še ${besediloNalogov(p.vec)}`, { x: xn + ST_NALOGI.st + P, y: y - VRSTICA_TAB / 2 - vt * 0.36, size: vt, font: f.lezeca, color: SIVA });
+      y -= VRSTICA_TAB;
+    }
+  }
+
+  // opomba
+  if (p.opomba.length) {
+    y -= 8;
+    for (const v of p.opomba) {
+      stran.drawText(v, { x: xn, y: y - VEL.besedilo, size: VEL.besedilo, font: f.lezeca, color: SIVA });
+      y -= VRSTICA_OPOMBE;
+    }
+  }
+}
+
+/** Oznaka DANES: oranžna črtkana črta čez list in značka nad stolpcem rokov. */
+function danes(stran: PDFPage, f: Pisave, y: number) {
+  stran.drawLine({ start: { x: ROB, y }, end: { x: W - ROB, y }, thickness: 1, color: ORANZNA, dashArray: [3, 2.5] });
+  const t = `DANES ${ddmm(toIso(new Date()))}`;
+  const w = f.krepka.widthOfTextAtSize(t, VEL.majhno) + 12;
+  zaobljen(stran, DATUM_DESNO - w, y - 6, w, 12, 6, ORANZNA);
+  stran.drawText(t, { x: DATUM_DESNO - w + 6, y: y - 2.4, size: VEL.majhno, font: f.krepka, color: BELA });
+}
+
+/** Časovnica s karticami od lista `l` naprej; kartica, ki ne gre na preostanek lista, gre na nov list. */
+function casovnica(kx: Kontekst, c: WorkflowCelica, barva: RGB, l: List, kartice: Postavitev[], iDanes: number) {
+  const { f } = kx;
+  const danesIso = toIso(new Date());
+  let i = 0;
+  while (i < kartice.length) {
+    // kartice na tem listu
+    const vrhDanes = i === iDanes ? DANES_VRH : 0;
+    let y = l.y - vrhDanes;
+    const naListu: { i: number; vrh: number }[] = [];
+    while (i < kartice.length && (naListu.length === 0 || y - kartice[i].h - KONICA >= DNO)) {
+      if (naListu.length === 0 && y - kartice[i].h - KONICA < DNO && l.y < H - ROB - 120) break; // prazen začetek lista - nov list
+      naListu.push({ i, vrh: y });
+      y -= kartice[i].h + RAZMAK;
+      i++;
+    }
+    if (!naListu.length) {
+      l = novList(kx, c, barva, true);
+      continue;
+    }
+    const dno = y + RAZMAK;
+    puscicaCasa(l.stran, naListu[0].vrh + 4, dno - KONICA);
+    naListu.forEach(({ i: ik, vrh }, j) => {
+      const k = c.koraki[ik];
+      const yS = vrh - GLAVA_MIN / 2;
+      const minulo = k.do < danesIso;
+      kartica(l.stran, f, k, kartice[ik], vrh);
+      vozlisce(l.stran, f, ik + 1, yS, opozorilo(k) ? RDECA : minulo ? MINULO : ORANZNA);
+      datumKoraka(l.stran, f, k, yS, minulo);
+      if (ik === iDanes) danes(l.stran, f, j === 0 ? vrh + DANES_VRH - 2 : vrh + RAZMAK / 2);
+    });
+    if (i < kartice.length) l = novList(kx, c, barva, true);
+  }
+}
+
+export async function ustvariPlanPregledPdf(plan: WorkflowPlan, druzine: DruzineNormativov): Promise<Blob> {
+  if (plan.celice.length === 0) throw new Error("V prikazanem obdobju ni postavitev.");
+  const { pdf, logo, ...f } = await novDokument(`Delovni plan - pregled ${plan.oddelek}`);
+  const kx: Kontekst = { pdf, f, logo, plan };
+  const danesIso = toIso(new Date());
+
+  // stalni stolpci: vse glavne družine (abecedno) + "Brez"
+  const stolpci = [...new Set(druzine.vse.map(glavnaDruzina).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  stolpci.push(BREZ_DRUZINE);
+  const druzinaNaloga = (ident: string) => {
+    const d = glavnaDruzina(druzine.poIdentu.get(ident) ?? "");
+    return d && stolpci.includes(d) ? d : BREZ_DRUZINE;
+  };
+
+  plan.celice.forEach((c, ci) => {
+    const barva = hex(barvaCelice(ci));
+    let l = novList(kx, c, barva, false);
+    l = planPoTednih(kx, c, barva, l, stolpci, druzinaNaloga);
+    const kartice = c.koraki.map((k) => postaviKartico(k, f, druzinaNaloga));
+    const iDanes = c.koraki[0] && c.koraki[0].od <= danesIso ? c.koraki.findIndex((k) => k.do >= danesIso) : -1;
+    casovnica(kx, c, barva, l, kartice, iDanes);
+  });
+
+  noga(pdf, f.navadna, `FINES d.o.o. | Production | Delovni plan - pregled ${plan.oddelek} | levo: rok (velik datum) in začetek koraka`);
   const bajti = await pdf.save();
   return new Blob([bajti as BlobPart], { type: "application/pdf" });
 }
 
 export const imePregleda = (plan: WorkflowPlan) => asciiIme(`Delovni_plan_pregled_${plan.oddelek}_${plan.od}`);
 
-export async function prenesiPlanPregledPdf(plan: WorkflowPlan) {
-  prenesiDatoteko(await ustvariPlanPregledPdf(plan), `${imePregleda(plan)}.pdf`);
+export async function prenesiPlanPregledPdf(plan: WorkflowPlan, druzine: DruzineNormativov) {
+  prenesiDatoteko(await ustvariPlanPregledPdf(plan, druzine), `${imePregleda(plan)}.pdf`);
 }
