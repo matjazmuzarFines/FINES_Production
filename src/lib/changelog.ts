@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "35.02",
+    datum: "12. 11. 2026",
+    spremembe: [
+      "PDF - pregled (roki) na novo: vsaka celica na svojem listu A4 pokončno kot navpičen procesni flow. Levo velika puščica časa z rokom (do) in začetkom (od) vsakega koraka, na sredini barvni krogi s številko koraka in puščicami, ob krogu pasica s krovnim nalogom, pod njo nalogi in kosi. Če je besedila veliko, so pasice izmenično levo in desno; sicer vse desno. Oranžna oznaka DANES na puščici časa, rdeč rok, če se konča po odpremi.",
+    ],
+  },
+  {
     verzija: "35.01",
     datum: "12. 11. 2026",
     spremembe: [
