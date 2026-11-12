@@ -8,6 +8,7 @@ import { supabaseConfigured } from "@/lib/supabase";
 import {
   OPIS_NACINA,
   naloziLog,
+  KLASIFIKATI_VIJACNI,
   naloziMaterial,
   novaZaloga,
   parseKolicina,
@@ -213,15 +214,16 @@ export function VijacniMaterialStran() {
         <div className="mr-auto min-w-[min(100%,18rem)] flex-1">
           <h2 className="text-xl font-bold text-ink-900">Vijačni material</h2>
           <p className="hidden text-sm text-ink-500 sm:block">
-            Zaloga in lokacije vijačnega in pomožnega materiala · tapni material in spremeni zalogo ali lokacijo
+            Zaloga in lokacije vijačnega in pomožnega materiala (identi s klasifikatom {KLASIFIKATI_VIJACNI.join(", ")}) · tapni
+            material in spremeni zalogo ali lokacijo
           </p>
         </div>
       </div>
 
       {material.length === 0 && (
         <WarningText>
-          Tabela je prazna. V Supabase SQL editorju zaženi <code className="rounded bg-white px-1">032_vijacni_material_uvoz.sql</code>{" "}
-          (enkraten uvoz iz Microsoft Lists).
+          Seznam je prazen. Preveri, ali so na strani Podatki uvoženi identi (klasifikat {KLASIFIKATI_VIJACNI.join(", ")}) in ali je v
+          Supabase zagnana skripta <code className="rounded bg-white px-1">037_vijacni_material_iz_identov.sql</code>.
         </WarningText>
       )}
 

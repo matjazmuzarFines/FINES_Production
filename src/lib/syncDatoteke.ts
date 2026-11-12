@@ -1,7 +1,7 @@
 // Izvozi iz ERP, ki jih worker vsakih nekaj ur shrani v mapo na serverju podjetja
 // (\\rokadasrv\RISPSQL$\Dokumentacija\Izvoz_excel_dir). Brskalnik jih prebere iz mape in uvozi (stran Podatki).
 
-export type SyncDatotekaKljuc = "nalogi" | "material" | "narocila" | "odpreme" | "prevzemi" | "izdaje" | "identi" | "kosovnice";
+export type SyncDatotekaKljuc = "nalogi" | "material" | "narocila" | "odpreme" | "prevzemi" | "izdaje" | "identi" | "kosovnice" | "porocano";
 
 export const SYNC_MAPA = "\\\\rokadasrv\\RISPSQL$\\Dokumentacija\\Izvoz_excel_dir";
 
@@ -22,6 +22,7 @@ export const SYNC_DATOTEKE: Record<SyncDatotekaKljuc, SyncDatotekaOpis> = {
   izdaje: { datoteka: "Kreiranje_izdaj_v_proizvodnjo.xlsx", naslov: "Izdaje v proizvodnjo", strani: "Doizdaja" },
   identi: { datoteka: "Identi.xlsx", naslov: "Identi", strani: "Primerjava kosovnic" },
   kosovnice: { datoteka: "Kosovnice.xlsx", naslov: "Kosovnice", strani: "Primerjava kosovnic" },
+  porocano: { datoteka: "Porocano_delo.xlsx", naslov: "Poročano delo", strani: "Produktivnost (Zasedenost)" },
 };
 
 export const SYNC_KLJUCI = Object.keys(SYNC_DATOTEKE) as SyncDatotekaKljuc[];
@@ -36,4 +37,5 @@ export const TABELE_UVOZOV: Record<SyncDatotekaKljuc, string> = {
   izdaje: "fp_doi_izdaje_uvozi",
   identi: "spl_identi_uvozi",
   kosovnice: "spl_kosovnice_uvozi",
+  porocano: "fp_por_uvozi",
 };

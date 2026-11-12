@@ -72,7 +72,7 @@ export const NAV: NavGroup[] = [
             label: "Zasedenost",
             href: "/proizvodnja/zasedenost",
             icon: Gauge,
-            hint: "Pokaži pregled zasedenosti in delovni plan",
+            hint: "Pregled zasedenosti, delovni plan in produktivnost",
             children: [
               {
                 label: "Pregled zasedenosti",
@@ -85,6 +85,12 @@ export const NAV: NavGroup[] = [
                 href: "/proizvodnja/zasedenost/plan",
                 icon: CalendarRange,
                 hint: "Razporedi krovne naloge na delovna mesta",
+              },
+              {
+                label: "Produktivnost",
+                href: "/proizvodnja/zasedenost/produktivnost",
+                icon: TrendingUp,
+                hint: "Plan proti poročanim uram po celicah",
               },
             ],
           },

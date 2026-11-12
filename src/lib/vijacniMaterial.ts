@@ -43,11 +43,26 @@ export const OPIS_NACINA: Record<Nacin, string> = {
 
 const STOLPCI = "id, sifra, naziv, em, zaloga, lokacija, spremenjeno, spremenil";
 
+/** Klasifikati identov, ki so na seznamu vijačnega materiala (seznam in filter sta v bazi: fp_vijacni_seznam). */
+export const KLASIFIKATI_VIJACNI = ["028", "060", "064"] as const;
+
+/**
+ * Seznam = vsi aktivni identi s klasifikatom 028 / 060 / 064 (nov ident se pojavi sam, z zalogo 0), naziv in EM iz
+ * identov, zaloga in lokacija iz fp_vijacni_material. Brez skripte 037 v bazi: stari fiksni seznam.
+ */
 export async function naloziMaterial(): Promise<VijacniMaterial[]> {
   const sb = getSupabase();
-  return fetchAll<VijacniMaterial>((od, do_) =>
-    sb.from("fp_vijacni_material").select(STOLPCI).eq("visible", true).order("naziv").order("id").range(od, do_),
-  );
+  try {
+    // funkcija ob vsakem klicu doda manjkajoče šifre - zato en klic (sto vrstic), ne po straneh
+    const { data, error } = await sb.rpc("fp_vijacni_seznam").select(STOLPCI).range(0, 9999);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as VijacniMaterial[];
+  } catch (e) {
+    if (!/fp_vijacni_seznam/.test((e as Error).message)) throw e;
+    return fetchAll<VijacniMaterial>((od, do_) =>
+      sb.from("fp_vijacni_material").select(STOLPCI).eq("visible", true).order("naziv").order("id").range(od, do_),
+    );
+  }
 }
 
 /** Zadnjih `koliko` sprememb (najnovejše prve). */

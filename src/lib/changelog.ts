@@ -9,6 +9,23 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "34.02",
+    datum: "12. 11. 2026",
+    spremembe: [
+      "Vijačni material: seznam so vsi aktivni identi s klasifikatom 028, 060 in 064 - nov ident na seznamu identov se pojavi sam (z zalogo 0), naziv in EM se vzameta iz identov. Neaktiven ident ostane viden, dokler ima zalogo. Potrebna skripta 037_vijacni_material_iz_identov.sql.",
+    ],
+  },
+  {
+    verzija: "34.01",
+    datum: "11. 11. 2026",
+    spremembe: [
+      "Nova stran Zasedenost → Produktivnost: delovni plan po celicah in dnevih proti poročanemu delu (štempljanje na naloge). Za vsak dan oranžen stolpec plana (po krovnih) in ob njem stolpec poročanih ur: v planu (zeleno), pred planom (modro), po planu (rumeno), izven plana (sivo), režija; del nad planom je rdeč. Pod stolpcem produktivnost (plan / poročano). Klik odpre podrobnosti (osebe, nalogi, operacije, čas). Pogled teden ali mesec.",
+      "Kontrola produktivnosti: krovni nalogi plana po začetku - plan, izdelano, zaslužene ure, poročane ure (tudi pred / po planu), osebe in produktivnost; izvoz v Excel.",
+      "Desni panel Kontrola produktivnosti (gumb za prikaz / skritje, kot Kontrola plana): za vsak krovni datum od - do in dve premici - planirane ure ter štempljane ure (zeleno do plana, rdeče čez plan). Razvrstitev po začetku ali po urah čez plan.",
+      "Nov izvoz iz ERP Porocano_delo.xlsx (stran Podatki). Uporabijo se poročane ure (ERP razdeli čas med naloge, na katere je delavec hkrati štempljan). Potrebna skripta 036_porocano_delo.sql.",
+    ],
+  },
+  {
     verzija: "33.01",
     datum: "11. 11. 2026",
     spremembe: [

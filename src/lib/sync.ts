@@ -6,6 +6,7 @@ import { preberiIdenteXlsx, preberiKosovniceXlsx, shraniIdenteUvoz, shraniKosovn
 import type { SyncDatotekaKljuc } from "./syncDatoteke";
 import { preberiVd200Xlsx, preberiVd300Xlsx, shraniOdpUvoz, shraniPriUvoz } from "./prioritete";
 import { preberiNalogeXlsx, shraniUvoz } from "./zasedenost";
+import { preberiPorocanoXlsx, shraniPorocanoUvoz } from "./porocanoDelo";
 
 export type RezultatUvoza = { opis: string; opozorila: string[] };
 
@@ -44,6 +45,11 @@ const UVOZ: Record<SyncDatotekaKljuc, (f: File) => Promise<RezultatUvoza>> = {
     const p = await preberiPrevzemeXlsx(f);
     await shraniPrevzemeUvoz(f.name, p);
     return { opis: `${p.prevzemi.length} postavk prevzemov`, opozorila: p.opozorila };
+  },
+  porocano: async (f) => {
+    const { vrstice, vnosov, opozorila } = await preberiPorocanoXlsx(f);
+    const { posodobljeno } = await shraniPorocanoUvoz(f.name, vrstice);
+    return { opis: `${vnosov} vnosov (${vrstice.length} po dnevih, posodobljenih ${posodobljeno})`, opozorila };
   },
   izdaje: async (f) => {
     const p = await preberiIzdajeXlsx(f);
