@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "35.01",
+    datum: "12. 11. 2026",
+    spremembe: [
+      "Delovni plan → Izvoz: nov »PDF - pregled (roki)«. Levo časovnica z dnevi, za vsako celico svoj stolpec, krovni nalogi kot okvirčki od dneva začetka do roka (povezani s puščicami, vzporedni drug ob drugem). V okvirčku krovni nalog, število nalogov in kosov, spodaj velik rok »do Pet 20.11«; rdeče, če se plan konča po odpremi. Danes je označen z oranžnim pasom. Za obešanje na celico in za FIN:TV - poudarek je na datumih, workflow PDF pa ostane za to, kaj je treba narediti.",
+    ],
+  },
+  {
     verzija: "34.02",
     datum: "12. 11. 2026",
     spremembe: [

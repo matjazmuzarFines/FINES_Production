@@ -918,6 +918,14 @@ function PlanOddelka({
                   akcija: async () => (await import("@/lib/planPdf")).prenesiPlanPdf(await workflow()),
                 },
                 {
+                  koda: "pdf-pregled",
+                  label: "PDF - pregled (roki)",
+                  hint: "Časovnica po celicah: krovni nalogi od začetka do roka (PDF za obešanje / FIN:TV)",
+                  disabled: !vObdobju,
+                  zakaj: "V prikazanih tednih ni postavitev",
+                  akcija: async () => (await import("@/lib/planPregledPdf")).prenesiPlanPregledPdf(await workflow()),
+                },
+                {
                   koda: "docx",
                   label: "Word - workflow",
                   hint: "Workflow po delovnih mestih za prikazane tedne (Word za urejanje)",
