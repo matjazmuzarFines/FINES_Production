@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "35.05",
+    datum: "13. 11. 2026",
+    spremembe: [
+      "FIN:TV popravek: objava plana se je ustavila, ko je bil zavihek Production v ozadju (brskalnik zamrzne izris PDF) - zdaj teče naprej tudi v ozadju.",
+      "FIN:TV: tekoči teden je na TV takoj (~pol minute po Shrani plan), ostali tedni se objavijo, ko so pripravljeni. Ob začetku obvestilo, koliko tednov se objavlja. Nov Shrani plan prekine prejšnjo objavo istega oddelka (prej sta tekli dve hkrati).",
+    ],
+  },
+  {
     verzija: "35.04",
     datum: "13. 11. 2026",
     spremembe: [

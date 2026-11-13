@@ -822,10 +822,19 @@ function PlanOddelka({
     void (async () => {
       const [odpreme, druzine] = await Promise.all([odpremeNalogov(), druzineNormativov()]);
       const { objaviPlanNaTv } = await import("@/lib/tvObjava");
-      return objaviPlanNaTv({ oddelek: oddelek.koda, nazivOddelka: oddelek.naziv, planTedna: (dn) => planZaDneve(dn, odpreme), druzine, zadnjiDan });
+      return objaviPlanNaTv({
+        oddelek: oddelek.koda,
+        nazivOddelka: oddelek.naziv,
+        planTedna: (dn) => planZaDneve(dn, odpreme),
+        druzine,
+        zadnjiDan,
+        napredek: (t, vseh) => {
+          if (t === 1 && vseh > 1) notify("info", `FIN:TV: objavljam plan za ${vseh} tednov - tekoči teden bo na TV v pol minute, ostali sledijo. Production pusti odprt.`, 8000);
+        },
+      });
     })()
       .then((izid) => {
-        if (!izid.length) return;
+        if (!izid?.length) return; // prazno ali prekinjeno z novejšim Shrani plan
         const tedni = (n: number) => `${n} ${n === 1 ? "teden" : n === 2 ? "tedna" : n <= 4 ? "tedni" : "tednov"}`;
         notify("success", `FIN:TV: plan objavljen - ${izid.map((d) => `${d.ime} ${tedni(d.tednov)}, ${d.strani} str.`).join(" · ")}.`);
       })

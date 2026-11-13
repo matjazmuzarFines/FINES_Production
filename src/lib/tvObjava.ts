@@ -44,7 +44,8 @@ async function pdfVSlike(pdfBlob: Blob): Promise<{ slike: Blob[]; razmerja: numb
       const ctx = canvas.getContext("2d")!;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await stran.render({ canvas, canvasContext: ctx, viewport }).promise;
+      // intent "print": brez requestAnimationFrame - sicer se izris v zavihku v ozadju ustavi (brskalnik ga zamrzne)
+      await stran.render({ canvas, canvasContext: ctx, viewport, intent: "print" }).promise;
       slike.push(await new Promise<Blob>((ok, ne) => canvas.toBlob((b) => (b ? ok(b) : ne(new Error("Strani ni mogoče shraniti."))), "image/webp", 0.9)));
       stran.cleanup();
       canvas.width = canvas.height = 0;
@@ -77,10 +78,14 @@ export type IzidObjave = { ime: string; tednov: number; strani: number }[];
 
 type Zbirka = { dok: DokumentPlana; koda: string; mapa: string; strani: string[]; razmerja: number[]; veljaOd: IsoDate[]; veljaDo: IsoDate[]; tednov: number };
 
+/** Zadnja zagnana objava po oddelku - novejši Shrani plan prekine starejšo objavo istega oddelka. */
+const zadnjaObjava = new Map<string, number>();
+
 /**
  * Plan po tednih na FIN:TV (workflow + pregled). `planTedna(dnevi)` = WorkflowPlan za 5 delovnih dni tedna
  * (pripraviWorkflow), `zadnjiDan` = konec zadnjega koraka v planu. Plan tedna se izračuna enkrat za oba dokumenta.
- * Izklopljene / manjkajoče komponente se preskočijo.
+ * Izklopljene / manjkajoče komponente se preskočijo. Tekoči teden se objavi takoj (TV ga pokaže v ~20 s), vsi tedni
+ * pa na koncu. `napredek(teden, vseh)` = obvestilo o napredku. Vrne null, ko jo je prekinil novejši Shrani plan.
  */
 export async function objaviPlanNaTv({
   oddelek,
@@ -88,16 +93,20 @@ export async function objaviPlanNaTv({
   planTedna,
   druzine,
   zadnjiDan,
+  napredek,
 }: {
   oddelek: OddelekKoda;
   nazivOddelka: string;
   planTedna: (dnevi: IsoDate[]) => WorkflowPlan;
   druzine: DruzineNormativov;
   zadnjiDan: IsoDate | null;
-}): Promise<IzidObjave> {
+  napredek?: (teden: number, vseh: number) => void;
+}): Promise<IzidObjave | null> {
   const prvi = mondayOf(toIso(new Date()));
   if (!zadnjiDan || zadnjiDan < prvi) return [];
   const zdaj = Date.now();
+  zadnjaObjava.set(oddelek, zdaj);
+  const prekinjena = () => zadnjaObjava.get(oddelek) !== zdaj;
   const zbirke: Zbirka[] = [];
   for (const dok of DOKUMENTI) {
     const koda = dok.koda(oddelek);
@@ -105,25 +114,39 @@ export async function objaviPlanNaTv({
   }
   if (!zbirke.length) return [];
 
-  const zadnji = mondayOf(zadnjiDan);
-  for (let pon = prvi, n = 0; pon <= zadnji && n < NAJVEC_TEDNOV; pon = addDays(pon, 7), n++) {
+  const tedni: IsoDate[] = [];
+  for (let pon = prvi; pon <= mondayOf(zadnjiDan) && tedni.length < NAJVEC_TEDNOV; pon = addDays(pon, 7)) tedni.push(pon);
+  for (const [t, pon] of tedni.entries()) {
+    if (prekinjena()) return null;
+    napredek?.(t + 1, tedni.length);
     const plan = planTedna(Array.from({ length: 5 }, (_, i) => addDays(pon, i)));
-    if (!plan.celice.length) continue;
-    for (const z of zbirke) {
-      const { slike, razmerja } = await pdfVSlike(await z.dok.pdf(plan, druzine));
-      for (let i = 0; i < slike.length; i++) {
-        const pot = `${z.mapa}/${pon}-${i + 1}.webp`;
-        const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
-        if (error) throw new Error(`Nalaganje strani na TV (${z.dok.ime}): ${error.message}`);
-        z.strani.push(pot);
-        z.razmerja.push(razmerja[i]);
-        z.veljaOd.push(pon);
-        z.veljaDo.push(addDays(pon, 6));
-      }
-      z.tednov++;
-    }
+    if (plan.celice.length) await dodajTeden(zbirke, pon, plan, druzine);
+    // tekoči teden takoj na TV, ostali ob koncu (nova objava zamenja prejšnjo)
+    if (t === 0 && tedni.length > 1 && !prekinjena()) await objavi(zbirke, nazivOddelka);
   }
+  if (prekinjena()) return null;
+  return objavi(zbirke, nazivOddelka);
+}
 
+/** Strani enega tedna za vse dokumente -> košara. */
+async function dodajTeden(zbirke: Zbirka[], pon: IsoDate, plan: WorkflowPlan, druzine: DruzineNormativov) {
+  for (const z of zbirke) {
+    const { slike, razmerja } = await pdfVSlike(await z.dok.pdf(plan, druzine));
+    for (let i = 0; i < slike.length; i++) {
+      const pot = `${z.mapa}/${pon}-${i + 1}.webp`;
+      const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(`Nalaganje strani na TV (${z.dok.ime}): ${error.message}`);
+      z.strani.push(pot);
+      z.razmerja.push(razmerja[i]);
+      z.veljaOd.push(pon);
+      z.veljaDo.push(addDays(pon, 6));
+    }
+    z.tednov++;
+  }
+}
+
+/** Objava zbranih strani (vsak dokument svoja komponenta). */
+async function objavi(zbirke: Zbirka[], nazivOddelka: string): Promise<IzidObjave> {
   const izid: IzidObjave = [];
   for (const z of zbirke) {
     if (!z.strani.length) continue;
