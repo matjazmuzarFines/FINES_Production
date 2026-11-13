@@ -20,6 +20,7 @@ import {
 import { naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { delezNapredka, naloziCelice, naloziPostavitve, naloziZaposlene, zdruziKrovne, type Celica, type Postavitev, type ZaposleniDan } from "@/lib/plan";
 import {
+  naloziKoseNalogov,
   naloziNalogeKrovnih,
   naloziPorocano,
   naloziPorocanoNalogov,
@@ -30,21 +31,26 @@ import {
 import {
   KATEGORIJE,
   NERAZPOREJENO,
+  PREVERI_NAD,
+  PREVERI_POD,
   dneviObdobja,
   izracunajPlanOddelka,
   izracunajProduktivnost,
+  izracunajZakljucene,
   izvoziDeloXlsx,
   izvoziKontroloXlsx,
   kljucDneva,
   labelKategorije,
   nalogiPlana,
   porabaDneva,
+  zakljuceniKandidati,
   type DanCelice,
   type Kategorija,
   type KontrolaPostavitve,
+  type KrovniZakljucen,
   type PripisanoDelo,
 } from "@/lib/produktivnostPlana";
-import { formatNum, formatUre } from "@/lib/stevila";
+import { formatNum, formatRazlikaUr, formatUre } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import { izracunajNaloge, naloziZadnjiUvoz, naloziZasOddelke, type Nalog, type ZasOddelek } from "@/lib/zasedenost";
 import { PodatkiVir } from "@/components/PodatkiVir";
@@ -62,6 +68,9 @@ const SIRINA_IMENA = 150; // px
 const VISINA_GRAFA = 128; // px - stolpci enega delovnega mesta
 
 type Obdobje = "teden" | "mesec";
+type Pogled = "plan" | "zakljuceni";
+/** Zaključeni krovni: koliko dni nazaj (datum zaključka). */
+const DNI_ZAKLJUCENI = 30;
 
 /** Barve kategorij poročanega dela (stolpec desno od plana). */
 const BARVA: Record<Kategorija, string> = {
@@ -76,7 +85,10 @@ const BARVA_PRESEZEK = "bg-nok-500";
 /** Produktivnost (zasluženo / poročano): 100 % in več zelena, do 85 % rumena, pod 85 % rdeča. */
 const barvaProduktivnosti = (p: number | null) =>
   p === null ? "text-ink-400" : p >= 0.995 ? "text-ok-600" : p >= 0.85 ? "text-warn-700" : "text-nok-600";
-/** Poraba ur (poročano / plan): do 105 % zelena (v planu), nad 105 % rdeča (več ur kot plan), pod 85 % rumena (plan ni delan). */
+/**
+ * Barva ur proti planu (poročano / plan): do +5 % zelena (v planu), čez rdeča (več ur kot plan), pod 85 % rumena (plan ni delan).
+ * Številka se kaže v URAH (formatRazlikaUr) - procent je rezerviran za produktivnost.
+ */
 const barvaPorabe = (p: number | null, temno = false) =>
   p === null ? "text-ink-400" : p > 1.05 ? (temno ? "text-nok-500" : "text-nok-600") : p >= 0.85 ? (temno ? "text-ok-500" : "text-ok-600") : temno ? "text-warn-400" : "text-warn-700";
 const fmtPct = (p: number | null) => (p === null ? "–" : `${Math.round(p * 100)} %`);
@@ -140,6 +152,8 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
   // Desni panel; stran pokaže Loading, dokler podatki niso naloženi - branje localStorage je varno
   const [panel, setPanel] = useState(preberiPanel);
   const [naTv, setNaTv] = useState(false);
+  const [pogled, setPogled] = useState<Pogled>("plan");
+  const [zakPodatki, setZakPodatki] = useState<{ porocano: PorocanoDelo[]; kosi: Map<string, number> } | null>(null);
 
   /** FIN:TV "Delo - prejšnji dan" ročno (sicer se objavi sama ob uvozu poročanega dela). */
   async function objaviNaTv() {
@@ -182,6 +196,7 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
     setZgodovina(null);
     setPorPlana(null);
     setPorObdobja(null);
+    setZakPodatki(null);
     setVerzija((v) => v + 1);
   });
 
@@ -232,6 +247,38 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
     return izracunajProduktivnost({ koda, celice, plan, krovni, zgodovina, porocano: [...porPlana, ...porObdobja.vrstice] });
   }, [koda, celice, plan, krovni, zgodovina, porPlana, porObdobja]);
 
+  // Zaključeni krovni: štempljanje (vsi datumi) in kosi nalogov zaključenih krovnih iz plana - naloži se ob prvem ogledu
+  const odprti = useMemo(() => new Set(osnova?.nalogi.map((n) => n.st_naloga) ?? []), [osnova]);
+  const odZakljucenih = addDays(danes, -DNI_ZAKLJUCENI);
+  useEffect(() => {
+    if (pogled !== "zakljuceni" || zakPodatki || !plan || !zgodovina) return;
+    let preklic = false;
+    const nalogi = zakljuceniKandidati(plan.postavitve, odprti, zgodovina).flatMap((k) => k.nalogi.map((n) => n.st_naloga));
+    Promise.all([naloziPorocanoNalogov(nalogi), naloziKoseNalogov(nalogi)])
+      .then(([porocano, kosi]) => !preklic && setZakPodatki({ porocano, kosi }))
+      .catch((e) => notify("error", `Napaka pri nalaganju zaključenih krovnih: ${(e as Error).message}`, 10000));
+    return () => {
+      preklic = true;
+    };
+  }, [pogled, zakPodatki, plan, zgodovina, odprti, notify]);
+  const zakljuceni = useMemo(
+    () =>
+      plan && zgodovina && zakPodatki && osnova
+        ? izracunajZakljucene({
+            koda,
+            postavitve: plan.postavitve,
+            razpored: plan.razpored,
+            odprti,
+            zgodovina,
+            porocano: zakPodatki.porocano,
+            normativi: osnova.normativi,
+            kosiNalogov: zakPodatki.kosi,
+            od: odZakljucenih,
+          })
+        : null,
+    [koda, plan, zgodovina, zakPodatki, osnova, odprti, odZakljucenih],
+  );
+
   if (!osnova) return <Loading />;
 
   const nalagam = imaTabele && (!rezultat || porObdobja?.kljuc !== kljucObdobja);
@@ -275,23 +322,40 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
           );
         })}
       </div>
+        <div className="ml-auto">
+          <FilterPreklopnik<Pogled>
+            label="Pogled"
+            value={pogled}
+            onChange={setPogled}
+            options={[
+              { value: "plan", label: "Plan in ure", hint: "Planirane proti štempljanim uram po delovnih mestih in dnevih" },
+              {
+                value: "zakljuceni",
+                label: "Zaključeni krovni",
+                hint: `Produktivnost krovnih nalogov, zaključenih v zadnjih ${DNI_ZAKLJUCENI} dneh`,
+              },
+            ]}
+          />
+        </div>
+        {pogled === "plan" && (
         <Button
           hint={panel ? "Zapri kontrolo produktivnosti" : "Odpri kontrolo produktivnosti: krovni nalogi s planiranimi in štempljanimi urami"}
           variant={panel ? "primary" : "neutral"}
           icon={panel ? PanelRightClose : PanelRightOpen}
           aria-pressed={panel}
           onClick={preklopiPanel}
-          className="ml-auto"
+          className="self-end"
         >
           Kontrola produktivnosti
         </Button>
+        )}
         <Button
           hint="Objavi delo prejšnjega dne na FIN:TV"
           variant="sync"
           icon={naTv ? Loader2 : Tv}
           disabled={naTv || !imaTabele}
           onClick={objaviNaTv}
-          className={naTv ? "[&>svg]:animate-spin" : ""}
+          className={`self-end ${naTv ? "[&>svg]:animate-spin" : ""}`}
         >
           Na TV
         </Button>
@@ -309,6 +373,8 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
 
       {!oddelek ? (
         <div className="fp-card p-8 text-center text-ink-600">Oddelek ni najden.</div>
+      ) : pogled === "zakljuceni" ? (
+        <ZakljuceniKrovni celice={celice} krovni={zakljuceni} od={odZakljucenih} oddelek={oddelek.naziv} />
       ) : (
         <>
           <div className={`grid items-start gap-4 ${panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
@@ -426,6 +492,154 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
 }
 
 // =====================================================================
+// ZAKLJUČENI KROVNI - stolpci po celicah (en krovni = en stolpec čez celo višino)
+// =====================================================================
+
+/** Ozadje in rob glave stolpca po produktivnosti (iste meje kot barvaProduktivnosti). */
+const tonProduktivnosti = (p: number | null) =>
+  p === null ? "border-ink-300 bg-ink-50" : p >= 0.995 ? "border-ok-500 bg-ok-50" : p >= 0.85 ? "border-warn-400 bg-warn-50" : "border-nok-500 bg-nok-50";
+const besediloNalogov = (n: number) => `${n} ${n === 1 ? "nalog" : n === 2 ? "naloga" : n <= 4 ? "nalogi" : "nalogov"}`;
+
+function ZakljuceniKrovni({ celice, krovni, od, oddelek }: { celice: Celica[]; krovni: KrovniZakljucen[] | null; od: IsoDate; oddelek: string }) {
+  const skupine = [...celice.map((c) => ({ id: c.id, naziv: c.naziv })), { id: NERAZPOREJENO, naziv: "Brez delovnega mesta" }]
+    .map((c) => ({ ...c, krovni: (krovni ?? []).filter((k) => k.celicaId === c.id) }))
+    .filter((c) => c.krovni.length > 0);
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="fp-card flex flex-col gap-2 p-3 sm:p-4">
+        <div>
+          <h3 className="text-base font-bold text-ink-900">Zaključeni krovni nalogi · {oddelek}</h3>
+          <p className="text-xs text-ink-500">
+            Krovni iz delovnega plana, pri katerih so zaključeni vsi nalogi, zadnje štempljanje od {formatShort(od)} naprej. Krovni se vedno
+            upošteva v celoti (vse ure, tudi starejše). Štejejo samo ure na operacijah oddelka; zaključen nalog = narejena razpisana količina.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700">
+          <span title="Normativne ure (kosi × normativ oddelka) deljeno s štempljanimi urami">
+            <strong className="uppercase tracking-wide">Produktivnost</strong> = normativne ure ÷ štempljane ure × 100
+          </span>
+          <span className="font-semibold text-ok-600" title="Narejeno v manj urah, kot predvideva normativ">
+            ≥ 100 % · manj ur od normativa
+          </span>
+          <span className="font-semibold text-warn-700" title="Malo več ur od normativa">
+            85–99 %
+          </span>
+          <span className="font-semibold text-nok-600" title="Bistveno več ur od normativa">
+            pod 85 %
+          </span>
+          <span className="rounded-full bg-nok-50 px-2 font-semibold text-nok-600" title="Verjetno napaka pri štempljanju - vodja naj preveri in popravi">
+            preveri: pod {Math.round(PREVERI_POD * 100)} % ali nad {Math.round(PREVERI_NAD * 100)} %
+          </span>
+        </div>
+      </div>
+
+      {krovni === null ? (
+        <div className="fp-card p-4">
+          <Loading />
+        </div>
+      ) : skupine.length === 0 ? (
+        <div className="fp-card p-8 text-center text-ink-600">V zadnjih {DNI_ZAKLJUCENI} dneh ni zaključenih krovnih iz delovnega plana.</div>
+      ) : (
+        skupine.map((c) => (
+          <section key={c.id} className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-lg font-bold text-ink-900">{c.naziv}</h3>
+              <span className="text-sm text-ink-500">
+                {c.krovni.length} {c.krovni.length === 1 ? "zaključen krovni" : "zaključenih krovnih"} · po datumu zaključka
+              </span>
+            </div>
+            <div className="flex items-stretch gap-3 overflow-x-auto pb-2">
+              {c.krovni.map((k) => (
+                <StolpecKrovnega key={k.krovni} k={k} />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+function StolpecKrovnega({ k }: { k: KrovniZakljucen }) {
+  const steti = k.nalogi.filter((n) => !n.izlocen);
+  const izloceni = k.nalogi.filter((n) => n.izlocen);
+  const hoverKrovnega = [
+    `Krovni ${k.krovni}`,
+    `Normativ ${formatUre(k.normUre)} h · štempljano ${formatUre(k.ure)} h`,
+    k.prviDan ? `Štempljanje v oddelku od ${formatShort(k.prviDan)}, zaključen ${formatShort(k.zakljucen)}` : `Zaključen ${formatShort(k.zakljucen)}`,
+  ].join("\n");
+  return (
+    <div className="flex min-w-[15rem] max-w-[24rem] flex-1 shrink-0 flex-col overflow-hidden rounded-xl border border-ink-200 bg-white">
+      {/* krovni: velik prikaz produktivnosti */}
+      <div className={`border-b-4 px-3 py-3 ${tonProduktivnosti(k.produktivnost)}`} title={hoverKrovnega}>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-base font-bold text-ink-900">{k.krovni}</span>
+          <span className="ml-auto text-xs text-ink-500">zaključen {formatDayMonth(k.zakljucen)}</span>
+        </div>
+        <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-ink-500">Produktivnost</div>
+        <div className={`text-4xl font-bold leading-tight tabular-nums ${barvaProduktivnosti(k.produktivnost)}`}>{fmtPct(k.produktivnost)}</div>
+        <div className="text-xs tabular-nums text-ink-600">
+          normativ {formatUre(k.normUre)} h · štempljano {formatUre(k.ure)} h
+        </div>
+        {k.ureBrezNormativa > 0.05 && (
+          <div className="text-[11px] text-ink-500" title="Ure na nalogih brez normativa za oddelek - niso v produktivnosti">
+            + {formatUre(k.ureBrezNormativa)} h na nalogih brez normativa
+          </div>
+        )}
+      </div>
+
+      {/* nalogi: manjši prikaz ob besedilu naloga */}
+      <ul className="flex flex-col divide-y divide-ink-100">
+        {steti.map((n) => (
+          <li
+            key={n.st}
+            className="px-3 py-2"
+            title={
+              n.normUre === null
+                ? `Nalog ${n.st}: ni normativa za oddelek - štempljane ure brez izračuna produktivnosti`
+                : `Nalog ${n.st}: normativ ${formatUre(n.normUre)} h (${formatNum(n.kos)} kos), štempljano ${formatUre(n.ure)} h`
+            }
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono text-sm font-semibold text-ink-900">{n.st}</span>
+              <span className={`ml-auto text-base font-bold tabular-nums ${n.normUre === null ? "text-ink-400" : barvaProduktivnosti(n.produktivnost)}`}>
+                {n.normUre === null ? "–" : fmtPct(n.produktivnost)}
+              </span>
+            </div>
+            {n.naziv && <div className="text-xs text-ink-700">{n.naziv}</div>}
+            <div className="text-[11px] tabular-nums text-ink-500">
+              {n.normUre === null ? (
+                <span className="italic">ni normativa · štempljano {formatUre(n.ure)} h</span>
+              ) : (
+                <>
+                  {formatNum(n.kos)} kos · normativ {formatUre(n.normUre)} h · štempljano {formatUre(n.ure)} h
+                </>
+              )}
+            </div>
+            {n.preveri && (
+              <span
+                className="mt-1 inline-block rounded-full bg-nok-50 px-2 py-0.5 text-[11px] font-semibold text-nok-600"
+                title="Produktivnost pod 50 % ali nad 150 % je verjetno napaka pri štempljanju - vodja naj preveri"
+              >
+                preveri štempljanje
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {izloceni.length > 0 && (
+        <div
+          className="mt-auto border-t border-ink-100 bg-ink-50 px-3 py-2 text-[11px] text-ink-500"
+          title={izloceni.map((n) => `${n.st}: ${n.izlocen === "brez_stempljanja" ? "brez štempljanja v oddelku" : "brez kosov"}`).join("\n")}
+        >
+          {besediloNalogov(izloceni.length)} ni štetih (brez štempljanja v oddelku ali brez kosov)
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
 // LEGENDA
 // =====================================================================
 
@@ -443,8 +657,8 @@ function Legenda() {
       <span className="flex items-center gap-1.5" title="Poročane ure nad planiranimi urami dneva">
         <span className={`h-3 w-3 rounded-sm ${BARVA_PRESEZEK}`} aria-hidden /> Nad planom
       </span>
-      <span className="text-ink-500" title="Vse poročane ure na delovnem mestu / planirane ure dneva. Nad 100 % = več ur kot plan.">
-        % pod stolpcem = poraba ur (poročano / plan)
+      <span className="text-ink-500" title="Vse poročane ure na delovnem mestu proti planiranim uram dneva. + = več ur kot plan, − = manj.">
+        Pod stolpcem = <strong>ure</strong> proti planu (+ čez plan) · <strong>%</strong> je vedno produktivnost
       </span>
     </div>
   );
@@ -529,13 +743,13 @@ function Casovnica({
               <div
                 key={d}
                 className={`px-0.5 py-1.5 text-center text-xs tabular-nums ${weekday(d) === 1 || i === 0 ? "border-l-2 border-ink-600" : ""}`}
-                title={`Oddelek, ${formatShort(d)}: plan ${formatUre(plan)} h, poročano ${formatUre(por)} h, poraba ur ${fmtPct(p)}`}
+                title={`Oddelek, ${formatShort(d)}: plan ${formatUre(plan)} h, poročano ${formatUre(por)} h, razlika ${formatRazlikaUr(por - plan)}`}
               >
                 <div>
                   {formatUre(plan)}/<strong>{formatUre(por)}</strong>
                   {siroko ? " h" : ""}
                 </div>
-                <div className={`font-bold ${barvaPorabe(p, true)}`}>{fmtPct(p)}</div>
+                <div className={`font-bold ${barvaPorabe(p, true)}`}>{p === null ? "–" : formatRazlikaUr(por - plan)}</div>
               </div>
             );
           })}
@@ -556,8 +770,8 @@ function Casovnica({
                 <span className="text-xs tabular-nums text-ink-600">
                   {formatUre(planSkupaj)} / {formatUre(porSkupaj)} h
                 </span>
-                <span className={`text-sm font-bold ${barvaPorabe(p)}`} title="Poraba ur obdobja: poročane / planirane ure">
-                  {fmtPct(p)}
+                <span className={`text-sm font-bold ${barvaPorabe(p)}`} title="Ure obdobja: poročane proti planiranim (+ = čez plan)">
+                  {p === null ? "–" : formatRazlikaUr(porSkupaj - planSkupaj)}
                 </span>
                 <span className="text-[10px] text-ink-400">merilo {formatUre(max)} h</span>
               </div>
@@ -637,7 +851,7 @@ function StolpecDneva({
     `Plan: ${formatUre(dan.planUre)} h (${formatNum(Math.round(planOseb * 10) / 10)} os.)${dan.plan.length ? ` - ${dan.plan.map((x) => `${x.krovni} ${formatUre(x.ure)} h`).join(", ")}` : ""}`,
     `Poročano: ${formatUre(dan.porocano)} h (${dan.osebe.length} os.)`,
     ...VRSTNI_RED.filter((k) => dan.ure[k] > 0).map((k) => `  ${labelKategorije(k)}: ${formatUre(dan.ure[k])} h`),
-    `Poraba ur (poročano / plan): ${fmtPct(p)}`,
+    `Razlika do plana: ${p === null ? "ni plana" : formatRazlikaUr(dan.porocano - dan.planUre)}`,
     "Klik: podrobnosti poročanega dela",
   ].join("\n");
 
@@ -670,12 +884,14 @@ function StolpecDneva({
         {dan.planUre > 0 && <div className="absolute left-[4%] right-[4%] border-t-2 border-dashed border-ink-700/60" style={{ bottom: h(dan.planUre) }} />}
       </div>
       <div className={`flex h-5 items-center justify-center text-xs font-bold tabular-nums ${barvaPorabe(p)}`}>
-        {siroko ? (
+        {p === null ? (
+          "–"
+        ) : siroko ? (
           <span>
-            {fmtPct(p)} <span className="font-normal text-ink-500">· {formatUre(dan.porocano)} h</span>
+            {formatRazlikaUr(dan.porocano - dan.planUre)} <span className="font-normal text-ink-500">· {formatUre(dan.porocano)} h</span>
           </span>
         ) : (
-          fmtPct(p).replace(" ", "")
+          formatRazlikaUr(dan.porocano - dan.planUre).replace(" h", "")
         )}
       </div>
     </button>
@@ -778,7 +994,7 @@ function PanelProduktivnosti({
                   onClick={() => onOdpri(k)}
                   title={[
                     `Krovni ${k.postavitev.krovni_dn} · ${k.celica}`,
-                    `Plan ${formatUre(k.planUre)} h, štempljano ${formatUre(k.porocano)} h (${fmtPct(k.planUre > 0 ? k.porocano / k.planUre : null)} plana)`,
+                    `Plan ${formatUre(k.planUre)} h, štempljano ${formatUre(k.porocano)} h (${formatRazlikaUr(k.porocano - k.planUre)} do plana)`,
                     k.zasluzeno !== null ? `Zasluženo ${formatUre(k.zasluzeno)} h · produktivnost ${fmtPct(k.produktivnost)}` : "Prosta naloga - brez napredka",
                     "Klik: poročano delo na nalogih krovnega",
                   ].join("\n")}
@@ -995,7 +1211,7 @@ function PodrobnostiDneva({ dan, celica, onClose }: { dan: DanCelice; celica: st
           <Stevilka label="Plan" vrednost={`${formatUre(dan.planUre)} h`} opis={dan.plan.map((x) => `${x.krovni}: ${formatUre(x.ure)} h`).join(" · ") || "ni plana"} />
           <Stevilka label="Poročano" vrednost={`${formatUre(dan.porocano)} h`} opis={`${dan.osebe.length} oseb`} />
           <Stevilka label="V planu" vrednost={`${formatUre(dan.ure.plan)} h`} opis={`izven / drugo ${formatUre(dan.porocano - dan.ure.plan)} h`} />
-          <Stevilka label="Poraba ur" vrednost={fmtPct(p)} opis="poročano / plan" cls={barvaPorabe(p)} />
+          <Stevilka label="Razlika do plana" vrednost={p === null ? "–" : formatRazlikaUr(dan.porocano - dan.planUre)} opis="poročano − plan (+ = čez plan)" cls={barvaPorabe(p)} />
         </div>
         <OsebeTabela delo={dan.delo} />
         <DeloTabela delo={dan.delo} />

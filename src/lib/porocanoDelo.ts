@@ -258,6 +258,31 @@ export async function naloziNalogeKrovnih(krovni: string[]): Promise<NalogKrovne
   return out;
 }
 
+/**
+ * Razpisana količina nalogov iz zadnjega uvoza nalogov, v katerem je nalog še bil (tudi zaključeni nalogi).
+ * Za zaključen nalog se šteje, da je narejena razpisana količina - "izdelana količina" iz zadnjega uvoza je
+ * pri zaključenih nalogih običajno 0 ali delna (nalog se zaključi po zadnjem uvozu, v katerem je še bil).
+ */
+export async function naloziKoseNalogov(nalogi: string[]): Promise<Map<string, number>> {
+  const sb = getSupabase();
+  const out = new Map<string, number>();
+  for (const kos of kosi([...new Set(nalogi)], 40)) {
+    const vrstice = await fetchAll<{ st_naloga: string; razpisana_kolicina: number }>((from, to) =>
+      sb
+        .from("fp_zas_nalogi")
+        .select("st_naloga, razpisana_kolicina")
+        .eq("visible", true)
+        .in("st_naloga", kos)
+        .order("uvoz_id", { ascending: false })
+        .order("id")
+        .range(from, to),
+    );
+    // urejeno od najnovejšega uvoza: prva vrstica naloga je zadnji znani podatek
+    for (const v of vrstice) if (!out.has(v.st_naloga)) out.set(v.st_naloga, Number(v.razpisana_kolicina));
+  }
+  return out;
+}
+
 /** Zadnji aktiven uvoz poročanega dela (null = še ni uvoza); napaka, če tabel ni (skripta 036). */
 export async function zadnjiPorocanoUvoz(): Promise<{ datoteka: string; created_at: string } | null> {
   const { data, error } = await getSupabase()

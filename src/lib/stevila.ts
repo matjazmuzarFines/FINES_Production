@@ -15,6 +15,14 @@ const fmt1 = new Intl.NumberFormat("sl-SI", { minimumFractionDigits: 1, maximumF
 export const formatNum = (n: number | null | undefined) => (n === null || n === undefined ? "" : fmt.format(n));
 /** 12,0 (ena decimalka - ure) */
 export const formatUre = (n: number) => fmt1.format(n);
+/**
+ * Razlika ur proti planu "+2,0 h" / "−1,5 h" / "0,0 h". Poraba ur se vedno kaže v URAH, procent je rezerviran za
+ * produktivnost (normativne / štempljane ure) - da zaposleni ne mešajo dveh procentov z nasprotno logiko barv.
+ */
+export const formatRazlikaUr = (n: number) => {
+  const r = Math.round(n * 10) / 10;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${fmt1.format(Math.abs(r))} h`;
+};
 
 const fmtVnos = new Intl.NumberFormat("sl-SI", { maximumFractionDigits: 3, useGrouping: false });
 /** Za vnosna polja: 10000 / 4,5 (brez ločila tisočic, sicer parseNum("10.000") vrne 10). */

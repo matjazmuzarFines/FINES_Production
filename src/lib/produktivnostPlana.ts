@@ -1,7 +1,7 @@
 // Produktivnost delovnega plana: planirane ure (delovni plan) proti poročanim uram (štempljanje po nalogih).
 import * as XLSX from "xlsx";
 import { addDays, mondayOf, type IsoDate } from "./dates";
-import type { OddelekKoda } from "./normativi";
+import { ODDELKI_NORMATIVA, type Normativ, type OddelekKoda } from "./normativi";
 import {
   delezNapredka,
   jeDelovniDan,
@@ -347,6 +347,153 @@ export function dneviObdobja(od: IsoDate, doo: IsoDate, delo: { datum: IsoDate }
  * kot plan). Prava produktivnost (zaslužene / poročane ure) je samo pri krovnih nalogih - po dnevih ni znano, koliko je izdelano.
  */
 export const porabaDneva = (planUre: number, porocano: number) => (planUre > 0 ? porocano / planUre : null);
+
+// =====================================================================
+// ZAKLJUČENI KROVNI NALOGI (produktivnost po zaključku)
+//
+// Delovni nalog je zaključen, ko ga ni več v zadnjem uvozu nalogov (v štempljanju ima status "Z").
+// Krovni je zaključen, ko so zaključeni VSI njegovi nalogi (iz vseh uvozov); datum zaključka = zadnji dan štempljanja.
+// Prikažejo se krovni iz delovnega plana oddelka, zaključeni v zadnjih N dneh - vedno v celoti (vse ure, tudi starejše).
+// Produktivnost = normativne ure / štempljane ure (samo operacije oddelka): nad 100 % = manj ur od normativa.
+// =====================================================================
+
+/** Produktivnost zunaj teh mej je verjetno napaka štempljanja - pokaže se značka "preveri", izločanja ni. */
+export const PREVERI_NAD = 1.5;
+export const PREVERI_POD = 0.5;
+
+export type NalogZakljucen = {
+  st: string;
+  naziv: string | null;
+  ident: string | null;
+  /** Razpisana količina (zaključen nalog = narejeno). */
+  kos: number;
+  /** Normativne ure oddelka (kos × normativ); null = ni normativa za oddelek. */
+  normUre: number | null;
+  /** Štempljane ure na operacijah oddelka. */
+  ure: number;
+  produktivnost: number | null;
+  /** Ne šteje se: brez štempljanja v oddelku ali brez kosov. */
+  izlocen: "brez_stempljanja" | "brez_kosov" | null;
+  preveri: boolean;
+};
+
+export type KrovniZakljucen = {
+  krovni: string;
+  celicaId: number;
+  /** Zadnji dan štempljanja na nalogih krovnega (vsi oddelki). */
+  zakljucen: IsoDate;
+  /** Prvi dan štempljanja v oddelku. */
+  prviDan: IsoDate | null;
+  /** Vsota nalogov z normativom (brez izločenih). */
+  normUre: number;
+  ure: number;
+  /** Štempljane ure na nalogih brez normativa (niso v produktivnosti). */
+  ureBrezNormativa: number;
+  produktivnost: number | null;
+  nalogi: NalogZakljucen[];
+};
+
+/** Nalogi krovnega iz vseh uvozov (krovni brez "Krovni DN" je nalog sam). */
+function nalogiKrovnega(krovni: string, zgodovina: NalogKrovnega[]) {
+  const m = new Map<string, NalogKrovnega>();
+  for (const n of zgodovina) if (n.krovni_dn === krovni || n.st_naloga === krovni) m.set(n.st_naloga, n);
+  return [...m.values()];
+}
+
+/** Zaključeni krovni iz plana oddelka (brez ur - za nalaganje štempljanja in kosov). */
+export function zakljuceniKandidati(postavitve: Postavitev[], odprti: Set<string>, zgodovina: NalogKrovnega[]) {
+  const krovni = [...new Set(postavitve.filter((p) => !p.prosta).map((p) => p.krovni_dn))];
+  return krovni
+    .map((k) => ({ krovni: k, nalogi: nalogiKrovnega(k, zgodovina) }))
+    .filter((x) => x.nalogi.length > 0 && !odprti.has(x.krovni) && x.nalogi.every((n) => !odprti.has(n.st_naloga)));
+}
+
+export function izracunajZakljucene({
+  koda,
+  postavitve,
+  razpored,
+  odprti,
+  zgodovina,
+  porocano,
+  normativi,
+  kosiNalogov,
+  od,
+}: {
+  koda: OddelekKoda;
+  postavitve: Postavitev[];
+  razpored: Map<number, Razpored>;
+  /** Nalogi v zadnjem uvozu (odprti). */
+  odprti: Set<string>;
+  zgodovina: NalogKrovnega[];
+  /** Vse štempljanje na nalogih kandidatov (vsi datumi, vse operacije). */
+  porocano: PorocanoDelo[];
+  normativi: Normativ[];
+  kosiNalogov: Map<string, number>;
+  /** Krovni, zaključeni na ta dan ali pozneje. */
+  od: IsoDate;
+}): KrovniZakljucen[] {
+  const polje = ODDELKI_NORMATIVA.find((o) => o.koda === koda)!.polje;
+  const normPoIdentu = new Map(normativi.map((n) => [n.ident, n]));
+  const porPoNalogu = new Map<string, PorocanoDelo[]>();
+  for (const v of new Map(porocano.map((x) => [x.id, x])).values()) porPoNalogu.set(v.st_naloga, [...(porPoNalogu.get(v.st_naloga) ?? []), v]);
+  // celica krovnega: postavitev z najpoznejšim koncem plana
+  const celicaKrovnega = new Map<string, { celicaId: number; konec: string }>();
+  for (const p of postavitve) {
+    if (p.prosta) continue;
+    const konec = razpored.get(p.id)?.do ?? p.datum_zacetka;
+    const x = celicaKrovnega.get(p.krovni_dn);
+    if (!x || konec > x.konec) celicaKrovnega.set(p.krovni_dn, { celicaId: p.delovno_mesto_id, konec });
+  }
+
+  const out: KrovniZakljucen[] = [];
+  for (const { krovni, nalogi } of zakljuceniKandidati(postavitve, odprti, zgodovina)) {
+    const vseVrstice = nalogi.flatMap((n) => porPoNalogu.get(n.st_naloga) ?? []);
+    if (!vseVrstice.length) continue;
+    const zakljucen = vseVrstice.reduce((m, v) => (v.datum > m ? v.datum : m), vseVrstice[0].datum);
+    if (zakljucen < od) continue;
+    const vOddelku = vseVrstice.filter((v) => oddelekOperacije(v.operacija) === koda && v.ure > 0);
+    const prviDan = vOddelku.length ? vOddelku.reduce((m, v) => (v.datum < m ? v.datum : m), vOddelku[0].datum) : null;
+
+    const vrstice: NalogZakljucen[] = nalogi.map((n) => {
+      const ure = (porPoNalogu.get(n.st_naloga) ?? []).filter((v) => oddelekOperacije(v.operacija) === koda).reduce((s, v) => s + v.ure, 0);
+      const kos = kosiNalogov.get(n.st_naloga) ?? 0;
+      const norm = n.koda_artikla ? normPoIdentu.get(n.koda_artikla) : undefined;
+      const naKos = norm ? Number(norm[polje]) : 0;
+      const normUre = naKos > 0 && kos > 0 ? naKos * kos : null;
+      const izlocen = ure <= 0.005 ? "brez_stempljanja" : kos <= 0 ? "brez_kosov" : null;
+      const produktivnost = !izlocen && normUre !== null ? normUre / ure : null;
+      return {
+        st: n.st_naloga,
+        naziv: n.naziv_artikla,
+        ident: n.koda_artikla,
+        kos,
+        normUre,
+        ure,
+        produktivnost,
+        izlocen,
+        preveri: produktivnost !== null && (produktivnost > PREVERI_NAD || produktivnost < PREVERI_POD),
+      };
+    });
+    // krovni brez štempljanja v oddelku ni delo tega oddelka
+    if (vrstice.every((v) => v.izlocen)) continue;
+    const steti = vrstice.filter((v) => !v.izlocen && v.normUre !== null);
+    const normUre = steti.reduce((s, v) => s + v.normUre!, 0);
+    const ure = steti.reduce((s, v) => s + v.ure, 0);
+    out.push({
+      krovni,
+      celicaId: celicaKrovnega.get(krovni)?.celicaId ?? NERAZPOREJENO,
+      zakljucen,
+      prviDan,
+      normUre,
+      ure,
+      ureBrezNormativa: vrstice.filter((v) => !v.izlocen && v.normUre === null).reduce((s, v) => s + v.ure, 0),
+      produktivnost: ure > 0 ? normUre / ure : null,
+      // nalogi: šteti po vrsti, nato brez normativa, izločeni na koncu
+      nalogi: vrstice.sort((a, b) => Number(!!a.izlocen) - Number(!!b.izlocen) || Number(a.normUre === null) - Number(b.normUre === null) || a.st.localeCompare(b.st)),
+    });
+  }
+  return out.sort((a, b) => a.zakljucen.localeCompare(b.zakljucen) || a.krovni.localeCompare(b.krovni));
+}
 
 // =====================================================================
 // IZVOZ
