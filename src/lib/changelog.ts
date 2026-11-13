@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "36.02",
+    datum: "13. 11. 2026",
+    spremembe: [
+      "FIN:TV »Delo - prejšnji dan«: krožnica čez plan (rumena / rdeča) je zdaj zunaj zelenega kroga in ne prekriva več številk; besedilo v krogu se po potrebi pomanjša, da ostane znotraj.",
+      "Zasedenost → Produktivnost: nov gumb »PDF - delo …« za prenos PDF-ja Delo - prejšnji dan za izbran oddelek (isti kot na FIN:TV).",
+    ],
+  },
+  {
     verzija: "36.01",
     datum: "13. 11. 2026",
     spremembe: [

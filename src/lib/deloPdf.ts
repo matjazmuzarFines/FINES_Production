@@ -1,10 +1,12 @@
 // PDF "Delo - prejšnji dan" (FIN:TV): ena stran 16:9 na oddelek - za vsako celico krog porabe ur (štempljano / plan)
 // in ure po krovnih nalogih. Krog: zelena krožnica do plana, čez plan dodatna širša krožnica (do +10 % rumena, nad rdeča).
+// Krožnica čez plan je ZUNAJ zelene (ne prekriva besedila v krogu).
 // Številke so v URAH (štempljano, razlika do plana) - procent je v aplikaciji rezerviran za produktivnost.
 // Stran je 16:9, da jo TV pokaže čez cel zaslon brez raztega (krogi ostanejo okrogli). Skupna oblika: porociloPdf.ts.
 import { LineCapStyle, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { formatLong } from "./dates";
 import { poraba, stanjePorabe, type DeloCelice, type DeloOddelka } from "./deloVceraj";
+import { asciiIme, prenesiDatoteko } from "./prenos";
 import { formatRazlikaUr, formatUre } from "./stevila";
 import { BELA, ORANZNA, PRELIV, SIVA, TEMNA, glavaStrani, novDokument, noga, preliv, zaobljen, type Pisave } from "./porociloPdf";
 
@@ -50,17 +52,25 @@ function lok(s: PDFPage, cx: number, cy: number, r: number, a0: number, a1: numb
   });
 }
 
+/** Krožnica čez plan: debelina (× d) in odmik središča od zelene krožnice (× d). Zunanji rob = r + ZUNANJI_ROB × d. */
+const DEBELINA_CEZ = 0.9;
+const ODMIK_CEZ = 0.5 + 0.3 + DEBELINA_CEZ / 2;
+const ZUNANJI_ROB = ODMIK_CEZ + DEBELINA_CEZ / 2;
+
 /**
- * Krog porabe: siva sled, zelena krožnica do 100 %, nad 100 % dodatna širša krožnica (rumena / rdeča) od vrha naprej.
- * (cx, cy) = središče, r = polmer krožnice, d = debelina zelene.
+ * Krog porabe: siva sled, zelena krožnica do 100 %, nad 100 % dodatna krožnica (rumena / rdeča) ZUNAJ zelene, od vrha
+ * naprej - notranjost kroga ostane prosta za besedilo. (cx, cy) = središče, r = polmer zelene, d = debelina zelene.
  */
 function krogPorabe(s: PDFPage, cx: number, cy: number, r: number, d: number, p: number | null) {
   lok(s, cx, cy, r, 0, 2 * Math.PI, SLED, d, false);
   if (p === null || p <= 0) return;
   const polno = 2 * Math.PI;
   lok(s, cx, cy, r, 0, Math.min(p, 1) * polno, ZELENA, d, p < 1);
-  if (p > 1) lok(s, cx, cy, r, 0, Math.min(p - 1, 1) * polno, stanjePorabe(p) === "opozorilo" ? RUMENA : RDECA, d * 1.7, p < 2);
+  if (p > 1) lok(s, cx, cy, r + d * ODMIK_CEZ, 0, Math.min(p - 1, 1) * polno, stanjePorabe(p) === "opozorilo" ? RUMENA : RDECA, d * DEBELINA_CEZ, p < 2);
 }
+
+/** Velikost pisave, da besedilo ne preseže širine (največ `vel`). */
+const naSirino = (t: string, font: PDFFont, vel: number, sirina: number) => Math.min(vel, (sirina / Math.max(1, font.widthOfTextAtSize(t, 1))));
 
 const sredina = (s: PDFPage, t: string, cx: number, y: number, vel: number, font: PDFFont, barva: RGB) =>
   s.drawText(t, { x: cx - font.widthOfTextAtSize(t, vel) / 2, y, size: vel, font, color: barva });
@@ -90,19 +100,30 @@ function kartica(s: PDFPage, f: Pisave, c: DeloCelice, x: number, yVrh: number, 
   const visina = h - GLAVA - 2 * PAD;
   // krog: ~55 % višine vsebine, največ 62 % širine
   const premer = Math.min(visina * 0.55, (w - 2 * PAD) * 0.62, 210);
-  const debelina = Math.max(5, premer * 0.075);
-  const r = premer / 2 - debelina * 0.85;
+  const debelina = Math.max(4.5, premer * 0.065);
+  // prostor zunaj zelene je rezerviran za krožnico čez plan
+  const r = premer / 2 - debelina * ZUNANJI_ROB;
   const cx = x + w / 2;
   const cy = vrh - premer / 2;
   krogPorabe(s, cx, cy, r, debelina, p);
+  // besedilo znotraj notranjega roba zelene (z malo zraka)
+  const notranji = r - debelina / 2 - 3;
   const velPct = premer * 0.2;
+  const yGor = cy - velPct * 0.2;
+  const yDol = yGor - premer * 0.12;
+  // širina tetive kroga na višini vrstice (spodnja vrstica je nižje -> ožja)
+  const tetiva = (yv: number, vel: number) => 2 * Math.sqrt(Math.max(0, notranji ** 2 - (cy - yv + vel * 0.3) ** 2));
+  const vrstica = (t: string, yv: number, vel: number, font: PDFFont, barva: RGB) => {
+    const v = naSirino(t, font, vel, Math.min(2 * notranji * 0.9, tetiva(yv, vel)));
+    sredina(s, t, cx, yv, v, font, barva);
+  };
   if (p === null) {
-    sredina(s, c.ure > 0 ? ure(c.ure) : "–", cx, cy - velPct * 0.3, velPct * (c.ure > 0 ? 0.7 : 1), f.krepka, SIVA);
-    sredina(s, c.ure > 0 ? "brez plana" : "ni plana", cx, cy - velPct * 0.3 - premer * 0.13, Math.max(6.75, premer * 0.07), f.navadna, SIVA);
+    vrstica(c.ure > 0 ? ure(c.ure) : "–", yGor - velPct * 0.1, velPct * (c.ure > 0 ? 0.7 : 1), f.krepka, SIVA);
+    vrstica(c.ure > 0 ? "brez plana" : "ni plana", yDol - velPct * 0.1, Math.max(6.75, premer * 0.07), f.navadna, SIVA);
   } else {
     // sredina: štempljane ure (veliko), pod njimi razlika do plana in plan
-    sredina(s, ure(c.ure), cx, cy - velPct * 0.2, velPct * 0.8, f.krepka, TEMNA);
-    sredina(s, `${formatRazlikaUr(c.ure - c.plan)} · plan ${ure(c.plan)}`, cx, cy - velPct * 0.2 - premer * 0.13, Math.max(6.75, premer * 0.075), f.polkrepka, barva.besedilo);
+    vrstica(ure(c.ure), yGor, velPct * 0.8, f.krepka, TEMNA);
+    vrstica(`${formatRazlikaUr(c.ure - c.plan)} · plan ${ure(c.plan)}`, yDol, Math.max(6.75, premer * 0.075), f.polkrepka, barva.besedilo);
   }
 
   // ure po krovnih nalogih
@@ -165,6 +186,11 @@ function legenda(s: PDFPage, f: Pisave, x: number, y: number) {
   s.drawText("Krog = štempljane ure celice proti planiranim uram (delovni plan); številke so ure, + = čez plan.", { x: x + 6, y, size: 7.5, font: f.lezeca, color: SIVA });
 }
 
+/** Prenos PDF "Delo - prejšnji dan" za oddelek (stran Produktivnost). */
+export async function prenesiDeloPdf(d: DeloOddelka) {
+  prenesiDatoteko(await ustvariDeloPdf(d), `${asciiIme(`Delo_${d.naziv}_${d.datum}`)}.pdf`);
+}
+
 /** PDF ene strani 16:9 za oddelek. */
 export async function ustvariDeloPdf(d: DeloOddelka): Promise<Blob> {
   const naslov = "Delo - prejšnji dan";
@@ -181,12 +207,12 @@ export async function ustvariDeloPdf(d: DeloOddelka): Promise<Blob> {
   const planSk = redne.reduce((a, c) => a + c.plan, 0);
   const ureSk = redne.reduce((a, c) => a + c.ure, 0);
   const pSk = poraba(ureSk, planSk);
-  const rSk = 15;
-  const cxSk = W - ROB - rSk - 4;
+  const rSk = 13;
+  const cxSk = W - ROB - rSk - 8;
   const cySk = y - 18;
-  krogPorabe(s, cxSk, cySk, rSk, 4.5, pSk);
-  desno(s, planSk > 0 ? formatRazlikaUr(ureSk - planSk) : "–", cxSk - rSk - 12, y - 16, 16, f.krepka, BARVA_STANJA[stanjePorabe(pSk)].besedilo);
-  desno(s, `Oddelek skupaj · štempljano ${formatUre(ureSk)} / plan ${ure(planSk)}`, cxSk - rSk - 12, y - 30, 8.25, f.navadna, SIVA);
+  krogPorabe(s, cxSk, cySk, rSk, 4, pSk);
+  desno(s, planSk > 0 ? formatRazlikaUr(ureSk - planSk) : "–", cxSk - rSk - 16, y - 16, 16, f.krepka, BARVA_STANJA[stanjePorabe(pSk)].besedilo);
+  desno(s, `Oddelek skupaj · štempljano ${formatUre(ureSk)} / plan ${ure(planSk)}`, cxSk - rSk - 16, y - 30, 8.25, f.navadna, SIVA);
   y -= 44;
 
   // mreža kartic: do 4 celice v eni vrsti, več v dveh

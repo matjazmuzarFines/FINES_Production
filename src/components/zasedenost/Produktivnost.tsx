@@ -12,6 +12,7 @@ import {
   isoWeek,
   mondayOf,
   monthEnd,
+  prevWorkday,
   monthStart,
   toIso,
   weekday,
@@ -352,6 +353,27 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
         >
           Kontrola produktivnosti
         </Button>
+        )}
+        {oddelek && (
+          <Izvoz
+            className="self-end"
+            spomin="produktivnost-delo"
+            formati={[
+              {
+                koda: "pdf-delo",
+                label: `PDF - delo ${formatShort(prevWorkday(danes))}`,
+                hint: `Delo prejšnjega delovnega dne (${formatShort(prevWorkday(danes))}) · ${oddelek.naziv}: štempljane ure proti planu po celicah, stran 16:9 (isto kot FIN:TV)`,
+                disabled: !imaTabele,
+                zakaj: "Tabele poročanega dela še ni v bazi",
+                akcija: async () => {
+                  const [{ pripraviDelo }, { prenesiDeloPdf }] = await Promise.all([import("@/lib/deloVceraj"), import("@/lib/deloPdf")]);
+                  const [d] = await pripraviDelo(prevWorkday(danes), [oddelek.koda]);
+                  if (!d) throw new Error("Oddelek ni najden.");
+                  await prenesiDeloPdf(d);
+                },
+              },
+            ]}
+          />
         )}
         <Button
           hint="Objavi delo prejšnjega dne in zaključene krovne na FIN:TV"
