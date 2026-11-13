@@ -20,7 +20,7 @@ export function PodatkiVir({ kljuci }: { kljuci: SyncDatotekaKljuc[] }) {
       onClick={(e) => {
         if (!lahkoZapustim()) e.preventDefault();
       }}
-      className="fp-card flex w-full flex-col gap-1 px-3 py-2 text-xs transition-colors hover:border-ink-400 hover:bg-ink-50 sm:w-72"
+      className="fp-card flex w-full min-w-0 flex-1 flex-col gap-1 px-3 py-2 text-xs transition-colors hover:border-ink-400 hover:bg-ink-50 sm:w-72 sm:flex-none"
     >
       <span className="font-semibold text-ink-600">Podatki iz ERP · uvoženo</span>
       {prikazane.map((d) => (

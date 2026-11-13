@@ -12,8 +12,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     verzija: "36.02",
     datum: "13. 11. 2026",
     spremembe: [
-      "FIN:TV »Delo - prejšnji dan«: krožnica čez plan (rumena / rdeča) je zdaj zunaj zelenega kroga in ne prekriva več številk; besedilo v krogu se po potrebi pomanjša, da ostane znotraj.",
-      "Zasedenost → Produktivnost: nov gumb »PDF - delo …« za prenos PDF-ja Delo - prejšnji dan za izbran oddelek (isti kot na FIN:TV).",
+      "FIN:TV »Delo - prejšnji dan«: krožnica čez plan (rumena / rdeča) je zdaj zunaj zelenega kroga in ne prekriva več številk; štempljane ure v krogu so v barvi stanja (zelena v planu, rumena do +10 %, rdeča čez plan).",
+      "Produktivnost: pogleda »Plan in ure« in »Zaključeni krovni« sta zdaj zavihka (kot Delovni plan); Kontrola produktivnosti je čisto desno ob oddelkih.",
+      "Produktivnost: PDF »Delo - prejšnji dan« je nov format v Izvozu zavihka Plan in ure (skupaj z Excelom). Gumb »Na TV« je odstranjen - objava je samodejna ob uvozu Poročanega dela.",
+      "Nova komponenta FIN:TV (Delovni plan, Produktivnost): kvadratek z utripajočo ikono TV desno od Podatkov iz ERP - klik pokaže, kateri izpisi strani gredo na TV, v kakšni obliki, kdaj se objavijo, koliko časa veljajo, stanje komponente v FinOS in zadnjo objavo.",
     ],
   },
   {

@@ -1,5 +1,5 @@
 // PDF "Delo - prejšnji dan" (FIN:TV): ena stran 16:9 na oddelek - za vsako celico krog porabe ur (štempljano / plan)
-// in ure po krovnih nalogih. Krog: zelena krožnica do plana, čez plan dodatna širša krožnica (do +10 % rumena, nad rdeča).
+// in ure po krovnih nalogih. Krog: zelena krožnica do plana, čez plan dodatna krožnica zunaj zelene (do +10 % rumena, nad rdeča).
 // Krožnica čez plan je ZUNAJ zelene (ne prekriva besedila v krogu).
 // Številke so v URAH (štempljano, razlika do plana) - procent je v aplikaciji rezerviran za produktivnost.
 // Stran je 16:9, da jo TV pokaže čez cel zaslon brez raztega (krogi ostanejo okrogli). Skupna oblika: porociloPdf.ts.
@@ -121,8 +121,8 @@ function kartica(s: PDFPage, f: Pisave, c: DeloCelice, x: number, yVrh: number, 
     vrstica(c.ure > 0 ? ure(c.ure) : "–", yGor - velPct * 0.1, velPct * (c.ure > 0 ? 0.7 : 1), f.krepka, SIVA);
     vrstica(c.ure > 0 ? "brez plana" : "ni plana", yDol - velPct * 0.1, Math.max(6.75, premer * 0.07), f.navadna, SIVA);
   } else {
-    // sredina: štempljane ure (veliko), pod njimi razlika do plana in plan
-    vrstica(ure(c.ure), yGor, velPct * 0.8, f.krepka, TEMNA);
+    // sredina: štempljane ure (veliko, v barvi stanja - takoj se vidi, ali je problem), pod njimi razlika do plana in plan
+    vrstica(ure(c.ure), yGor, velPct * 0.8, f.krepka, barva.besedilo);
     vrstica(`${formatRazlikaUr(c.ure - c.plan)} · plan ${ure(c.plan)}`, yDol, Math.max(6.75, premer * 0.075), f.polkrepka, barva.besedilo);
   }
 

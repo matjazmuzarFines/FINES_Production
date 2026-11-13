@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2, PanelRightClose, PanelRightOpen, Tv } from "lucide-react";
+import { CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
 import {
   addDays,
   addMonths,
@@ -54,8 +54,11 @@ import {
 import { formatNum, formatRazlikaUr, formatUre } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import { izracunajNaloge, naloziZadnjiUvoz, naloziZasOddelke, type Nalog, type ZasOddelek } from "@/lib/zasedenost";
+import { tvIzpisiProduktivnosti } from "@/lib/tvIzpisi";
 import { DNI_ZAKLJUCENI, poCelicah } from "@/lib/zakljuceniKrovni";
 import { PodatkiVir } from "@/components/PodatkiVir";
+import { TvPovezava } from "@/components/TvPovezava";
+import { Zavihki } from "@/components/ui/Zavihki";
 import { usePoSyncu } from "@/components/SyncProvider";
 import { Button, IconButton } from "@/components/ui/Button";
 import { FilterCheckbox, FilterPreklopnik, FilterVrstica } from "@/components/ui/Filtri";
@@ -151,29 +154,8 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
   const [samoObdobje, setSamoObdobje] = useState(true);
   // Desni panel; stran pokaže Loading, dokler podatki niso naloženi - branje localStorage je varno
   const [panel, setPanel] = useState(preberiPanel);
-  const [naTv, setNaTv] = useState(false);
   const [pogled, setPogled] = useState<Pogled>("plan");
   const [zakPodatki, setZakPodatki] = useState<{ porocano: PorocanoDelo[]; kosi: Map<string, number> } | null>(null);
-
-  /** FIN:TV "Delo - prejšnji dan" ročno (sicer se objavi sama ob uvozu poročanega dela). */
-  async function objaviNaTv() {
-    setNaTv(true);
-    try {
-      const { objaviDeloNaTv, objaviZakljuceneNaTv } = await import("@/lib/tvObjava");
-      const izid = await objaviDeloNaTv("ročna objava");
-      const zak = await objaviZakljuceneNaTv("ročna objava");
-      const deli = [
-        izid.oddelki.length ? `delo ${formatShort(izid.datum)} - ${izid.oddelki.join(", ")}` : "",
-        zak.oddelki.length ? `zaključeni krovni - ${zak.oddelki.join(", ")}` : "",
-      ].filter(Boolean);
-      if (deli.length) notify("success", `FIN:TV objavljeno: ${deli.join(" · ")}.`, 8000);
-      else notify("warning", "FIN:TV: komponenti Delo - prejšnji dan in Zaključeni krovni nista vklopljeni (ali ni dostopa do FIN:TV).", 10000);
-    } catch (e) {
-      notify("error", `FIN:TV: ${(e as Error).message}`, 10000);
-    } finally {
-      setNaTv(false);
-    }
-  }
 
   function preklopiPanel() {
     setPanel(!panel);
@@ -294,7 +276,7 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
     : [];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 [&>[role=tablist]]:-mb-4">
       {/* ============ GLAVA ============ */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto min-w-[min(100%,18rem)] flex-1">
@@ -303,88 +285,45 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
             Planirane ure delovnega plana proti poročanim uram (štempljanje na naloge) po delovnih mestih in dnevih
           </p>
         </div>
-        <PodatkiVir kljuci={["nalogi", "porocano"]} />
+        <div className="flex w-full items-stretch gap-3 sm:w-auto">
+          <PodatkiVir kljuci={["nalogi", "porocano"]} />
+          <TvPovezava izpisi={tvIzpisiProduktivnosti(koda)} oddelek={oddelek?.naziv} />
+        </div>
       </div>
 
-      {/* ============ ODDELKI ============ */}
-      <div className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Oddelki">
-        {osnova.oddelki.map((o) => {
-          const aktiven = o.koda === koda;
-          return (
-            <Link
-              key={o.koda}
-              href={`/proizvodnja/zasedenost/produktivnost?oddelek=${o.koda}`}
-              role="tab"
-              aria-selected={aktiven}
-              title={`Pokaži produktivnost: ${o.naziv}`}
-              className={`flex h-10 items-center rounded-lg border-2 px-4 text-sm font-bold transition-colors ${
-                aktiven ? "border-fines-500 bg-fines-500 text-white" : "border-ink-200 bg-white text-ink-700 hover:border-fines-500 hover:text-fines-500"
-              }`}
-            >
-              {o.naziv}
-            </Link>
-          );
-        })}
-      </div>
-        <div className="ml-auto">
-          <FilterPreklopnik<Pogled>
-            label="Pogled"
-            value={pogled}
-            onChange={setPogled}
-            options={[
-              { value: "plan", label: "Plan in ure", hint: "Planirane proti štempljanim uram po delovnih mestih in dnevih" },
-              {
-                value: "zakljuceni",
-                label: "Zaključeni krovni",
-                hint: `Produktivnost krovnih nalogov, zaključenih v zadnjih ${DNI_ZAKLJUCENI} dneh`,
-              },
-            ]}
-          />
+      {/* ============ ODDELKI (levo) · KONTROLA (desno) ============ */}
+      <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Oddelki">
+          {osnova.oddelki.map((o) => {
+            const aktiven = o.koda === koda;
+            return (
+              <Link
+                key={o.koda}
+                href={`/proizvodnja/zasedenost/produktivnost?oddelek=${o.koda}`}
+                role="tab"
+                aria-selected={aktiven}
+                title={`Pokaži produktivnost: ${o.naziv}`}
+                className={`flex h-10 items-center rounded-lg border-2 px-4 text-sm font-bold transition-colors ${
+                  aktiven ? "border-fines-500 bg-fines-500 text-white" : "border-ink-200 bg-white text-ink-700 hover:border-fines-500 hover:text-fines-500"
+                }`}
+              >
+                {o.naziv}
+              </Link>
+            );
+          })}
         </div>
         {pogled === "plan" && (
-        <Button
-          hint={panel ? "Zapri kontrolo produktivnosti" : "Odpri kontrolo produktivnosti: krovni nalogi s planiranimi in štempljanimi urami"}
-          variant={panel ? "primary" : "neutral"}
-          icon={panel ? PanelRightClose : PanelRightOpen}
-          aria-pressed={panel}
-          onClick={preklopiPanel}
-          className="self-end"
-        >
-          Kontrola produktivnosti
-        </Button>
+          <Button
+            hint={panel ? "Zapri kontrolo produktivnosti" : "Odpri kontrolo produktivnosti: krovni nalogi s planiranimi in štempljanimi urami"}
+            variant={panel ? "primary" : "neutral"}
+            icon={panel ? PanelRightClose : PanelRightOpen}
+            aria-pressed={panel}
+            onClick={preklopiPanel}
+            className="ml-auto"
+          >
+            Kontrola produktivnosti
+          </Button>
         )}
-        {oddelek && (
-          <Izvoz
-            className="self-end"
-            spomin="produktivnost-delo"
-            formati={[
-              {
-                koda: "pdf-delo",
-                label: `PDF - delo ${formatShort(prevWorkday(danes))}`,
-                hint: `Delo prejšnjega delovnega dne (${formatShort(prevWorkday(danes))}) · ${oddelek.naziv}: štempljane ure proti planu po celicah, stran 16:9 (isto kot FIN:TV)`,
-                disabled: !imaTabele,
-                zakaj: "Tabele poročanega dela še ni v bazi",
-                akcija: async () => {
-                  const [{ pripraviDelo }, { prenesiDeloPdf }] = await Promise.all([import("@/lib/deloVceraj"), import("@/lib/deloPdf")]);
-                  const [d] = await pripraviDelo(prevWorkday(danes), [oddelek.koda]);
-                  if (!d) throw new Error("Oddelek ni najden.");
-                  await prenesiDeloPdf(d);
-                },
-              },
-            ]}
-          />
-        )}
-        <Button
-          hint="Objavi delo prejšnjega dne in zaključene krovne na FIN:TV"
-          variant="sync"
-          icon={naTv ? Loader2 : Tv}
-          disabled={naTv || !imaTabele}
-          onClick={objaviNaTv}
-          className={`self-end ${naTv ? "[&>svg]:animate-spin" : ""}`}
-        >
-          Na TV
-        </Button>
       </div>
 
       {!imaTabele && (
@@ -397,6 +336,22 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
         <WarningText>Poročano delo še ni uvoženo - na strani Podatki uvozi Porocano_delo.xlsx (Sync ali ročni uvoz).</WarningText>
       )}
 
+      {/* ============ POGLEDI ============ */}
+      <Zavihki<Pogled>
+        label="Pogled produktivnosti"
+        value={pogled}
+        onChange={setPogled}
+        zavihki={[
+          { koda: "plan", label: "Plan in ure", hint: "Planirane proti štempljanim uram po delovnih mestih in dnevih", icon: CalendarRange },
+          {
+            koda: "zakljuceni",
+            label: "Zaključeni krovni",
+            hint: `Produktivnost krovnih nalogov, zaključenih v zadnjih ${DNI_ZAKLJUCENI} dneh`,
+            icon: CheckCircle2,
+          },
+        ]}
+      />
+
       {!oddelek ? (
         <div className="fp-card p-8 text-center text-ink-600">Oddelek ni najden.</div>
       ) : pogled === "zakljuceni" ? (
@@ -405,7 +360,7 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
         <>
           <div className={`grid items-start gap-4 ${panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
           {/* ============ ČASOVNICA ============ */}
-          <div className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
+          <div className="fp-card flex min-w-0 flex-col gap-3 rounded-tl-none p-3 sm:p-4">
             <FilterVrstica>
               <div className="flex items-end gap-2">
                 <IconButton
@@ -447,6 +402,17 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
                 className="ml-auto"
                 spomin="produktivnost-delo"
                 formati={[
+                  {
+                    koda: "pdf-delo",
+                    label: "PDF - delo prejšnji dan",
+                    hint: `Delo prejšnjega delovnega dne (${formatShort(prevWorkday(danes))}) · ${oddelek.naziv}: štempljane ure proti planu po celicah, stran 16:9 (isto kot FIN:TV)`,
+                    akcija: async () => {
+                      const [{ pripraviDelo }, { prenesiDeloPdf }] = await Promise.all([import("@/lib/deloVceraj"), import("@/lib/deloPdf")]);
+                      const [d] = await pripraviDelo(prevWorkday(danes), [oddelek.koda]);
+                      if (!d) throw new Error("Oddelek ni najden.");
+                      await prenesiDeloPdf(d);
+                    },
+                  },
                   {
                     koda: "xlsx",
                     label: "Excel (.xlsx)",
@@ -530,7 +496,7 @@ function ZakljuceniKrovni({ celice, krovni, od, oddelek }: { celice: Celica[]; k
   const skupine = poCelicah(celice, krovni ?? []);
   return (
     <div className="flex flex-col gap-4">
-      <div className="fp-card flex flex-col gap-2 p-3 sm:p-4">
+      <div className="fp-card flex flex-col gap-2 rounded-tl-none p-3 sm:p-4">
         <FilterVrstica>
           <div className="mr-auto min-w-[min(100%,18rem)] flex-1 self-center">
             <h3 className="text-base font-bold text-ink-900">Zaključeni krovni nalogi · {oddelek.naziv}</h3>

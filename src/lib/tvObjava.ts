@@ -11,7 +11,7 @@
 // Delo - prejšnji dan (vsak oddelek svoja komponenta, FinOS 027): ob vsakem uvozu Poročanega dela (Sync) se za prejšnji
 // delovni dan ustvari stran 16:9 na oddelek (deloPdf.ts); stran velja samo na dan objave.
 //
-// Zaključeni krovni (vsak oddelek svoja komponenta, FinOS 028): ob vsakem uvozu Poročanega dela (in ob gumbu Na TV) se
+// Zaključeni krovni (vsak oddelek svoja komponenta, FinOS 028): ob vsakem uvozu Poročanega dela se
 // ustvari stran 16:9 na celico s krovnimi, zaključenimi v zadnjih 30 dneh (zakljuceniPdf.ts); strani veljajo 7 dni.
 import { addDays, mondayOf, prevWorkday, toIso, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
@@ -19,6 +19,7 @@ import type { WorkflowPlan } from "./plan";
 import { ustvariPlanPdf } from "./planPdf";
 import { ustvariPlanPregledPdf, type DruzineNormativov } from "./planPregledPdf";
 import { getSupabase } from "./supabase";
+import { kodaDela, kodaPregleda, kodaWorkflowa, kodaZakljucenih } from "./tvIzpisi";
 
 const KOSARA = "fos-tv-viri";
 /** Širina slike strani (4K). */
@@ -26,13 +27,6 @@ const SIRINA = 3840;
 /** Največ tednov naprej (plan za pol leta). */
 const NAJVEC_TEDNOV = 26;
 
-/** Koda komponente pregleda plana za oddelek (FinOS 025). */
-export const kodaPregleda = (oddelek: OddelekKoda) => `fp_plan_pregled_${oddelek.toLowerCase()}`;
-/** Koda komponente workflowa plana za oddelek (FinOS 026). */
-export const kodaWorkflowa = (oddelek: OddelekKoda) => `fp_plan_workflow_${oddelek.toLowerCase()}`;
-
-/** Koda komponente "Delo - prejšnji dan" za oddelek (FinOS 027). */
-export const kodaDela = (oddelek: OddelekKoda) => `fp_delo_vceraj_${oddelek.toLowerCase()}`;
 const ODDELKI: OddelekKoda[] = ["P", "M", "E", "T"];
 
 /** PDF -> slike strani (pdf.js, kot pdfStrani.ts v FinOS) + razmerje strani (višina / širina). */
@@ -64,6 +58,35 @@ async function pdfVSlike(pdfBlob: Blob): Promise<{ slike: Blob[]; razmerja: numb
     await pdf.loadingTask.destroy();
   }
   return { slike, razmerja };
+}
+
+/** Stanje komponente FIN:TV za prikaz na strani (TvPovezava): ali obstaja, ali je vklopljena, zadnja objava. */
+export type StanjeTvKomponente = {
+  koda: string;
+  ime: string | null;
+  /** null = komponente ni v FinOS (migracija ni zagnana) ali ni dostopa. */
+  vklopljena: boolean | null;
+  zadnja: { cas: string; izvor: string; strani: number } | null;
+};
+
+/** Stanje izbranih komponent FIN:TV (fos_tv_viri + fos_tv_zadnje_objave). */
+export async function stanjeTvKomponent(kode: string[]): Promise<StanjeTvKomponente[]> {
+  const sb = getSupabase();
+  const { data: viri } = await sb.from("fos_tv_viri").select("id, koda, ime, vklopljen").in("koda", kode).eq("visible", true);
+  const ids = (viri ?? []).map((v) => v.id as number);
+  const { data: objave } = ids.length
+    ? await sb.from("fos_tv_zadnje_objave").select("id_vira, created_at, izvor, strani").in("id_vira", ids)
+    : { data: [] as { id_vira: number; created_at: string; izvor: string; strani: string[] }[] };
+  return kode.map((koda) => {
+    const v = (viri ?? []).find((x) => x.koda === koda);
+    const o = v ? (objave ?? []).find((x) => x.id_vira === v.id) : undefined;
+    return {
+      koda,
+      ime: (v?.ime as string) ?? null,
+      vklopljena: v ? !!v.vklopljen : null,
+      zadnja: o ? { cas: o.created_at as string, izvor: (o.izvor as string) ?? "", strani: (o.strani as string[])?.length ?? 0 } : null,
+    };
+  });
 }
 
 /** Ali je komponenta v FinOS in vklopljena (sicer se nič ne ustvari). */
@@ -212,8 +235,6 @@ export async function objaviDeloNaTv(izvor = "uvoz poročanega dela"): Promise<{
   return { datum, oddelki };
 }
 
-/** Koda komponente "Zaključeni krovni" za oddelek (FinOS 028). */
-export const kodaZakljucenih = (oddelek: OddelekKoda) => `fp_zakljuceni_krovni_${oddelek.toLowerCase()}`;
 /** Strani zaključenih krovnih veljajo teden dni (nova objava jih zamenja - ob vsakem uvozu poročanega dela). */
 const VELJA_ZAKLJUCENI_DNI = 7;
 

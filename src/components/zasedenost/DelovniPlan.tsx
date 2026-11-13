@@ -24,6 +24,8 @@ import { addDays, formatDatumUra, formatDayMonth, formatShort, isoWeek, mondayOf
 import { naloziDruzine, naloziNormative, type Normativ, type OddelekKoda } from "@/lib/normativi";
 import { imaNeshranjeno, lahkoZapustim, useNeshranjeno } from "@/lib/neshranjeno";
 import { PodatkiVir } from "@/components/PodatkiVir";
+import { TvPovezava } from "@/components/TvPovezava";
+import { tvIzpisiDelovnegaPlana } from "@/lib/tvIzpisi";
 import { usePoSyncu } from "@/components/SyncProvider";
 import {
   delezNapredka,
@@ -321,7 +323,10 @@ function DelovniPlanInner({ koda }: { koda: OddelekKoda }) {
           </p>
         </div>
         {/* Kontrola plana uporablja še naročila, odpreme in material (kot Prioritete) */}
-        <PodatkiVir kljuci={potrebujePri ? ["nalogi", "narocila", "odpreme", "material"] : ["nalogi"]} />
+        <div className="flex w-full items-stretch gap-3 sm:w-auto">
+          <PodatkiVir kljuci={potrebujePri ? ["nalogi", "narocila", "odpreme", "material"] : ["nalogi"]} />
+          <TvPovezava izpisi={tvIzpisiDelovnegaPlana(koda)} oddelek={oddelek?.naziv} />
+        </div>
       </div>
 
       {/* ============ ODDELKI ============ */}
