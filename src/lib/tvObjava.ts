@@ -10,6 +10,9 @@
 //
 // Delo - prejšnji dan (vsak oddelek svoja komponenta, FinOS 027): ob vsakem uvozu Poročanega dela (Sync) se za prejšnji
 // delovni dan ustvari stran 16:9 na oddelek (deloPdf.ts); stran velja samo na dan objave.
+//
+// Zaključeni krovni (vsak oddelek svoja komponenta, FinOS 028): ob vsakem uvozu Poročanega dela (in ob gumbu Na TV) se
+// ustvari stran 16:9 na celico s krovnimi, zaključenimi v zadnjih 30 dneh (zakljuceniPdf.ts); strani veljajo 7 dni.
 import { addDays, mondayOf, prevWorkday, toIso, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
 import type { WorkflowPlan } from "./plan";
@@ -207,4 +210,46 @@ export async function objaviDeloNaTv(izvor = "uvoz poročanega dela"): Promise<{
     oddelki.push(d.naziv);
   }
   return { datum, oddelki };
+}
+
+/** Koda komponente "Zaključeni krovni" za oddelek (FinOS 028). */
+export const kodaZakljucenih = (oddelek: OddelekKoda) => `fp_zakljuceni_krovni_${oddelek.toLowerCase()}`;
+/** Strani zaključenih krovnih veljajo teden dni (nova objava jih zamenja - ob vsakem uvozu poročanega dela). */
+const VELJA_ZAKLJUCENI_DNI = 7;
+
+/**
+ * "Zaključeni krovni" na FIN:TV za vse oddelke z vklopljeno komponento: produktivnost krovnih iz delovnega plana,
+ * zaključenih v zadnjih 30 dneh (zakljuceniKrovni.ts -> zakljuceniPdf.ts), stran 16:9 na celico.
+ * Vrne objavljene oddelke (prazno = nobena komponenta ni vklopljena ali ni dostopa do FIN:TV).
+ */
+export async function objaviZakljuceneNaTv(izvor = "uvoz poročanega dela"): Promise<{ oddelki: string[] }> {
+  const danes = toIso(new Date());
+  const kode: OddelekKoda[] = [];
+  for (const o of ODDELKI) if (await vklopljena(kodaZakljucenih(o))) kode.push(o);
+  if (!kode.length) return { oddelki: [] };
+  const [{ pripraviZakljucene }, { ustvariZakljucenePdf }] = await Promise.all([import("./zakljuceniKrovni"), import("./zakljuceniPdf")]);
+  const zdaj = Date.now();
+  const oddelki: string[] = [];
+  for (const d of await pripraviZakljucene(kode)) {
+    const koda = kodaZakljucenih(d.koda);
+    const { slike, razmerja } = await pdfVSlike(await ustvariZakljucenePdf(d));
+    const strani: string[] = [];
+    for (let i = 0; i < slike.length; i++) {
+      const pot = `${koda}/${zdaj}/${danes}-${i + 1}.webp`;
+      const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(`Nalaganje strani na TV (${d.naziv}): ${error.message}`);
+      strani.push(pot);
+    }
+    const { error } = await getSupabase().rpc("fos_tv_objavi", {
+      p_koda: koda,
+      p_strani: strani,
+      p_razmerja: razmerja,
+      p_izvor: `Production: ${izvor} · ${d.naziv}`,
+      p_velja_od: strani.map(() => danes),
+      p_velja_do: strani.map(() => addDays(danes, VELJA_ZAKLJUCENI_DNI - 1)),
+    });
+    if (error) throw new Error(`${d.naziv}: ${error.message}`);
+    oddelki.push(d.naziv);
+  }
+  return { oddelki };
 }

@@ -53,6 +53,7 @@ import {
 import { formatNum, formatRazlikaUr, formatUre } from "@/lib/stevila";
 import { supabaseConfigured } from "@/lib/supabase";
 import { izracunajNaloge, naloziZadnjiUvoz, naloziZasOddelke, type Nalog, type ZasOddelek } from "@/lib/zasedenost";
+import { DNI_ZAKLJUCENI, poCelicah } from "@/lib/zakljuceniKrovni";
 import { PodatkiVir } from "@/components/PodatkiVir";
 import { usePoSyncu } from "@/components/SyncProvider";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -69,8 +70,6 @@ const VISINA_GRAFA = 128; // px - stolpci enega delovnega mesta
 
 type Obdobje = "teden" | "mesec";
 type Pogled = "plan" | "zakljuceni";
-/** Zaključeni krovni: koliko dni nazaj (datum zaključka). */
-const DNI_ZAKLJUCENI = 30;
 
 /** Barve kategorij poročanega dela (stolpec desno od plana). */
 const BARVA: Record<Kategorija, string> = {
@@ -159,10 +158,15 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
   async function objaviNaTv() {
     setNaTv(true);
     try {
-      const { objaviDeloNaTv } = await import("@/lib/tvObjava");
+      const { objaviDeloNaTv, objaviZakljuceneNaTv } = await import("@/lib/tvObjava");
       const izid = await objaviDeloNaTv("ročna objava");
-      if (izid.oddelki.length) notify("success", `FIN:TV: delo ${formatShort(izid.datum)} objavljeno - ${izid.oddelki.join(", ")}.`, 8000);
-      else notify("warning", "FIN:TV: komponenta Delo - prejšnji dan ni vklopljena (ali ni dostopa do FIN:TV).", 10000);
+      const zak = await objaviZakljuceneNaTv("ročna objava");
+      const deli = [
+        izid.oddelki.length ? `delo ${formatShort(izid.datum)} - ${izid.oddelki.join(", ")}` : "",
+        zak.oddelki.length ? `zaključeni krovni - ${zak.oddelki.join(", ")}` : "",
+      ].filter(Boolean);
+      if (deli.length) notify("success", `FIN:TV objavljeno: ${deli.join(" · ")}.`, 8000);
+      else notify("warning", "FIN:TV: komponenti Delo - prejšnji dan in Zaključeni krovni nista vklopljeni (ali ni dostopa do FIN:TV).", 10000);
     } catch (e) {
       notify("error", `FIN:TV: ${(e as Error).message}`, 10000);
     } finally {
@@ -350,7 +354,7 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
         </Button>
         )}
         <Button
-          hint="Objavi delo prejšnjega dne na FIN:TV"
+          hint="Objavi delo prejšnjega dne in zaključene krovne na FIN:TV"
           variant="sync"
           icon={naTv ? Loader2 : Tv}
           disabled={naTv || !imaTabele}
@@ -374,7 +378,7 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
       {!oddelek ? (
         <div className="fp-card p-8 text-center text-ink-600">Oddelek ni najden.</div>
       ) : pogled === "zakljuceni" ? (
-        <ZakljuceniKrovni celice={celice} krovni={zakljuceni} od={odZakljucenih} oddelek={oddelek.naziv} />
+        <ZakljuceniKrovni celice={celice} krovni={zakljuceni} od={odZakljucenih} oddelek={oddelek} />
       ) : (
         <>
           <div className={`grid items-start gap-4 ${panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
@@ -500,20 +504,34 @@ const tonProduktivnosti = (p: number | null) =>
   p === null ? "border-ink-300 bg-ink-50" : p >= 0.995 ? "border-ok-500 bg-ok-50" : p >= 0.85 ? "border-warn-400 bg-warn-50" : "border-nok-500 bg-nok-50";
 const besediloNalogov = (n: number) => `${n} ${n === 1 ? "nalog" : n === 2 ? "naloga" : n <= 4 ? "nalogi" : "nalogov"}`;
 
-function ZakljuceniKrovni({ celice, krovni, od, oddelek }: { celice: Celica[]; krovni: KrovniZakljucen[] | null; od: IsoDate; oddelek: string }) {
-  const skupine = [...celice.map((c) => ({ id: c.id, naziv: c.naziv })), { id: NERAZPOREJENO, naziv: "Brez delovnega mesta" }]
-    .map((c) => ({ ...c, krovni: (krovni ?? []).filter((k) => k.celicaId === c.id) }))
-    .filter((c) => c.krovni.length > 0);
+function ZakljuceniKrovni({ celice, krovni, od, oddelek }: { celice: Celica[]; krovni: KrovniZakljucen[] | null; od: IsoDate; oddelek: ZasOddelek }) {
+  const skupine = poCelicah(celice, krovni ?? []);
   return (
     <div className="flex flex-col gap-4">
       <div className="fp-card flex flex-col gap-2 p-3 sm:p-4">
-        <div>
-          <h3 className="text-base font-bold text-ink-900">Zaključeni krovni nalogi · {oddelek}</h3>
-          <p className="text-xs text-ink-500">
-            Krovni iz delovnega plana, pri katerih so zaključeni vsi nalogi, zadnje štempljanje od {formatShort(od)} naprej. Krovni se vedno
-            upošteva v celoti (vse ure, tudi starejše). Štejejo samo ure na operacijah oddelka; zaključen nalog = narejena razpisana količina.
-          </p>
-        </div>
+        <FilterVrstica>
+          <div className="mr-auto min-w-[min(100%,18rem)] flex-1 self-center">
+            <h3 className="text-base font-bold text-ink-900">Zaključeni krovni nalogi · {oddelek.naziv}</h3>
+            <p className="text-xs text-ink-500">
+              Krovni iz delovnega plana, pri katerih so zaključeni vsi nalogi, zadnje štempljanje od {formatShort(od)} naprej. Krovni se vedno
+              upošteva v celoti (vse ure, tudi starejše). Štejejo samo ure na operacijah oddelka; zaključen nalog = narejena razpisana količina.
+            </p>
+          </div>
+          <Izvoz
+            spomin="produktivnost-zakljuceni"
+            formati={[
+              {
+                koda: "pdf",
+                label: "PDF - zaključeni krovni",
+                hint: "Zaključeni krovni po celicah, stran 16:9 (tisk in FIN:TV)",
+                disabled: krovni === null,
+                zakaj: "Podatki se še nalagajo",
+                akcija: async () =>
+                  (await import("@/lib/zakljuceniPdf")).prenesiZakljucenePdf({ koda: oddelek.koda, naziv: oddelek.naziv, od, celice: skupine }),
+              },
+            ]}
+          />
+        </FilterVrstica>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700">
           <span title="Normativne ure (kosi × normativ oddelka) deljeno s štempljanimi urami">
             <strong className="uppercase tracking-wide">Produktivnost</strong> = normativne ure ÷ štempljane ure × 100
@@ -541,7 +559,7 @@ function ZakljuceniKrovni({ celice, krovni, od, oddelek }: { celice: Celica[]; k
         <div className="fp-card p-8 text-center text-ink-600">V zadnjih {DNI_ZAKLJUCENI} dneh ni zaključenih krovnih iz delovnega plana.</div>
       ) : (
         skupine.map((c) => (
-          <section key={c.id} className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
+          <section key={c.naziv} className="fp-card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
             <div className="flex items-baseline gap-2">
               <h3 className="text-lg font-bold text-ink-900">{c.naziv}</h3>
               <span className="text-sm text-ink-500">
@@ -576,7 +594,17 @@ function StolpecKrovnega({ k }: { k: KrovniZakljucen }) {
           <span className="font-mono text-base font-bold text-ink-900">{k.krovni}</span>
           <span className="ml-auto text-xs text-ink-500">zaključen {formatDayMonth(k.zakljucen)}</span>
         </div>
-        <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-ink-500">Produktivnost</div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Produktivnost</span>
+          {k.produktivnost !== null && (k.produktivnost > PREVERI_NAD || k.produktivnost < PREVERI_POD) && (
+            <span
+              className="ml-auto rounded-full border border-nok-500 bg-white px-2 py-0.5 text-[11px] font-semibold text-nok-600"
+              title="Produktivnost krovnega pod 50 % ali nad 150 % - verjetno napaka pri štempljanju, vodja naj preveri"
+            >
+              preveri štempljanje
+            </span>
+          )}
+        </div>
         <div className={`text-4xl font-bold leading-tight tabular-nums ${barvaProduktivnosti(k.produktivnost)}`}>{fmtPct(k.produktivnost)}</div>
         <div className="text-xs tabular-nums text-ink-600">
           normativ {formatUre(k.normUre)} h · štempljano {formatUre(k.ure)} h
