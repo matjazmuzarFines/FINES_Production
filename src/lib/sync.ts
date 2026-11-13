@@ -49,7 +49,16 @@ const UVOZ: Record<SyncDatotekaKljuc, (f: File) => Promise<RezultatUvoza>> = {
   porocano: async (f) => {
     const { vrstice, vnosov, opozorila } = await preberiPorocanoXlsx(f);
     const { posodobljeno } = await shraniPorocanoUvoz(f.name, vrstice);
-    return { opis: `${vnosov} vnosov (${vrstice.length} po dnevih, posodobljenih ${posodobljeno})`, opozorila };
+    let tv = "";
+    // FIN:TV "Delo - prejšnji dan" (vklopljene komponente) - napaka objave ne pokvari uvoza
+    try {
+      const { objaviDeloNaTv } = await import("./tvObjava");
+      const izid = await objaviDeloNaTv();
+      if (izid.oddelki.length) tv = ` · FIN:TV delo ${izid.datum}: ${izid.oddelki.join(", ")}`;
+    } catch (e) {
+      opozorila.push(`FIN:TV (Delo - prejšnji dan) ni objavljen: ${(e as Error).message}`);
+    }
+    return { opis: `${vnosov} vnosov (${vrstice.length} po dnevih, posodobljenih ${posodobljeno})${tv}`, opozorila };
   },
   izdaje: async (f) => {
     const p = await preberiIzdajeXlsx(f);

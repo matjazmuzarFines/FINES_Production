@@ -9,6 +9,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "36.01",
+    datum: "13. 11. 2026",
+    spremembe: [
+      "Nova FIN:TV komponenta »Delo - prejšnji dan« (vsak oddelek svoja): za vsako celico krog štempljanih ur proti planu prejšnjega delovnega dne - zelena krožnica do 100 %, nad 100 % dodatna širša krožnica (do 110 % rumena, nad 110 % rdeča), pod krogom ure po krovnih nalogih s porabo % ter izven plana / režija; zgoraj desno oddelek skupaj. Stran 16:9 (na TV čez cel zaslon).",
+      "Objavi se sama ob vsakem uvozu Poročanega dela (Sync zjutraj / popoldan) in velja samo ta dan. Ročno: Zasedenost → Produktivnost → Na TV (moder). Potrebna skripta FinOS 027_fin_tv_delo_prejsnji_dan.sql.",
+    ],
+  },
+  {
     verzija: "35.05",
     datum: "13. 11. 2026",
     spremembe: [

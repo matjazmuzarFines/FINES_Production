@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, PanelRightClose, PanelRightOpen, Tv } from "lucide-react";
 import {
   addDays,
   addMonths,
@@ -139,6 +139,22 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
   const [samoObdobje, setSamoObdobje] = useState(true);
   // Desni panel; stran pokaže Loading, dokler podatki niso naloženi - branje localStorage je varno
   const [panel, setPanel] = useState(preberiPanel);
+  const [naTv, setNaTv] = useState(false);
+
+  /** FIN:TV "Delo - prejšnji dan" ročno (sicer se objavi sama ob uvozu poročanega dela). */
+  async function objaviNaTv() {
+    setNaTv(true);
+    try {
+      const { objaviDeloNaTv } = await import("@/lib/tvObjava");
+      const izid = await objaviDeloNaTv("ročna objava");
+      if (izid.oddelki.length) notify("success", `FIN:TV: delo ${formatShort(izid.datum)} objavljeno - ${izid.oddelki.join(", ")}.`, 8000);
+      else notify("warning", "FIN:TV: komponenta Delo - prejšnji dan ni vklopljena (ali ni dostopa do FIN:TV).", 10000);
+    } catch (e) {
+      notify("error", `FIN:TV: ${(e as Error).message}`, 10000);
+    } finally {
+      setNaTv(false);
+    }
+  }
 
   function preklopiPanel() {
     setPanel(!panel);
@@ -268,6 +284,16 @@ function ProduktivnostInner({ koda }: { koda: OddelekKoda }) {
           className="ml-auto"
         >
           Kontrola produktivnosti
+        </Button>
+        <Button
+          hint="Objavi delo prejšnjega dne na FIN:TV"
+          variant="sync"
+          icon={naTv ? Loader2 : Tv}
+          disabled={naTv || !imaTabele}
+          onClick={objaviNaTv}
+          className={naTv ? "[&>svg]:animate-spin" : ""}
+        >
+          Na TV
         </Button>
       </div>
 

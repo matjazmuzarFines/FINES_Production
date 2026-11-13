@@ -7,7 +7,10 @@
 // Delovni plan - workflow in pregled (vsak oddelek svoja komponenta za vsakega): ob "Shrani plan" se za VSAK TEDEN, za
 // katerega je plan narejen (od tekočega tedna naprej), ustvari svoj PDF; strani tedna veljajo pon - ned. TV v ponedeljek
 // sam preklopi na nov teden. Nova objava zamenja vse tedne naenkrat. Izklopljena / manjkajoča komponenta = nič se ne ustvari.
-import { addDays, mondayOf, toIso, type IsoDate } from "./dates";
+//
+// Delo - prejšnji dan (vsak oddelek svoja komponenta, FinOS 027): ob vsakem uvozu Poročanega dela (Sync) se za prejšnji
+// delovni dan ustvari stran 16:9 na oddelek (deloPdf.ts); stran velja samo na dan objave.
+import { addDays, mondayOf, prevWorkday, toIso, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
 import type { WorkflowPlan } from "./plan";
 import { ustvariPlanPdf } from "./planPdf";
@@ -24,6 +27,10 @@ const NAJVEC_TEDNOV = 26;
 export const kodaPregleda = (oddelek: OddelekKoda) => `fp_plan_pregled_${oddelek.toLowerCase()}`;
 /** Koda komponente workflowa plana za oddelek (FinOS 026). */
 export const kodaWorkflowa = (oddelek: OddelekKoda) => `fp_plan_workflow_${oddelek.toLowerCase()}`;
+
+/** Koda komponente "Delo - prejšnji dan" za oddelek (FinOS 027). */
+export const kodaDela = (oddelek: OddelekKoda) => `fp_delo_vceraj_${oddelek.toLowerCase()}`;
+const ODDELKI: OddelekKoda[] = ["P", "M", "E", "T"];
 
 /** PDF -> slike strani (pdf.js, kot pdfStrani.ts v FinOS) + razmerje strani (višina / širina). */
 async function pdfVSlike(pdfBlob: Blob): Promise<{ slike: Blob[]; razmerja: number[] }> {
@@ -162,4 +169,42 @@ async function objavi(zbirke: Zbirka[], nazivOddelka: string): Promise<IzidObjav
     izid.push({ ime: z.dok.ime, tednov: z.tednov, strani: z.strani.length });
   }
   return izid;
+}
+
+/**
+ * "Delo - prejšnji dan" na FIN:TV za vse oddelke z vklopljeno komponento: štempljane ure prejšnjega delovnega dne proti
+ * planu (deloVceraj.ts -> deloPdf.ts). Stran velja samo danes - naslednji dan je komponenta prazna do novega uvoza.
+ * Vrne objavljene oddelke (prazno = nobena komponenta ni vklopljena ali ni dostopa do FIN:TV).
+ */
+export async function objaviDeloNaTv(izvor = "uvoz poročanega dela"): Promise<{ datum: IsoDate; oddelki: string[] }> {
+  const danes = toIso(new Date());
+  const datum = prevWorkday(danes);
+  const kode: OddelekKoda[] = [];
+  for (const o of ODDELKI) if (await vklopljena(kodaDela(o))) kode.push(o);
+  if (!kode.length) return { datum, oddelki: [] };
+  const [{ pripraviDelo }, { ustvariDeloPdf }] = await Promise.all([import("./deloVceraj"), import("./deloPdf")]);
+  const zdaj = Date.now();
+  const oddelki: string[] = [];
+  for (const d of await pripraviDelo(datum, kode)) {
+    const koda = kodaDela(d.koda);
+    const { slike, razmerja } = await pdfVSlike(await ustvariDeloPdf(d));
+    const strani: string[] = [];
+    for (let i = 0; i < slike.length; i++) {
+      const pot = `${koda}/${zdaj}/${datum}-${i + 1}.webp`;
+      const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(`Nalaganje strani na TV (${d.naziv}): ${error.message}`);
+      strani.push(pot);
+    }
+    const { error } = await getSupabase().rpc("fos_tv_objavi", {
+      p_koda: koda,
+      p_strani: strani,
+      p_razmerja: razmerja,
+      p_izvor: `Production: ${izvor} · ${d.naziv}`,
+      p_velja_od: strani.map(() => danes),
+      p_velja_do: strani.map(() => danes),
+    });
+    if (error) throw new Error(`${d.naziv}: ${error.message}`);
+    oddelki.push(d.naziv);
+  }
+  return { datum, oddelki };
 }
