@@ -811,8 +811,8 @@ function PlanOddelka({
   const workflow = async () => planZaDneve(dnevi, await odpremeNalogov());
 
   /**
-   * FIN:TV: pregled plana za vsak teden od tekočega do konca plana (vsak teden svoj PDF, TV kaže tekoči teden).
-   * Teče v ozadju po shranjevanju - podatki so posnetek ob kliku Shrani plan.
+   * FIN:TV: workflow in pregled plana za vsak teden od tekočega do konca plana (vsak teden svoj PDF, TV kaže tekoči
+   * teden). Teče v ozadju po shranjevanju - podatki so posnetek ob kliku Shrani plan.
    */
   function objaviNaTv() {
     const zadnjiDan = efektivne.reduce<IsoDate | null>((m, p) => {
@@ -821,11 +821,13 @@ function PlanOddelka({
     }, null);
     void (async () => {
       const [odpreme, druzine] = await Promise.all([odpremeNalogov(), druzineNormativov()]);
-      const { objaviPregledPlana } = await import("@/lib/tvObjava");
-      return objaviPregledPlana({ oddelek: oddelek.koda, nazivOddelka: oddelek.naziv, planTedna: (dn) => planZaDneve(dn, odpreme), druzine, zadnjiDan });
+      const { objaviPlanNaTv } = await import("@/lib/tvObjava");
+      return objaviPlanNaTv({ oddelek: oddelek.koda, nazivOddelka: oddelek.naziv, planTedna: (dn) => planZaDneve(dn, odpreme), druzine, zadnjiDan });
     })()
       .then((izid) => {
-        if (izid) notify("success", `FIN:TV: pregled plana objavljen (${izid.tednov} ${izid.tednov === 1 ? "teden" : izid.tednov === 2 ? "tedna" : izid.tednov <= 4 ? "tedni" : "tednov"}, ${izid.strani} str.).`);
+        if (!izid.length) return;
+        const tedni = (n: number) => `${n} ${n === 1 ? "teden" : n === 2 ? "tedna" : n <= 4 ? "tedni" : "tednov"}`;
+        notify("success", `FIN:TV: plan objavljen - ${izid.map((d) => `${d.ime} ${tedni(d.tednov)}, ${d.strani} str.`).join(" · ")}.`);
       })
       .catch((e) => notify("warning", `Plan je shranjen, objava na FIN:TV ni uspela: ${(e as Error).message}`, 10000));
   }

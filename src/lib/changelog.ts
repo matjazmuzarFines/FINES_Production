@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "35.04",
+    datum: "13. 11. 2026",
+    spremembe: [
+      "Delovni plan → Shrani plan na FIN:TV objavi tudi workflow (kaj je treba narediti), enako kot pregled: vsak oddelek svojo komponento, za vsak teden od tekočega do konca plana svoj PDF, TV kaže tekoči teden in v ponedeljek sam preklopi. Obvestilo pove, koliko tednov in strani je bilo objavljenih za workflow in za pregled. Potrebna skripta FinOS 026_fin_tv_workflow_po_oddelkih.sql.",
+    ],
+  },
+  {
     verzija: "35.03",
     datum: "12. 11. 2026",
     spremembe: [

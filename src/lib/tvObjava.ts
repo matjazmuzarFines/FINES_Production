@@ -4,12 +4,13 @@
 // 025); objava = strani dokumenta kot slike WebP 3840 px v košari fos-tv-viri + klic fos_tv_objavi. Vsaka stran ima lahko
 // veljavnost (od - do, datum): TV kaže samo strani, ki veljajo danes.
 //
-// Delovni plan - pregled: ob "Shrani plan" se za VSAK TEDEN, za katerega je plan narejen (od tekočega tedna naprej),
-// ustvari svoj PDF pregled; strani tedna veljajo pon - ned. TV v ponedeljek sam preklopi na nov teden. Nova objava
-// zamenja vse tedne naenkrat. Izklopljena / manjkajoča komponenta = nič se ne ustvari.
+// Delovni plan - workflow in pregled (vsak oddelek svoja komponenta za vsakega): ob "Shrani plan" se za VSAK TEDEN, za
+// katerega je plan narejen (od tekočega tedna naprej), ustvari svoj PDF; strani tedna veljajo pon - ned. TV v ponedeljek
+// sam preklopi na nov teden. Nova objava zamenja vse tedne naenkrat. Izklopljena / manjkajoča komponenta = nič se ne ustvari.
 import { addDays, mondayOf, toIso, type IsoDate } from "./dates";
 import type { OddelekKoda } from "./normativi";
 import type { WorkflowPlan } from "./plan";
+import { ustvariPlanPdf } from "./planPdf";
 import { ustvariPlanPregledPdf, type DruzineNormativov } from "./planPregledPdf";
 import { getSupabase } from "./supabase";
 
@@ -21,6 +22,8 @@ const NAJVEC_TEDNOV = 26;
 
 /** Koda komponente pregleda plana za oddelek (FinOS 025). */
 export const kodaPregleda = (oddelek: OddelekKoda) => `fp_plan_pregled_${oddelek.toLowerCase()}`;
+/** Koda komponente workflowa plana za oddelek (FinOS 026). */
+export const kodaWorkflowa = (oddelek: OddelekKoda) => `fp_plan_workflow_${oddelek.toLowerCase()}`;
 
 /** PDF -> slike strani (pdf.js, kot pdfStrani.ts v FinOS) + razmerje strani (višina / širina). */
 async function pdfVSlike(pdfBlob: Blob): Promise<{ slike: Blob[]; razmerja: number[] }> {
@@ -58,13 +61,28 @@ async function vklopljena(koda: string): Promise<boolean> {
   return !error && !!data?.vklopljen;
 }
 
-export type IzidObjave = { tednov: number; strani: number } | null;
+/** Dokumenti plana na FIN:TV - vsak je za vsak oddelek svoja komponenta (FinOS 025 / 026). */
+type DokumentPlana = {
+  ime: string;
+  koda: (oddelek: OddelekKoda) => string;
+  pdf: (plan: WorkflowPlan, druzine: DruzineNormativov) => Promise<Blob>;
+};
+const DOKUMENTI: DokumentPlana[] = [
+  { ime: "workflow", koda: kodaWorkflowa, pdf: (plan) => ustvariPlanPdf(plan) },
+  { ime: "pregled", koda: kodaPregleda, pdf: (plan, druzine) => ustvariPlanPregledPdf(plan, druzine) },
+];
+
+/** Objavljeni dokumenti (samo vklopljene komponente, ki imajo strani). Prazno = nič objavljeno. */
+export type IzidObjave = { ime: string; tednov: number; strani: number }[];
+
+type Zbirka = { dok: DokumentPlana; koda: string; mapa: string; strani: string[]; razmerja: number[]; veljaOd: IsoDate[]; veljaDo: IsoDate[]; tednov: number };
 
 /**
- * Pregled plana po tednih na FIN:TV. `planTedna(dnevi)` = WorkflowPlan za 5 delovnih dni tedna (pripraviWorkflow),
- * `zadnjiDan` = konec zadnjega koraka v planu. Vrne null, ko komponente ni / je izklopljena ali plana od tega tedna naprej ni.
+ * Plan po tednih na FIN:TV (workflow + pregled). `planTedna(dnevi)` = WorkflowPlan za 5 delovnih dni tedna
+ * (pripraviWorkflow), `zadnjiDan` = konec zadnjega koraka v planu. Plan tedna se izračuna enkrat za oba dokumenta.
+ * Izklopljene / manjkajoče komponente se preskočijo.
  */
-export async function objaviPregledPlana({
+export async function objaviPlanNaTv({
   oddelek,
   nazivOddelka,
   planTedna,
@@ -77,43 +95,48 @@ export async function objaviPregledPlana({
   druzine: DruzineNormativov;
   zadnjiDan: IsoDate | null;
 }): Promise<IzidObjave> {
-  const koda = kodaPregleda(oddelek);
-  if (!(await vklopljena(koda))) return null;
   const prvi = mondayOf(toIso(new Date()));
-  if (!zadnjiDan || zadnjiDan < prvi) return null;
+  if (!zadnjiDan || zadnjiDan < prvi) return [];
+  const zdaj = Date.now();
+  const zbirke: Zbirka[] = [];
+  for (const dok of DOKUMENTI) {
+    const koda = dok.koda(oddelek);
+    if (await vklopljena(koda)) zbirke.push({ dok, koda, mapa: `${koda}/${zdaj}`, strani: [], razmerja: [], veljaOd: [], veljaDo: [], tednov: 0 });
+  }
+  if (!zbirke.length) return [];
 
-  const mapa = `${koda}/${Date.now()}`;
-  const strani: string[] = [];
-  const razmerja: number[] = [];
-  const veljaOd: IsoDate[] = [];
-  const veljaDo: IsoDate[] = [];
   const zadnji = mondayOf(zadnjiDan);
-  let tednov = 0;
   for (let pon = prvi, n = 0; pon <= zadnji && n < NAJVEC_TEDNOV; pon = addDays(pon, 7), n++) {
     const plan = planTedna(Array.from({ length: 5 }, (_, i) => addDays(pon, i)));
     if (!plan.celice.length) continue;
-    const { slike, razmerja: r } = await pdfVSlike(await ustvariPlanPregledPdf(plan, druzine));
-    for (let i = 0; i < slike.length; i++) {
-      const pot = `${mapa}/${pon}-${i + 1}.webp`;
-      const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
-      if (error) throw new Error(`Nalaganje strani na TV: ${error.message}`);
-      strani.push(pot);
-      razmerja.push(r[i]);
-      veljaOd.push(pon);
-      veljaDo.push(addDays(pon, 6));
+    for (const z of zbirke) {
+      const { slike, razmerja } = await pdfVSlike(await z.dok.pdf(plan, druzine));
+      for (let i = 0; i < slike.length; i++) {
+        const pot = `${z.mapa}/${pon}-${i + 1}.webp`;
+        const { error } = await getSupabase().storage.from(KOSARA).upload(pot, slike[i], { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+        if (error) throw new Error(`Nalaganje strani na TV (${z.dok.ime}): ${error.message}`);
+        z.strani.push(pot);
+        z.razmerja.push(razmerja[i]);
+        z.veljaOd.push(pon);
+        z.veljaDo.push(addDays(pon, 6));
+      }
+      z.tednov++;
     }
-    tednov++;
   }
-  if (!strani.length) return null;
 
-  const { error } = await getSupabase().rpc("fos_tv_objavi", {
-    p_koda: koda,
-    p_strani: strani,
-    p_razmerja: razmerja,
-    p_izvor: `Production: Shrani plan · ${nazivOddelka}`,
-    p_velja_od: veljaOd,
-    p_velja_do: veljaDo,
-  });
-  if (error) throw new Error(error.message);
-  return { tednov, strani: strani.length };
+  const izid: IzidObjave = [];
+  for (const z of zbirke) {
+    if (!z.strani.length) continue;
+    const { error } = await getSupabase().rpc("fos_tv_objavi", {
+      p_koda: z.koda,
+      p_strani: z.strani,
+      p_razmerja: z.razmerja,
+      p_izvor: `Production: Shrani plan · ${nazivOddelka}`,
+      p_velja_od: z.veljaOd,
+      p_velja_do: z.veljaDo,
+    });
+    if (error) throw new Error(`${z.dok.ime}: ${error.message}`);
+    izid.push({ ime: z.dok.ime, tednov: z.tednov, strani: z.strani.length });
+  }
+  return izid;
 }
