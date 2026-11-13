@@ -9,6 +9,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    verzija: "35.03",
+    datum: "12. 11. 2026",
+    spremembe: [
+      "Delovni plan → Shrani plan objavi pregled (roki) na FIN:TV: za vsak teden od tekočega do konca plana svoj PDF (plan za 3 mesece = ~13 tednov). TV kaže tekoči teden in v ponedeljek sam preklopi na naslednjega. Vsak oddelek ima na TV svojo komponento. Objava teče v ozadju po shranjevanju; ko je končana, se pokaže obvestilo. Če je komponenta v FIN:TV izklopljena, se nič ne objavi.",
+    ],
+  },
+  {
     verzija: "35.02",
     datum: "12. 11. 2026",
     spremembe: [

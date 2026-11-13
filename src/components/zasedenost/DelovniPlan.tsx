@@ -757,6 +757,7 @@ function PlanOddelka({
         }),
       });
       notify("success", "Delovni plan je shranjen.");
+      objaviNaTv();
       await onShranjeno();
     } catch (e) {
       notify("error", `Napaka pri shranjevanju: ${(e as Error).message}`, 10000);
@@ -786,27 +787,48 @@ function PlanOddelka({
    * Workflow za PDF / Word: prikazano obdobje, po delovnih mestih. Datumi odprem po nalogih:
    * naročila VD200 razdeljena FIFO na zalogo in naloge (kot na Prioritetah); ob napaki brez odprem.
    */
-  const workflow = async () => {
-    const odpreme = await Promise.all([
+  const odpremeNalogov = () =>
+    Promise.all([
       naloziZadnjiPriUvoz(),
       naloziZadnjiOdpUvoz().catch(() => ({ odpreme: [] })),
       naloziMaterial().catch(() => ({ material: new Map<string, Material>() })),
     ])
       .then(([pri, odp, mat]) => odpremePoNalogih(pri.postavke, nalogi, odp.odpreme, mat.material))
       .catch(() => new Map<string, IsoDate[]>());
-    return pripraviWorkflow({
+  const planZaDneve = (dn: IsoDate[], odpreme: Map<string, IsoDate[]>) =>
+    pripraviWorkflow({
       oddelek: oddelek.naziv,
       celice,
       postavitve: efektivne,
       razpored,
       krovniPoKljucu,
       kosiPostavitev,
-      dnevi,
+      dnevi: dn,
       ureNaDan: oddelek.ure_na_dan,
       zaposleni: steviloZaposlenih,
       odpreme,
     });
-  };
+  const workflow = async () => planZaDneve(dnevi, await odpremeNalogov());
+
+  /**
+   * FIN:TV: pregled plana za vsak teden od tekočega do konca plana (vsak teden svoj PDF, TV kaže tekoči teden).
+   * Teče v ozadju po shranjevanju - podatki so posnetek ob kliku Shrani plan.
+   */
+  function objaviNaTv() {
+    const zadnjiDan = efektivne.reduce<IsoDate | null>((m, p) => {
+      const d = razpored.get(p.id)?.do;
+      return d && (!m || d > m) ? d : m;
+    }, null);
+    void (async () => {
+      const [odpreme, druzine] = await Promise.all([odpremeNalogov(), druzineNormativov()]);
+      const { objaviPregledPlana } = await import("@/lib/tvObjava");
+      return objaviPregledPlana({ oddelek: oddelek.koda, nazivOddelka: oddelek.naziv, planTedna: (dn) => planZaDneve(dn, odpreme), druzine, zadnjiDan });
+    })()
+      .then((izid) => {
+        if (izid) notify("success", `FIN:TV: pregled plana objavljen (${izid.tednov} ${izid.tednov === 1 ? "teden" : izid.tednov === 2 ? "tedna" : izid.tednov <= 4 ? "tedni" : "tednov"}, ${izid.strani} str.).`);
+      })
+      .catch((e) => notify("warning", `Plan je shranjen, objava na FIN:TV ni uspela: ${(e as Error).message}`, 10000));
+  }
   /** Družine za PDF pregled: ident -> družina iz normativov, stolpci = vse družine (šifrant, sicer iz normativov). */
   const druzineNormativov = async () => {
     const sifrant = await naloziDruzine().catch(() => []);
